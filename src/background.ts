@@ -196,3 +196,8 @@ async function updateScore(url: string) {
     await chrome.storage.local.set({ bookmarks });
   }
 }
+
+// Open options page when the extension icon in the toolbar is clicked
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});
