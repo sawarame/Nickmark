@@ -34,12 +34,8 @@
       <template #content>
         <DataTable :value="flatBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
           <Column field="nickname" header="Nickname" sortable></Column>
+          <Column field="title" header="Title" sortable></Column>
           <Column field="url" header="URL" sortable></Column>
-          <Column field="score" header="Score" sortable>
-            <template #body="slotProps">
-              {{ slotProps.data.score.toFixed(2) }}
-            </template>
-          </Column>
           <Column header="Actions">
             <template #body="slotProps">
               <Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete" @click="deleteBookmark(slotProps.data.nickname, slotProps.data.url)" />
@@ -76,7 +72,7 @@ import Card from 'primevue/card';
 import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 
-import { BookmarkEntry } from './background';
+import { BookmarkEntry, loadBookmarksData } from './background';
 
 const toast = useToast();
 
@@ -104,8 +100,7 @@ const flatBookmarks = computed(() => {
 });
 
 const loadBookmarks = async () => {
-  const data = await chrome.storage.local.get('bookmarks');
-  bookmarksData.value = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
+  bookmarksData.value = await loadBookmarksData();
 };
 
 onMounted(async () => {

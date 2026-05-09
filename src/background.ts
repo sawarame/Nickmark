@@ -10,6 +10,24 @@ export interface NickmarkData {
   bookmarks: Record<string, BookmarkEntry[]>;
 }
 
+export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
+  const data = await chrome.storage.local.get('bookmarks');
+  const rawBookmarks = data.bookmarks || {};
+  const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
+  
+  for (const [nickname, entries] of Object.entries(rawBookmarks)) {
+    if (Array.isArray(entries)) {
+      normalizedBookmarks[nickname] = entries;
+    } else if (entries && typeof entries === 'object') {
+      // Normalize malformed JSON objects back to arrays
+      normalizedBookmarks[nickname] = Object.values(entries) as BookmarkEntry[];
+    } else {
+      normalizedBookmarks[nickname] = [];
+    }
+  }
+  return normalizedBookmarks;
+}
+
 // Decay rate per day
 const DECAY_RATE = 0.95;
 
@@ -24,8 +42,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   const trimmed = text.trim();
   if (!trimmed) return;
 
-  const data = await chrome.storage.local.get('bookmarks');
-  const bookmarks = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
+  const bookmarks = await loadBookmarksData();
 
   const suggestions: chrome.omnibox.SuggestResult[] = [];
 
@@ -36,7 +53,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
     if (':add'.startsWith(cmd)) {
       suggestions.push({
         content: `:add ${rest}`,
-        description: `<match>:add</match> ${rest || '[nickname]'} - Add current tab to Nickmark`
+        description: `<match>:add</match> ${rest || '[nickname] [title(optional)]'} - Add current tab to Nickmark`
       });
     }
     if (':option'.startsWith(cmd)) {
@@ -90,18 +107,19 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       chrome.runtime.openOptionsPage();
       return;
     } else if (cmd === ':add') {
-      if (!name) return;
+      const nickname = parts[1];
+      if (!nickname) return;
+      const customTitle = parts.slice(2).join(' ').trim();
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (currentTab && currentTab.url) {
-        const data = await chrome.storage.local.get('bookmarks');
-        const bookmarks = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
-        if (!bookmarks[name]) bookmarks[name] = [];
+        const bookmarks = await loadBookmarksData();
+        if (!bookmarks[nickname]) bookmarks[nickname] = [];
         
         // Ensure no duplicate URL for this nickname
-        if (!bookmarks[name].some(b => b.url === currentTab.url)) {
-          bookmarks[name].push({
+        if (!bookmarks[nickname].some(b => b.url === currentTab.url)) {
+          bookmarks[nickname].push({
             url: currentTab.url,
-            title: currentTab.title || '',
+            title: customTitle || currentTab.title || '',
             score: 1.0,
             last_used_at: Date.now(),
             created_at: Date.now()
@@ -112,8 +130,7 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       return;
     } else if (cmd === ':rm') {
       if (!name) return;
-      const data = await chrome.storage.local.get('bookmarks');
-      const bookmarks = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
+      const bookmarks = await loadBookmarksData();
       if (bookmarks[name]) {
         delete bookmarks[name];
         await chrome.storage.local.set({ bookmarks });
@@ -126,8 +143,7 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
 
   // If text doesn't look like a URL, maybe it's just the nickname and they pressed enter
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-    const data = await chrome.storage.local.get('bookmarks');
-    const bookmarks = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
+    const bookmarks = await loadBookmarksData();
     
     let bestMatch: BookmarkEntry | null = null;
     
@@ -178,8 +194,7 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
 });
 
 async function updateScore(url: string) {
-  const data = await chrome.storage.local.get('bookmarks');
-  const bookmarks = (data.bookmarks || {}) as Record<string, BookmarkEntry[]>;
+  const bookmarks = await loadBookmarksData();
   let updated = false;
 
   for (const [nickname, entries] of Object.entries(bookmarks)) {
