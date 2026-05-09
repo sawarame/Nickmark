@@ -8,7 +8,6 @@
     "omnibox",
     "storage",
     "unlimitedStorage",
-    "bookmarks",
     "tabs"
   ],
   "background": {

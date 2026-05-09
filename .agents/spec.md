@@ -39,5 +39,4 @@
 - `omnibox`: アドレスバー操作用
 - `storage`: データ保存用
 - `unlimitedStorage`: 容量制限解除
-- `bookmarks`: （将来的な連携用）
 - `tabs`: 現在のタブの取得・新規タブでのページ遷移用
