@@ -40,13 +40,21 @@ function calculateNewScore(oldScore: number, lastUsedAt: number): number {
 
 chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   const trimmed = text.trim();
-  if (!trimmed) return;
+  if (!trimmed) {
+    chrome.omnibox.setDefaultSuggestion({
+      description: 'Search Nickmark'
+    });
+    return;
+  }
 
   const bookmarks = await loadBookmarksData();
-
   const suggestions: chrome.omnibox.SuggestResult[] = [];
 
+  // Command mode handling
   if (trimmed.startsWith(':')) {
+    chrome.omnibox.setDefaultSuggestion({
+      description: 'Nickmark Command Mode'
+    });
     const cmd = trimmed.split(' ')[0];
     const rest = trimmed.slice(cmd.length).trim();
 
@@ -71,24 +79,43 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
     suggest(suggestions);
     return;
   }
-  
+
+  // Gather matching entries
+  const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
   for (const [nickname, entries] of Object.entries(bookmarks)) {
     if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-      // Sort entries by score desc, url asc
-      const sortedEntries = [...entries].sort((a, b) => {
-        if (b.score !== a.score) {
-          return b.score - a.score;
-        }
-        return a.url.localeCompare(b.url);
-      });
-
-      for (const entry of sortedEntries) {
-        suggestions.push({
-          content: entry.url,
-          description: `<match>${nickname}</match>: <url>${entry.url}</url> - ${entry.title || 'No title'}`
-        });
+      for (const entry of entries) {
+        allMatches.push({ nickname, entry });
       }
     }
+  }
+
+  // Sort by score desc, then url asc
+  allMatches.sort((a, b) => {
+    if (b.entry.score !== a.entry.score) {
+      return b.entry.score - a.entry.score;
+    }
+    return a.entry.url.localeCompare(b.entry.url);
+  });
+
+  if (allMatches.length > 0) {
+    const top = allMatches[0];
+    // Set the first match as the default suggestion
+    chrome.omnibox.setDefaultSuggestion({
+      description: `<match>${top.nickname}</match>: <url>${top.entry.url}</url> - ${top.entry.title || 'No title'}`
+    });
+
+    // Provide the rest as suggestions (2nd through 10th)
+    for (const match of allMatches.slice(1, 10)) {
+      suggestions.push({
+        content: match.entry.url,
+        description: `<match>${match.nickname}</match>: <url>${match.entry.url}</url> - ${match.entry.title || 'No title'}`
+      });
+    }
+  } else {
+    chrome.omnibox.setDefaultSuggestion({
+      description: `No matches found for: <match>${trimmed}</match>`
+    });
   }
 
   suggest(suggestions);
@@ -155,36 +182,27 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
 
   let targetUrl = trimmed;
 
-  // If text doesn't look like a URL, maybe it's just the nickname and they pressed enter
+  // If text doesn't look like a URL, maybe it's just the nickname or part of it
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
     const bookmarks = await loadBookmarksData();
     
-    let bestMatch: BookmarkEntry | null = null;
-    
-    // Exact match first
-    if (bookmarks[trimmed] && bookmarks[trimmed].length > 0) {
-      const sorted = [...bookmarks[trimmed]].sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.url.localeCompare(b.url);
-      });
-      bestMatch = sorted[0];
-    } else {
-      // Partial match
-      let highestScore = -1;
-      for (const [nickname, entries] of Object.entries(bookmarks)) {
-        if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-          for (const entry of entries) {
-            if (entry.score > highestScore) {
-              highestScore = entry.score;
-              bestMatch = entry;
-            }
-          }
+    // Use the same matching/sorting logic as onInputChanged
+    const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
+    for (const [nickname, entries] of Object.entries(bookmarks)) {
+      if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
+        for (const entry of entries) {
+          allMatches.push({ nickname, entry });
         }
       }
     }
 
-    if (bestMatch) {
-      targetUrl = bestMatch.url;
+    allMatches.sort((a, b) => {
+      if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
+      return a.entry.url.localeCompare(b.entry.url);
+    });
+
+    if (allMatches.length > 0) {
+      targetUrl = allMatches[0].entry.url;
     } else {
       return;
     }
