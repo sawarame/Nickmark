@@ -10,7 +10,12 @@ export interface NickmarkData {
   bookmarks: Record<string, BookmarkEntry[]>;
 }
 
+// Local cache for bookmarks to avoid repeated storage reads during typing
+let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
+
 export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
+  if (bookmarksCache) return bookmarksCache;
+
   const data = await chrome.storage.local.get('bookmarks');
   const rawBookmarks = data.bookmarks || {};
   const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
@@ -19,14 +24,37 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
     if (Array.isArray(entries)) {
       normalizedBookmarks[nickname] = entries;
     } else if (entries && typeof entries === 'object') {
-      // Normalize malformed JSON objects back to arrays
       normalizedBookmarks[nickname] = Object.values(entries) as BookmarkEntry[];
     } else {
       normalizedBookmarks[nickname] = [];
     }
   }
+  
+  bookmarksCache = normalizedBookmarks;
   return normalizedBookmarks;
 }
+
+// Keep cache in sync with storage changes
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.bookmarks) {
+    const newVal = changes.bookmarks.newValue;
+    if (newVal) {
+      const normalized: Record<string, BookmarkEntry[]> = {};
+      for (const [nickname, entries] of Object.entries(newVal)) {
+        if (Array.isArray(entries)) {
+          normalized[nickname] = entries;
+        } else if (entries && typeof entries === 'object') {
+          normalized[nickname] = Object.values(entries) as BookmarkEntry[];
+        } else {
+          normalized[nickname] = [];
+        }
+      }
+      bookmarksCache = normalized;
+    } else {
+      bookmarksCache = {};
+    }
+  }
+});
 
 // Decay rate per day
 const DECAY_RATE = 0.95;
@@ -55,24 +83,26 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
     chrome.omnibox.setDefaultSuggestion({
       description: 'Nickmark Command Mode'
     });
-    const cmd = trimmed.split(' ')[0];
-    const rest = trimmed.slice(cmd.length).trim();
+    const parts = trimmed.split(' ');
+    const cmd = parts[0];
+    const rest = parts.slice(1).join(' ').trim();
 
-    if (':add'.startsWith(cmd)) {
+    // Show suggestions for all commands that start with the current input or follow a full match
+    if (':add'.startsWith(cmd) || cmd === ':add') {
       suggestions.push({
-        content: `:add ${rest}`,
+        content: `:add ${rest} `, // Adding trailing space to keep it distinct from user input
         description: `<match>:add</match> ${rest || '[nickname] [title(optional)]'} - Add current tab to Nickmark`
       });
     }
-    if (':option'.startsWith(cmd)) {
+    if (':option'.startsWith(cmd) || cmd === ':option') {
       suggestions.push({
-        content: ':option',
+        content: ':option ', // Adding trailing space to keep it distinct from user input
         description: `<match>:option</match> - Open Options / Manage Nickmarks`
       });
     }
-    if (':rm'.startsWith(cmd)) {
+    if (':rm'.startsWith(cmd) || cmd === ':rm') {
       suggestions.push({
-        content: `:rm ${rest}`,
+        content: `:rm ${rest} `, // Adding trailing space to keep it distinct from user input
         description: `<match>:rm</match> ${rest || '[nickname]'} - Remove Nickmark`
       });
     }
