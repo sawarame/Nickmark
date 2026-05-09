@@ -39,16 +39,10 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
         description: `<match>:add</match> ${rest || '[nickname]'} - Add current tab to Nickmark`
       });
     }
-    if (':ls'.startsWith(cmd)) {
+    if (':option'.startsWith(cmd)) {
       suggestions.push({
-        content: ':ls',
-        description: `<match>:ls</match> - Open Options / Manage Nickmarks`
-      });
-    }
-    if (':edit'.startsWith(cmd)) {
-      suggestions.push({
-        content: `:edit ${rest}`,
-        description: `<match>:edit</match> ${rest || '[nickname]'} - Edit Nickmark`
+        content: ':option',
+        description: `<match>:option</match> - Open Options / Manage Nickmarks`
       });
     }
     if (':rm'.startsWith(cmd)) {
@@ -115,11 +109,6 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
           await chrome.storage.local.set({ bookmarks });
         }
       }
-      return;
-    } else if (cmd === ':edit') {
-      if (!name) return;
-      const optionsUrl = chrome.runtime.getURL(`options.html?edit=${encodeURIComponent(name)}`);
-      chrome.tabs.create({ url: optionsUrl });
       return;
     } else if (cmd === ':rm') {
       if (!name) return;
