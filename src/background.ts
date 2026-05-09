@@ -151,6 +151,60 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   suggest(suggestions);
 });
 
+async function showToast(tabId: number, message: string) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (msg) => {
+        const id = 'nickmark-toast';
+        const existing = document.getElementById(id);
+        if (existing) existing.remove();
+
+        const div = document.createElement('div');
+        div.id = id;
+        div.textContent = msg;
+        Object.assign(div.style, {
+          position: 'fixed',
+          top: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: '2147483647',
+          padding: '12px 24px',
+          backgroundColor: '#323232',
+          color: '#ffffff',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          transition: 'opacity 0.3s, transform 0.3s',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          pointerEvents: 'none',
+          opacity: '0'
+        });
+
+        document.body.appendChild(div);
+        
+        // Force reflow
+        div.offsetHeight;
+        
+        div.style.opacity = '1';
+        div.style.transform = 'translateX(-50%) translateY(8px)';
+
+        setTimeout(() => {
+          div.style.opacity = '0';
+          div.style.transform = 'translateX(-50%)';
+          setTimeout(() => div.remove(), 300);
+        }, 3000);
+      },
+      args: [message]
+    });
+  } catch (e) {
+    // If injection fails (e.g. on special chrome:// pages), redirect to options page with message
+    const optionsUrl = chrome.runtime.getURL(`options.html?msg=${encodeURIComponent(message)}`);
+    chrome.tabs.update(tabId, { url: optionsUrl });
+  }
+}
+
 chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "currentTab" | "newForegroundTab" | "newBackgroundTab") => {
   const trimmed = text.trim();
 
@@ -165,10 +219,16 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       return;
     } else if (cmd === ':add') {
       const nickname = parts[1];
-      if (!nickname) return;
-      const customTitle = parts.slice(2).join(' ').trim();
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (currentTab && currentTab.url) {
+      if (!currentTab || !currentTab.id) return;
+
+      if (!nickname) {
+        const errorMsg = chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.';
+        await showToast(currentTab.id, errorMsg);
+        return;
+      }
+      const customTitle = parts.slice(2).join(' ').trim();
+      if (currentTab.url) {
         const bookmarks = await loadBookmarksData();
         if (!bookmarks[nickname]) bookmarks[nickname] = [];
         
@@ -183,28 +243,30 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
           });
           await chrome.storage.local.set({ bookmarks });
 
-          chrome.notifications.create({
-            type: 'basic',
-            iconUrl: '/icons/icon48.png',
-            title: chrome.i18n.getMessage("bookmarkAddedTitle") || 'Registration Complete',
-            message: chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as nickname '${nickname}'!`
-          });
+          const message = chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as nickname '${nickname}'!`;
+          await showToast(currentTab.id, message);
         }
       }
       return;
     } else if (cmd === ':rm') {
-      if (!name) return;
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!currentTab || !currentTab.id) return;
+
+      if (!name) {
+        const errorMsg = chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.';
+        await showToast(currentTab.id, errorMsg);
+        return;
+      }
       const bookmarks = await loadBookmarksData();
       if (bookmarks[name]) {
         delete bookmarks[name];
         await chrome.storage.local.set({ bookmarks });
 
-        chrome.notifications.create({
-          type: 'basic',
-          iconUrl: '/icons/icon48.png',
-          title: chrome.i18n.getMessage("bookmarkRemovedTitle") || 'Deletion Complete',
-          message: chrome.i18n.getMessage("bookmarkRemovedMessage", [name]) || `Deleted nickname '${name}'.`
-        });
+        const message = chrome.i18n.getMessage("bookmarkRemovedMessage", [name]) || `Deleted nickname '${name}'.`;
+        await showToast(currentTab.id, message);
+      } else {
+        const errorMsg = chrome.i18n.getMessage("errorNicknameNotFound", [name]) || `Nickname '${name}' not found.`;
+        await showToast(currentTab.id, errorMsg);
       }
       return;
     }

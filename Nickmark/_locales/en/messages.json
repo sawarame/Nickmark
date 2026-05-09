@@ -26,5 +26,16 @@
         "content": "$1"
       }
     }
+  },
+  "errorNicknameRequired": {
+    "message": "Please specify a nickname."
+  },
+  "errorNicknameNotFound": {
+    "message": "Nickname '$1' not found.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }

@@ -103,9 +103,58 @@ const loadBookmarks = async () => {
   bookmarksData.value = await loadBookmarksData();
 };
 
+const showCustomToast = (message: string) => {
+  const id = 'nickmark-custom-toast';
+  const existing = document.getElementById(id);
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = id;
+  div.textContent = message;
+  Object.assign(div.style, {
+    position: 'fixed',
+    top: '24px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: '9999',
+    padding: '12px 24px',
+    backgroundColor: '#323232',
+    color: '#ffffff',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    transition: 'opacity 0.3s, transform 0.3s',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    pointerEvents: 'none',
+    opacity: '0'
+  });
+
+  document.body.appendChild(div);
+  div.offsetHeight;
+  div.style.opacity = '1';
+  div.style.transform = 'translateX(-50%) translateY(8px)';
+
+  setTimeout(() => {
+    div.style.opacity = '0';
+    div.style.transform = 'translateX(-50%)';
+    setTimeout(() => div.remove(), 300);
+  }, 3000);
+};
+
 onMounted(async () => {
   title.value = chrome.i18n.getMessage('extensionName') ? chrome.i18n.getMessage('extensionName') + ' Options' : 'Nickmark Options';
   await loadBookmarks();
+
+  // Check for message in URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const msg = urlParams.get('msg');
+  if (msg) {
+    showCustomToast(msg);
+    // Clean up URL without refreshing
+    const newUrl = window.location.origin + window.location.pathname;
+    window.history.replaceState({}, document.title, newUrl);
+  }
 });
 
 const addBookmark = async () => {

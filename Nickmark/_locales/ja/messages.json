@@ -26,5 +26,16 @@
         "content": "$1"
       }
     }
+  },
+  "errorNicknameRequired": {
+    "message": "ニックネームを指定してください。"
+  },
+  "errorNicknameNotFound": {
+    "message": "指定されたニックネーム「$1」は見つかりませんでした。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
