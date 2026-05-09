@@ -4,5 +4,27 @@
   },
   "extensionDescription": {
     "message": "ニックネームを使ってアドレスバーからブックマークへ瞬時にアクセスするための、キーボード操作特化型拡張機能。"
+  },
+  "bookmarkAddedTitle": {
+    "message": "登録完了"
+  },
+  "bookmarkAddedMessage": {
+    "message": "ニックネーム「$1」として登録しました！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkRemovedTitle": {
+    "message": "削除完了"
+  },
+  "bookmarkRemovedMessage": {
+    "message": "ニックネーム「$1」を削除しました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }

@@ -125,6 +125,13 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
             created_at: Date.now()
           });
           await chrome.storage.local.set({ bookmarks });
+
+          chrome.notifications.create({
+            type: 'basic',
+            iconUrl: '/icons/icon48.png',
+            title: chrome.i18n.getMessage("bookmarkAddedTitle") || 'Registration Complete',
+            message: chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as nickname '${nickname}'!`
+          });
         }
       }
       return;
@@ -134,6 +141,13 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       if (bookmarks[name]) {
         delete bookmarks[name];
         await chrome.storage.local.set({ bookmarks });
+
+        chrome.notifications.create({
+          type: 'basic',
+          iconUrl: '/icons/icon48.png',
+          title: chrome.i18n.getMessage("bookmarkRemovedTitle") || 'Deletion Complete',
+          message: chrome.i18n.getMessage("bookmarkRemovedMessage", [name]) || `Deleted nickname '${name}'.`
+        });
       }
       return;
     }

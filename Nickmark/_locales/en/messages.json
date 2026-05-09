@@ -4,5 +4,27 @@
   },
   "extensionDescription": {
     "message": "Access bookmarks instantly from the address bar using nicknames. Designed for keyboard-focused power users."
+  },
+  "bookmarkAddedTitle": {
+    "message": "Registration Complete"
+  },
+  "bookmarkAddedMessage": {
+    "message": "Registered as nickname '$1'!",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkRemovedTitle": {
+    "message": "Deletion Complete"
+  },
+  "bookmarkRemovedMessage": {
+    "message": "Deleted nickname '$1'.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
