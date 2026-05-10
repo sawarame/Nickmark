@@ -27,6 +27,25 @@
       }
     }
   },
+  "bookmarkUrlRemovedMessage": {
+    "message": "Deleted specific URL for nickname '$1'.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorMultipleUrlsFound": {
+    "message": "Multiple URLs found. Please select a candidate from the suggestions."
+  },
+  "errorUrlNotFound": {
+    "message": "URL not found for nickname '$1'.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
   "errorNicknameRequired": {
     "message": "Please specify a nickname."
   },

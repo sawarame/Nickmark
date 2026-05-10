@@ -66,11 +66,30 @@ function calculateNewScore(oldScore: number, lastUsedAt: number): number {
   return (oldScore * Math.pow(DECAY_RATE, elapsedDays)) + 1.0;
 }
 
+// Helper to safely encode text for omnibox XML descriptions
+function escapeXml(unsafe: any): string {
+  if (!unsafe) return '';
+  return String(unsafe).replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '＆'; // Use fullwidth ampersand to bypass Chrome's XML parser bugs with URLs
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+      default: return c;
+    }
+  });
+}
+
+// Only register omnibox listeners if running in the background service worker.
+// This prevents the options page from executing them and throwing 'Invalid XML' or other errors.
+if (typeof window === 'undefined') {
 chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
-  const trimmed = text.trim();
-  if (!trimmed) {
-    chrome.omnibox.setDefaultSuggestion({
-      description: 'Search Nickmark'
+  const safeText = escapeXml(text);
+
+  if (!text) {
+    chrome.omnibox.setDefaultSuggestion({ 
+      description: 'Search Nickmark' 
     });
     return;
   }
@@ -79,72 +98,156 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
   const suggestions: chrome.omnibox.SuggestResult[] = [];
 
   // Command mode handling
-  if (trimmed.startsWith(':')) {
-    chrome.omnibox.setDefaultSuggestion({
-      description: 'Nickmark Command Mode'
-    });
-    const parts = trimmed.split(' ');
-    const cmd = parts[0];
-    const rest = parts.slice(1).join(' ').trim();
+  if (text.startsWith(':')) {
+    const firstSpaceIndex = text.indexOf(' ');
+    const cmd = firstSpaceIndex === -1 ? text : text.substring(0, firstSpaceIndex);
+    const rest = firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1);
+    const restTrimmed = rest.trim();
 
-    // Show suggestions for all commands that start with the current input or follow a full match
+    let hasSetDefault = false;
+
+    const addCommandSuggestion = (content: string, description: string) => {
+      if (!hasSetDefault) {
+        chrome.omnibox.setDefaultSuggestion({ description });
+        hasSetDefault = true;
+      } else {
+        // Ensure content starts with typed text so Chrome doesn't hide it
+        let finalContent = content;
+        if (!finalContent.startsWith(text) && text.startsWith(content)) {
+          finalContent = text;
+        }
+        suggestions.push({ content: finalContent, description });
+      }
+    };
+
+    // :add
     if (':add'.startsWith(cmd) || cmd === ':add') {
-      suggestions.push({
-        content: `:add ${rest} `, // Adding trailing space to keep it distinct from user input
-        description: `<match>:add</match> ${rest || '[nickname] [title(optional)]'} - Add current tab to Nickmark`
-      });
+      addCommandSuggestion(
+        ':add ',
+        `<match>:add</match> ${escapeXml(rest) || '[nickname] [title(optional)]'} - Add current tab`
+      );
     }
+
+    // :option
     if (':option'.startsWith(cmd) || cmd === ':option') {
-      suggestions.push({
-        content: ':option ', // Adding trailing space to keep it distinct from user input
-        description: `<match>:option</match> - Open Options / Manage Nickmarks`
-      });
+      addCommandSuggestion(
+        ':option',
+        `<match>:option</match> - Open Options / Manage Nickmarks`
+      );
     }
+
+    // :rm
     if (':rm'.startsWith(cmd) || cmd === ':rm') {
-      suggestions.push({
-        content: `:rm ${rest} `, // Adding trailing space to keep it distinct from user input
-        description: `<match>:rm</match> ${rest || '[nickname]'} - Remove Nickmark`
-      });
+      const nicknames = Object.keys(bookmarks);
+      
+      if (!restTrimmed) {
+        addCommandSuggestion(
+          ':rm ',
+          `<match>:rm</match> [nickname] - Remove Nickmark`
+        );
+        if (cmd === ':rm') {
+          for (const n of nicknames.slice(0, 8)) {
+            addCommandSuggestion(`:rm ${n}`, `<match>:rm</match> <match>${escapeXml(n)}</match>`);
+          }
+        }
+      } else {
+        const nicknameParts = restTrimmed.split(/\s+/);
+        const nicknameInput = nicknameParts[0];
+        const urlInput = nicknameParts.slice(1).join(' ').trim();
+
+        const matches = nicknames.filter(n => n.startsWith(nicknameInput));
+        
+        if (matches.length === 0) {
+          addCommandSuggestion(text, `<match>:rm</match> No nicknames match "${escapeXml(restTrimmed)}"`);
+        } else {
+          for (const n of matches) {
+            const entries = bookmarks[n];
+            // Exact nickname match AND multiple URLs exist -> show URL options
+            if (n === nicknameInput && entries.length > 1) {
+              for (const entry of entries) {
+                if (!urlInput || entry.url.includes(urlInput)) {
+                  addCommandSuggestion(
+                    `:rm ${n} ${entry.url}`,
+                    `<match>:rm ${escapeXml(n)}</match> <url>${escapeXml(entry.url)}</url> - ${escapeXml(entry.title) || 'No title'}`
+                  );
+                }
+              }
+            } else {
+              // Partial match or single entry
+              const targetContent = `:rm ${n}`;
+              addCommandSuggestion(
+                targetContent,
+                `<match>:rm</match> ${escapeXml(n)} - Remove ${entries.length > 1 ? 'all entries' : 'nickname'}`
+              );
+            }
+          }
+        }
+      }
     }
+
+    // If typing an invalid command like ":xyz"
+    if (!hasSetDefault) {
+      chrome.omnibox.setDefaultSuggestion({ description: `Invalid command: ${escapeXml(text)}` });
+    }
+
     suggest(suggestions);
     return;
   }
 
-  // Gather matching entries
+  // Regular Search Mode
+  const trimmed = text.trim();
   const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
+  const nicknameCompletions = new Set<string>();
+
   for (const [nickname, entries] of Object.entries(bookmarks)) {
     if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
       for (const entry of entries) {
         allMatches.push({ nickname, entry });
+      }
+      if (nickname.startsWith(trimmed) && nickname !== trimmed) {
+        nicknameCompletions.add(nickname);
       }
     }
   }
 
   // Sort by score desc, then url asc
   allMatches.sort((a, b) => {
-    if (b.entry.score !== a.entry.score) {
-      return b.entry.score - a.entry.score;
-    }
+    if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
     return a.entry.url.localeCompare(b.entry.url);
   });
 
+  let hasSetDefault = false;
+
   if (allMatches.length > 0) {
     const top = allMatches[0];
-    // Set the first match as the default suggestion
     chrome.omnibox.setDefaultSuggestion({
-      description: `<match>${top.nickname}</match>: <url>${top.entry.url}</url> - ${top.entry.title || 'No title'}`
+      description: `<match>${escapeXml(top.nickname)}</match>: <url>${escapeXml(top.entry.url)}</url> - ${escapeXml(top.entry.title) || 'No title'}`
     });
+    hasSetDefault = true;
 
-    // Provide the rest as suggestions (2nd through 10th)
     for (const match of allMatches.slice(1, 10)) {
       suggestions.push({
         content: match.entry.url,
-        description: `<match>${match.nickname}</match>: <url>${match.entry.url}</url> - ${match.entry.title || 'No title'}`
+        description: `<match>${escapeXml(match.nickname)}</match>: <url>${escapeXml(match.entry.url)}</url> - ${escapeXml(match.entry.title) || 'No title'}`
       });
     }
-  } else {
+  }
+
+  for (const n of nicknameCompletions) {
+    if (!hasSetDefault) {
+      chrome.omnibox.setDefaultSuggestion({ description: `Complete nickname: <match>${escapeXml(n)}</match>` });
+      hasSetDefault = true;
+    } else {
+      suggestions.push({
+        content: n,
+        description: `Complete nickname: <match>${escapeXml(n)}</match>`
+      });
+    }
+  }
+
+  if (!hasSetDefault) {
     chrome.omnibox.setDefaultSuggestion({
-      description: `No matches found for: <match>${trimmed}</match>`
+      description: `No matches found for: <match>${escapeXml(trimmed)}</match>`
     });
   }
 
@@ -183,10 +286,7 @@ async function showToast(tabId: number, message: string) {
         });
 
         document.body.appendChild(div);
-        
-        // Force reflow
         div.offsetHeight;
-        
         div.style.opacity = '1';
         div.style.transform = 'translateX(-50%) translateY(8px)';
 
@@ -199,7 +299,6 @@ async function showToast(tabId: number, message: string) {
       args: [message]
     });
   } catch (e) {
-    // If injection fails (e.g. on special chrome:// pages), redirect to options page with message
     const optionsUrl = chrome.runtime.getURL(`options.html?msg=${encodeURIComponent(message)}`);
     chrome.tabs.update(tabId, { url: optionsUrl });
   }
@@ -208,11 +307,10 @@ async function showToast(tabId: number, message: string) {
 chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "currentTab" | "newForegroundTab" | "newBackgroundTab") => {
   const trimmed = text.trim();
 
-  // Command mode handling
   if (trimmed.startsWith(':')) {
-    const parts = trimmed.split(' ');
+    const parts = trimmed.split(/\s+/);
     const cmd = parts[0];
-    const name = parts.slice(1).join(' ').trim();
+    const rest = trimmed.substring(cmd.length).trim();
 
     if (cmd === ':option') {
       chrome.runtime.openOptionsPage();
@@ -223,16 +321,13 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       if (!currentTab || !currentTab.id) return;
 
       if (!nickname) {
-        const errorMsg = chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.';
-        await showToast(currentTab.id, errorMsg);
+        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.');
         return;
       }
       const customTitle = parts.slice(2).join(' ').trim();
       if (currentTab.url) {
         const bookmarks = await loadBookmarksData();
         if (!bookmarks[nickname]) bookmarks[nickname] = [];
-        
-        // Ensure no duplicate URL for this nickname
         if (!bookmarks[nickname].some(b => b.url === currentTab.url)) {
           bookmarks[nickname].push({
             url: currentTab.url,
@@ -242,9 +337,7 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
             created_at: Date.now()
           });
           await chrome.storage.local.set({ bookmarks });
-
-          const message = chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as nickname '${nickname}'!`;
-          await showToast(currentTab.id, message);
+          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as '${nickname}'!`);
         }
       }
       return;
@@ -252,91 +345,81 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!currentTab || !currentTab.id) return;
 
-      if (!name) {
-        const errorMsg = chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.';
-        await showToast(currentTab.id, errorMsg);
+      const restParts = rest.split(/\s+/);
+      const nickname = restParts[0];
+      const urlToDelete = restParts.slice(1).join(' ').trim();
+
+      if (!nickname) {
+        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.');
         return;
       }
-      const bookmarks = await loadBookmarksData();
-      if (bookmarks[name]) {
-        delete bookmarks[name];
-        await chrome.storage.local.set({ bookmarks });
 
-        const message = chrome.i18n.getMessage("bookmarkRemovedMessage", [name]) || `Deleted nickname '${name}'.`;
-        await showToast(currentTab.id, message);
+      const bookmarks = await loadBookmarksData();
+      if (bookmarks[nickname]) {
+        if (urlToDelete) {
+          const initialLength = bookmarks[nickname].length;
+          bookmarks[nickname] = bookmarks[nickname].filter(b => b.url !== urlToDelete);
+          if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
+          if (bookmarks[nickname].length < initialLength) {
+            await chrome.storage.local.set({ bookmarks });
+            await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkUrlRemovedMessage", [nickname]) || `Deleted URL for '${nickname}'.`);
+          } else {
+            await showToast(currentTab.id, chrome.i18n.getMessage("errorUrlNotFound", [nickname]) || `URL not found.`);
+          }
+        } else {
+          if (bookmarks[nickname].length > 1) {
+            await showToast(currentTab.id, chrome.i18n.getMessage("errorMultipleUrlsFound") || "Multiple URLs found. Select from suggestions.");
+          } else {
+            delete bookmarks[nickname];
+            await chrome.storage.local.set({ bookmarks });
+            await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkRemovedMessage", [nickname]) || `Deleted '${nickname}'.`);
+          }
+        }
       } else {
-        const errorMsg = chrome.i18n.getMessage("errorNicknameNotFound", [name]) || `Nickname '${name}' not found.`;
-        await showToast(currentTab.id, errorMsg);
+        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `Nickname not found.`);
       }
       return;
     }
   }
 
   let targetUrl = trimmed;
-
-  // If text doesn't look like a URL, maybe it's just the nickname or part of it
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
     const bookmarks = await loadBookmarksData();
-    
-    // Use the same matching/sorting logic as onInputChanged
     const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
     for (const [nickname, entries] of Object.entries(bookmarks)) {
       if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-        for (const entry of entries) {
-          allMatches.push({ nickname, entry });
-        }
+        for (const entry of entries) allMatches.push({ nickname, entry });
       }
     }
-
-    allMatches.sort((a, b) => {
-      if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
-      return a.entry.url.localeCompare(b.entry.url);
-    });
-
-    if (allMatches.length > 0) {
-      targetUrl = allMatches[0].entry.url;
-    } else {
-      return;
-    }
+    allMatches.sort((a, b) => (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url));
+    if (allMatches.length > 0) targetUrl = allMatches[0].entry.url;
+    else return;
   }
 
-  // Update score
   await updateScore(targetUrl);
-
-  // Navigate
   switch (disposition) {
-    case 'currentTab':
-      chrome.tabs.update({ url: targetUrl });
-      break;
-    case 'newForegroundTab':
-      chrome.tabs.create({ url: targetUrl, active: true });
-      break;
-    case 'newBackgroundTab':
-      chrome.tabs.create({ url: targetUrl, active: false });
-      break;
+    case 'currentTab': chrome.tabs.update({ url: targetUrl }); break;
+    case 'newForegroundTab': chrome.tabs.create({ url: targetUrl, active: true }); break;
+    case 'newBackgroundTab': chrome.tabs.create({ url: targetUrl, active: false }); break;
   }
 });
 
 async function updateScore(url: string) {
   const bookmarks = await loadBookmarksData();
   let updated = false;
-
-  for (const [nickname, entries] of Object.entries(bookmarks)) {
-    for (let i = 0; i < entries.length; i++) {
-      if (entries[i].url === url) {
-        entries[i].score = calculateNewScore(entries[i].score, entries[i].last_used_at);
-        entries[i].last_used_at = Date.now();
+  for (const entries of Object.values(bookmarks)) {
+    for (const entry of entries) {
+      if (entry.url === url) {
+        entry.score = calculateNewScore(entry.score, entry.last_used_at);
+        entry.last_used_at = Date.now();
         updated = true;
       }
     }
   }
-
-  if (updated) {
-    await chrome.storage.local.set({ bookmarks });
-  }
+  if (updated) await chrome.storage.local.set({ bookmarks });
 }
 
-// Open options page when the extension icon in the toolbar is clicked
 chrome.action.onClicked.addListener(() => {
   chrome.runtime.openOptionsPage();
 });
+} // End of if (typeof window === 'undefined')
