@@ -81,6 +81,17 @@ function escapeXml(unsafe: any): string {
   });
 }
 
+function isSameUrl(u1: string, u2: string): boolean {
+  if (u1 === u2) return true;
+  try {
+    if (decodeURI(u1) === decodeURI(u2)) return true;
+  } catch (e) {}
+  try {
+    if (decodeURIComponent(u1) === decodeURIComponent(u2)) return true;
+  } catch (e) {}
+  return false;
+}
+
 // Only register omnibox listeners if running in the background service worker.
 // This prevents the options page from executing them and throwing 'Invalid XML' or other errors.
 if (typeof window === 'undefined') {
@@ -164,12 +175,18 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
             const entries = bookmarks[n];
             // Exact nickname match AND multiple URLs exist -> show URL options
             if (n === nicknameInput && entries.length > 1) {
+              if (!hasSetDefault) {
+                chrome.omnibox.setDefaultSuggestion({
+                  description: `<match>:rm</match> ${escapeXml(n)} - Select a specific URL below to delete`
+                });
+                hasSetDefault = true;
+              }
               for (const entry of entries) {
                 if (!urlInput || entry.url.includes(urlInput)) {
-                  addCommandSuggestion(
-                    `:rm ${n} ${entry.url}`,
-                    `<match>:rm ${escapeXml(n)}</match> <url>${escapeXml(entry.url)}</url> - ${escapeXml(entry.title) || 'No title'}`
-                  );
+                  suggestions.push({
+                    content: `:rm ${n} ${entry.url}`,
+                    description: `<match>:rm ${escapeXml(n)}</match> <url>${escapeXml(entry.url)}</url> - ${escapeXml(entry.title) || 'No title'}`
+                  });
                 }
               }
             } else {
@@ -358,7 +375,7 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
       if (bookmarks[nickname]) {
         if (urlToDelete) {
           const initialLength = bookmarks[nickname].length;
-          bookmarks[nickname] = bookmarks[nickname].filter(b => b.url !== urlToDelete);
+          bookmarks[nickname] = bookmarks[nickname].filter(b => !isSameUrl(b.url, urlToDelete));
           if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
           if (bookmarks[nickname].length < initialLength) {
             await chrome.storage.local.set({ bookmarks });
