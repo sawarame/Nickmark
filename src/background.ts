@@ -131,6 +131,17 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
       }
     };
 
+    const getNicknameSummary = (n: string): string => {
+      const entries = bookmarks[n] || [];
+      const escapedN = escapeXml(n);
+      if (entries.length === 1) {
+        return `<match>${escapedN}</match> <url>${escapeXml(entries[0].url)}</url> - ${escapeXml(entries[0].title) || 'No title'}`;
+      } else if (entries.length > 1) {
+        return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
+      }
+      return `<match>${escapedN}</match>`;
+    };
+
     // :add
     if (':add'.startsWith(cmd) || cmd === ':add') {
       addCommandSuggestion(
@@ -158,7 +169,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
         );
         if (cmd === ':rm') {
           for (const n of nicknames.slice(0, 8)) {
-            addCommandSuggestion(`:rm ${n}`, `<match>:rm</match> <match>${escapeXml(n)}</match>`);
+            addCommandSuggestion(`:rm ${n}`, `<match>:rm</match> ${getNicknameSummary(n)}`);
           }
         }
       } else {
@@ -194,7 +205,7 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
               const targetContent = `:rm ${n}`;
               addCommandSuggestion(
                 targetContent,
-                `<match>:rm</match> ${escapeXml(n)} - Remove ${entries.length > 1 ? 'all entries' : 'nickname'}`
+                `<match>:rm</match> ${getNicknameSummary(n)}`
               );
             }
           }
