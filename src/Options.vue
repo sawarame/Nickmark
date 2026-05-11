@@ -262,25 +262,31 @@ body {
 }
 
 .form-grid {
-  display: grid;
-  grid-template-columns: 1fr 2fr 2fr auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
-  align-items: end;
+  align-items: flex-end;
 }
 
 .field {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  flex: 1;
+  min-width: 150px;
 }
 
-.field label {
-  font-weight: 500;
+.field:nth-child(1) {
+  flex: 0 0 120px;
+}
+
+.field:nth-child(2),
+.field:nth-child(3) {
+  flex: 2 1 200px;
 }
 
 .field-btn {
-  display: flex;
-  align-items: flex-end;
+  flex: 0 0 auto;
 }
 
 .w-full {

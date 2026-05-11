@@ -153,11 +153,11 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
       );
     }
 
-    // :option
-    if (':option'.startsWith(cmd) || cmd === ':option') {
+    // :opt
+    if (':opt'.startsWith(cmd) || cmd === ':opt') {
       addCommandSuggestion(
-        ':option',
-        `<match>:option</match> - Open Options / Manage Nickmarks`
+        ':opt',
+        `<match>:opt</match> - Open Options / Manage Nickmarks`
       );
     }
 
@@ -350,10 +350,11 @@ chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "cur
     const cmd = parts[0];
     const rest = trimmed.substring(cmd.length).trim();
 
-    if (cmd === ':option') {
+    if (cmd === ':opt') {
       chrome.runtime.openOptionsPage();
       return;
-    } else if (cmd === ':add') {
+    }
+ else if (cmd === ':add') {
       const nickname = parts[1];
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!currentTab || !currentTab.id) return;
