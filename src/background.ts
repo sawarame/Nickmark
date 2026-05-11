@@ -135,12 +135,15 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
       const entries = bookmarks[n] || [];
       const escapedN = escapeXml(n);
       if (entries.length === 1) {
-        return `<match>${escapedN}</match> <url>${escapeXml(entries[0].url)}</url> - ${escapeXml(entries[0].title) || 'No title'}`;
+        const title = escapeXml(entries[0].title) || 'No title';
+        const url = escapeXml(entries[0].url);
+        return `<match>${escapedN}</match> ${title} - <url>${url}</url>`;
       } else if (entries.length > 1) {
         return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
       }
       return `<match>${escapedN}</match>`;
     };
+
 
     // :add
     if (':add'.startsWith(cmd) || cmd === ':add') {
@@ -194,9 +197,11 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
               }
               for (const entry of entries) {
                 if (!urlInput || entry.url.includes(urlInput)) {
+                  const title = escapeXml(entry.title) || 'No title';
+                  const url = escapeXml(entry.url);
                   suggestions.push({
                     content: `:rm ${n} ${entry.url}`,
-                    description: `<match>:rm ${escapeXml(n)}</match> <url>${escapeXml(entry.url)}</url> - ${escapeXml(entry.title) || 'No title'}`
+                    description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
                   });
                 }
               }
@@ -248,18 +253,23 @@ chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
 
   if (allMatches.length > 0) {
     const top = allMatches[0];
+    const topTitle = escapeXml(top.entry.title) || 'No title';
+    const topUrl = escapeXml(top.entry.url);
     chrome.omnibox.setDefaultSuggestion({
-      description: `<match>${escapeXml(top.nickname)}</match>: <url>${escapeXml(top.entry.url)}</url> - ${escapeXml(top.entry.title) || 'No title'}`
+      description: `<match>${escapeXml(top.nickname)}</match>: ${topTitle} - <url>${topUrl}</url>`
     });
     hasSetDefault = true;
 
     for (const match of allMatches.slice(1, 10)) {
+      const mTitle = escapeXml(match.entry.title) || 'No title';
+      const mUrl = escapeXml(match.entry.url);
       suggestions.push({
         content: match.entry.url,
-        description: `<match>${escapeXml(match.nickname)}</match>: <url>${escapeXml(match.entry.url)}</url> - ${escapeXml(match.entry.title) || 'No title'}`
+        description: `<match>${escapeXml(match.nickname)}</match>: ${mTitle} - <url>${mUrl}</url>`
       });
     }
   }
+
 
   for (const n of nicknameCompletions) {
     if (!hasSetDefault) {
