@@ -1,3 +1,6 @@
+/**
+ * ブックマークエントリの型定義
+ */
 export interface BookmarkEntry {
   url: string;
   title: string;
@@ -6,13 +9,21 @@ export interface BookmarkEntry {
   created_at: number;
 }
 
+/**
+ * 拡張機能全体のデータ構造
+ */
 export interface NickmarkData {
   bookmarks: Record<string, BookmarkEntry[]>;
 }
 
-// Local cache for bookmarks to avoid repeated storage reads during typing
+// 入力中に何度もストレージを読み込むのを防ぐためのローカルキャッシュ
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 
+/**
+ * ストレージからブックマークデータを読み込みます。
+ * キャッシュが存在する場合はキャッシュを返します。
+ * @returns {Promise<Record<string, BookmarkEntry[]>>} 正規化されたブックマークデータのプロミス
+ */
 export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
   if (bookmarksCache) return bookmarksCache;
 
@@ -34,7 +45,7 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
   return normalizedBookmarks;
 }
 
-// Keep cache in sync with storage changes
+// ストレージの変更を監視し、キャッシュを常に最新の状態に保ちます
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.bookmarks) {
     const newVal = changes.bookmarks.newValue;
@@ -56,9 +67,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
   }
 });
 
-// Decay rate per day
+// 1日あたりのスコア減衰率
 const DECAY_RATE = 0.95;
 
+/**
+ * 経過日数に基づいて新しいスコアを計算します。
+ * @param {number} oldScore 古いスコア
+ * @param {number} lastUsedAt 最後に使用された日時のタイムスタンプ
+ * @returns {number} 計算された新しいスコア
+ */
 function calculateNewScore(oldScore: number, lastUsedAt: number): number {
   const now = Date.now();
   const elapsedMs = Math.max(0, now - lastUsedAt);
@@ -66,14 +83,18 @@ function calculateNewScore(oldScore: number, lastUsedAt: number): number {
   return (oldScore * Math.pow(DECAY_RATE, elapsedDays)) + 1.0;
 }
 
-// Helper to safely encode text for omnibox XML descriptions
+/**
+ * オムニボックスの XML 記述用にテキストを安全にエスケープします。
+ * @param {any} unsafe エスケープする文字列
+ * @returns {string} エスケープされた文字列
+ */
 function escapeXml(unsafe: any): string {
   if (!unsafe) return '';
   return String(unsafe).replace(/[<>&'"]/g, function (c) {
     switch (c) {
       case '<': return '&lt;';
       case '>': return '&gt;';
-      case '&': return '＆'; // Use fullwidth ampersand to bypass Chrome's XML parser bugs with URLs
+      case '&': return '＆'; // Chrome の XML パーサーのバグを回避するため、全角のアンパサンドを使用します
       case '\'': return '&apos;';
       case '"': return '&quot;';
       default: return c;
@@ -81,6 +102,12 @@ function escapeXml(unsafe: any): string {
   });
 }
 
+/**
+ * 2つの URL が同一のものか比較します。
+ * @param {string} u1 URL 1
+ * @param {string} u2 URL 2
+ * @returns {boolean} 同一の URL であれば true
+ */
 function isSameUrl(u1: string, u2: string): boolean {
   if (u1 === u2) return true;
   try {
@@ -92,206 +119,215 @@ function isSameUrl(u1: string, u2: string): boolean {
   return false;
 }
 
-// Only register omnibox listeners if running in the background service worker.
-// This prevents the options page from executing them and throwing 'Invalid XML' or other errors.
-if (typeof window === 'undefined') {
-chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
-  const safeText = escapeXml(text);
+/**
+ * コマンド入力文字列を解析し、マッチするコマンドのリストを返します。
+ * @param {string} text 入力されたコマンド文字列（例: ":add mynick"）
+ * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
+ * @returns {{ content: string, description: string }[]} マッチしたコマンド候補の配列
+ */
+function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkEntry[]>): { content: string, description: string }[] {
+  const firstSpaceIndex = text.indexOf(' ');
+  const cmd = firstSpaceIndex === -1 ? text : text.substring(0, firstSpaceIndex);
+  const restTrimmed = (firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1)).trim();
+  const rawRest = firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1);
 
-  if (!text) {
-    chrome.omnibox.setDefaultSuggestion({ 
-      description: 'Search Nickmark' 
+  const commandMatches: { content: string, description: string }[] = [];
+
+  /**
+   * ニックネームのサマリー（タイトルや URL 件数など）を HTML (XML) 形式で取得します。
+   */
+  const getNicknameSummary = (n: string): string => {
+    const entries = bookmarks[n] || [];
+    const escapedN = escapeXml(n);
+    if (entries.length === 1) {
+      const title = escapeXml(entries[0].title) || 'No title';
+      const url = escapeXml(entries[0].url);
+      return `<match>${escapedN}</match> ${title} - <url>${url}</url>`;
+    } else if (entries.length > 1) {
+      return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
+    }
+    return `<match>${escapedN}</match>`;
+  };
+
+  // :add コマンド
+  if (':add'.startsWith(cmd) || cmd === ':add') {
+    commandMatches.push({
+      content: ':add ' + restTrimmed,
+      description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [title(optional)]'} - Add current tab`
     });
-    return;
   }
 
-  const bookmarks = await loadBookmarksData();
+  // :opt コマンド
+  if (':opt'.startsWith(cmd) || cmd === ':opt') {
+    commandMatches.push({
+      content: ':opt',
+      description: `<match>:opt</match> - Open Options / Manage Nickmarks`
+    });
+  }
+
+  // :rm コマンド
+  if (':rm'.startsWith(cmd) || cmd === ':rm') {
+    const nicknames = Object.keys(bookmarks);
+    
+    if (!restTrimmed) {
+      commandMatches.push({
+        content: ':rm ',
+        description: `<match>:rm</match> [nickname] - Remove Nickmark`
+      });
+      if (cmd === ':rm') {
+        for (const n of nicknames.slice(0, 8)) {
+          commandMatches.push({
+            content: `:rm ${n}`,
+            description: `<match>:rm</match> ${getNicknameSummary(n)}`
+          });
+        }
+      }
+    } else {
+      const nicknameParts = restTrimmed.split(/\s+/);
+      const nicknameInput = nicknameParts[0];
+      const urlInput = nicknameParts.slice(1).join(' ').trim();
+
+      const matches = nicknames.filter(n => n.startsWith(nicknameInput));
+      
+      if (matches.length === 0) {
+        commandMatches.push({
+          content: text,
+          description: `<match>:rm</match> No nicknames match "${escapeXml(restTrimmed)}"`
+        });
+      } else {
+        for (const n of matches) {
+          const entries = bookmarks[n];
+          if (n === nicknameInput && entries.length > 1) {
+            let found = false;
+            for (const entry of entries) {
+              if (!urlInput || entry.url.includes(urlInput)) {
+                const title = escapeXml(entry.title) || 'No title';
+                const url = escapeXml(entry.url);
+                commandMatches.push({
+                  content: `:rm ${n} ${entry.url}`,
+                  description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
+                });
+                found = true;
+              }
+            }
+            // 部分一致する URL が見つからなかった場合は親ニックネームのみの候補を出す
+            if (!found && cmd === ':rm') {
+              commandMatches.push({
+                content: `:rm ${n}`,
+                description: `<match>:rm</match> ${getNicknameSummary(n)}`
+              });
+            }
+          } else {
+            commandMatches.push({
+              content: `:rm ${n}`,
+              description: `<match>:rm</match> ${getNicknameSummary(n)}`
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return commandMatches;
+}
+
+/**
+ * コマンドモード入力時のサジェストを処理します。
+ * @param {string} text 入力されたテキスト
+ * @param {function} suggest サジェスト結果を返すためのコールバック関数
+ * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
+ */
+function handleCommandModeSuggestions(
+  text: string, 
+  suggest: (suggestResults: chrome.omnibox.SuggestResult[]) => void, 
+  bookmarks: Record<string, BookmarkEntry[]>
+) {
+  const commandMatches = resolveCommandMatches(text, bookmarks);
   const suggestions: chrome.omnibox.SuggestResult[] = [];
 
-  // Command mode handling
-  if (text.startsWith(':')) {
-    const firstSpaceIndex = text.indexOf(' ');
-    const cmd = firstSpaceIndex === -1 ? text : text.substring(0, firstSpaceIndex);
-    const rest = firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1);
-    const restTrimmed = rest.trim();
-
-    let hasSetDefault = false;
-
-    const addCommandSuggestion = (content: string, description: string) => {
-      if (!hasSetDefault) {
-        chrome.omnibox.setDefaultSuggestion({ description });
-        hasSetDefault = true;
-      } else {
-        // Ensure content starts with typed text so Chrome doesn't hide it
-        let finalContent = content;
-        if (!finalContent.startsWith(text) && text.startsWith(content)) {
-          finalContent = text;
-        }
-        suggestions.push({ content: finalContent, description });
-      }
-    };
-
-    const getNicknameSummary = (n: string): string => {
-      const entries = bookmarks[n] || [];
-      const escapedN = escapeXml(n);
-      if (entries.length === 1) {
-        const title = escapeXml(entries[0].title) || 'No title';
-        const url = escapeXml(entries[0].url);
-        return `<match>${escapedN}</match> ${title} - <url>${url}</url>`;
-      } else if (entries.length > 1) {
-        return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
-      }
-      return `<match>${escapedN}</match>`;
-    };
-
-
-    // :add
-    if (':add'.startsWith(cmd) || cmd === ':add') {
-      addCommandSuggestion(
-        ':add ',
-        `<match>:add</match> ${escapeXml(rest) || '[nickname] [title(optional)]'} - Add current tab`
-      );
-    }
-
-    // :opt
-    if (':opt'.startsWith(cmd) || cmd === ':opt') {
-      addCommandSuggestion(
-        ':opt',
-        `<match>:opt</match> - Open Options / Manage Nickmarks`
-      );
-    }
-
-    // :rm
-    if (':rm'.startsWith(cmd) || cmd === ':rm') {
-      const nicknames = Object.keys(bookmarks);
-      
-      if (!restTrimmed) {
-        addCommandSuggestion(
-          ':rm ',
-          `<match>:rm</match> [nickname] - Remove Nickmark`
-        );
-        if (cmd === ':rm') {
-          for (const n of nicknames.slice(0, 8)) {
-            addCommandSuggestion(`:rm ${n}`, `<match>:rm</match> ${getNicknameSummary(n)}`);
-          }
-        }
-      } else {
-        const nicknameParts = restTrimmed.split(/\s+/);
-        const nicknameInput = nicknameParts[0];
-        const urlInput = nicknameParts.slice(1).join(' ').trim();
-
-        const matches = nicknames.filter(n => n.startsWith(nicknameInput));
-        
-        if (matches.length === 0) {
-          addCommandSuggestion(text, `<match>:rm</match> No nicknames match "${escapeXml(restTrimmed)}"`);
-        } else {
-          for (const n of matches) {
-            const entries = bookmarks[n];
-            // Exact nickname match AND multiple URLs exist -> show URL options
-            if (n === nicknameInput && entries.length > 1) {
-              if (!hasSetDefault) {
-                chrome.omnibox.setDefaultSuggestion({
-                  description: `<match>:rm</match> ${escapeXml(n)} - Select a specific URL below to delete`
-                });
-                hasSetDefault = true;
-              }
-              for (const entry of entries) {
-                if (!urlInput || entry.url.includes(urlInput)) {
-                  const title = escapeXml(entry.title) || 'No title';
-                  const url = escapeXml(entry.url);
-                  suggestions.push({
-                    content: `:rm ${n} ${entry.url}`,
-                    description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
-                  });
-                }
-              }
-            } else {
-              // Partial match or single entry
-              const targetContent = `:rm ${n}`;
-              addCommandSuggestion(
-                targetContent,
-                `<match>:rm</match> ${getNicknameSummary(n)}`
-              );
-            }
-          }
-        }
-      }
-    }
-
-    // If typing an invalid command like ":xyz"
-    if (!hasSetDefault) {
-      chrome.omnibox.setDefaultSuggestion({ description: `Invalid command: ${escapeXml(text)}` });
-    }
-
-    suggest(suggestions);
-    return;
+  if (commandMatches.length === 1) {
+    chrome.omnibox.setDefaultSuggestion({ description: `Run command: ${commandMatches[0].description}` });
+  } else if (commandMatches.length > 1) {
+    chrome.omnibox.setDefaultSuggestion({ description: `Search commands for: <match>${escapeXml(text)}</match>` });
+  } else {
+    chrome.omnibox.setDefaultSuggestion({ description: `Invalid command: <match>${escapeXml(text)}</match>` });
   }
 
-  // Regular Search Mode
+  for (const match of commandMatches) {
+    let finalContent = match.content;
+    // Chrome が候補を非表示にするのを防ぐため、入力テキストで始まるように調整します
+    if (!finalContent.startsWith(text) && text.startsWith(match.content)) {
+      finalContent = text;
+    }
+    suggestions.push({ content: finalContent, description: match.description });
+  }
+
+  suggest(suggestions);
+}
+
+/**
+ * 通常検索モード入力時のサジェストを処理します。
+ * @param {string} text 入力されたテキスト
+ * @param {function} suggest サジェスト結果を返すためのコールバック関数
+ * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
+ */
+function handleRegularSearchSuggestions(
+  text: string, 
+  suggest: (suggestResults: chrome.omnibox.SuggestResult[]) => void, 
+  bookmarks: Record<string, BookmarkEntry[]>
+) {
   const trimmed = text.trim();
   const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
-  const nicknameCompletions = new Set<string>();
 
   for (const [nickname, entries] of Object.entries(bookmarks)) {
     if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
       for (const entry of entries) {
         allMatches.push({ nickname, entry });
       }
-      if (nickname.startsWith(trimmed) && nickname !== trimmed) {
-        nicknameCompletions.add(nickname);
-      }
     }
   }
 
-  // Sort by score desc, then url asc
+  // スコアの降順、次に URL の昇順でソートします
   allMatches.sort((a, b) => {
     if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
     return a.entry.url.localeCompare(b.entry.url);
   });
 
-  let hasSetDefault = false;
-
-  if (allMatches.length > 0) {
+  if (allMatches.length === 1) {
     const top = allMatches[0];
     const topTitle = escapeXml(top.entry.title) || 'No title';
     const topUrl = escapeXml(top.entry.url);
     chrome.omnibox.setDefaultSuggestion({
-      description: `<match>${escapeXml(top.nickname)}</match>: ${topTitle} - <url>${topUrl}</url>`
+      description: `Go to <match>${escapeXml(top.nickname)}</match>: ${topTitle} - <url>${topUrl}</url>`
     });
-    hasSetDefault = true;
-
-    for (const match of allMatches.slice(1, 10)) {
-      const mTitle = escapeXml(match.entry.title) || 'No title';
-      const mUrl = escapeXml(match.entry.url);
-      suggestions.push({
-        content: match.entry.url,
-        description: `<match>${escapeXml(match.nickname)}</match>: ${mTitle} - <url>${mUrl}</url>`
-      });
-    }
-  }
-
-
-  for (const n of nicknameCompletions) {
-    if (!hasSetDefault) {
-      chrome.omnibox.setDefaultSuggestion({ description: `Complete nickname: <match>${escapeXml(n)}</match>` });
-      hasSetDefault = true;
-    } else {
-      suggestions.push({
-        content: n,
-        description: `Complete nickname: <match>${escapeXml(n)}</match>`
-      });
-    }
-  }
-
-  if (!hasSetDefault) {
+  } else if (allMatches.length > 0) {
+    chrome.omnibox.setDefaultSuggestion({
+      description: `Search for: <match>${escapeXml(trimmed)}</match>`
+    });
+  } else {
     chrome.omnibox.setDefaultSuggestion({
       description: `No matches found for: <match>${escapeXml(trimmed)}</match>`
     });
   }
 
-  suggest(suggestions);
-});
+  const suggestions: chrome.omnibox.SuggestResult[] = [];
+  for (const match of allMatches.slice(0, 10)) {
+    const mTitle = escapeXml(match.entry.title) || 'No title';
+    const mUrl = escapeXml(match.entry.url);
+    suggestions.push({
+      content: match.entry.url,
+      description: `<match>${escapeXml(match.nickname)}</match>: ${mTitle} - <url>${mUrl}</url>`
+    });
+  }
 
+  suggest(suggestions);
+}
+
+/**
+ * 現在のタブに一時的なトースト通知を表示します。
+ * @param {number} tabId 対象となるタブの ID
+ * @param {string} message 表示するメッセージ
+ */
 async function showToast(tabId: number, message: string) {
   try {
     await chrome.scripting.executeScript({
@@ -337,112 +373,16 @@ async function showToast(tabId: number, message: string) {
       args: [message]
     });
   } catch (e) {
+    // スクリプト実行権限がないページの場合はオプションページを開いてエラーメッセージを表示
     const optionsUrl = chrome.runtime.getURL(`options.html?msg=${encodeURIComponent(message)}`);
     chrome.tabs.update(tabId, { url: optionsUrl });
   }
 }
 
-chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "currentTab" | "newForegroundTab" | "newBackgroundTab") => {
-  const trimmed = text.trim();
-
-  if (trimmed.startsWith(':')) {
-    const parts = trimmed.split(/\s+/);
-    const cmd = parts[0];
-    const rest = trimmed.substring(cmd.length).trim();
-
-    if (cmd === ':opt') {
-      chrome.runtime.openOptionsPage();
-      return;
-    }
- else if (cmd === ':add') {
-      const nickname = parts[1];
-      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!currentTab || !currentTab.id) return;
-
-      if (!nickname) {
-        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.');
-        return;
-      }
-      const customTitle = parts.slice(2).join(' ').trim();
-      if (currentTab.url) {
-        const bookmarks = await loadBookmarksData();
-        if (!bookmarks[nickname]) bookmarks[nickname] = [];
-        if (!bookmarks[nickname].some(b => b.url === currentTab.url)) {
-          bookmarks[nickname].push({
-            url: currentTab.url,
-            title: customTitle || currentTab.title || '',
-            score: 1.0,
-            last_used_at: Date.now(),
-            created_at: Date.now()
-          });
-          await chrome.storage.local.set({ bookmarks });
-          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `Registered as '${nickname}'!`);
-        }
-      }
-      return;
-    } else if (cmd === ':rm') {
-      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (!currentTab || !currentTab.id) return;
-
-      const restParts = rest.split(/\s+/);
-      const nickname = restParts[0];
-      const urlToDelete = restParts.slice(1).join(' ').trim();
-
-      if (!nickname) {
-        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'Please specify a nickname.');
-        return;
-      }
-
-      const bookmarks = await loadBookmarksData();
-      if (bookmarks[nickname]) {
-        if (urlToDelete) {
-          const initialLength = bookmarks[nickname].length;
-          bookmarks[nickname] = bookmarks[nickname].filter(b => !isSameUrl(b.url, urlToDelete));
-          if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
-          if (bookmarks[nickname].length < initialLength) {
-            await chrome.storage.local.set({ bookmarks });
-            await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkUrlRemovedMessage", [nickname]) || `Deleted URL for '${nickname}'.`);
-          } else {
-            await showToast(currentTab.id, chrome.i18n.getMessage("errorUrlNotFound", [nickname]) || `URL not found.`);
-          }
-        } else {
-          if (bookmarks[nickname].length > 1) {
-            await showToast(currentTab.id, chrome.i18n.getMessage("errorMultipleUrlsFound") || "Multiple URLs found. Select from suggestions.");
-          } else {
-            delete bookmarks[nickname];
-            await chrome.storage.local.set({ bookmarks });
-            await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkRemovedMessage", [nickname]) || `Deleted '${nickname}'.`);
-          }
-        }
-      } else {
-        await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `Nickname not found.`);
-      }
-      return;
-    }
-  }
-
-  let targetUrl = trimmed;
-  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
-    const bookmarks = await loadBookmarksData();
-    const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
-    for (const [nickname, entries] of Object.entries(bookmarks)) {
-      if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-        for (const entry of entries) allMatches.push({ nickname, entry });
-      }
-    }
-    allMatches.sort((a, b) => (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url));
-    if (allMatches.length > 0) targetUrl = allMatches[0].entry.url;
-    else return;
-  }
-
-  await updateScore(targetUrl);
-  switch (disposition) {
-    case 'currentTab': chrome.tabs.update({ url: targetUrl }); break;
-    case 'newForegroundTab': chrome.tabs.create({ url: targetUrl, active: true }); break;
-    case 'newBackgroundTab': chrome.tabs.create({ url: targetUrl, active: false }); break;
-  }
-});
-
+/**
+ * 対象の URL が使用された際に、スコアと最終使用日時を更新します。
+ * @param {string} url 使用された URL
+ */
 async function updateScore(url: string) {
   const bookmarks = await loadBookmarksData();
   let updated = false;
@@ -458,7 +398,162 @@ async function updateScore(url: string) {
   if (updated) await chrome.storage.local.set({ bookmarks });
 }
 
-chrome.action.onClicked.addListener(() => {
-  chrome.runtime.openOptionsPage();
-});
-} // End of if (typeof window === 'undefined')
+/**
+ * 確定したコマンド（:add, :opt, :rm）を実行します。
+ * @param {string} resolvedContent 補完済みのコマンド文字列
+ * @param {chrome.tabs.Tab} currentTab 現在アクティブなタブ
+ */
+async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.Tab) {
+  const parts = resolvedContent.split(/\s+/);
+  const cmd = parts[0];
+  const rest = resolvedContent.substring(cmd.length).trim();
+
+  if (cmd === ':opt') {
+    chrome.runtime.openOptionsPage();
+    return;
+  }
+
+  if (!currentTab || !currentTab.id) return;
+
+  if (cmd === ':add') {
+    const nickname = parts[1];
+    if (!nickname) {
+      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      return;
+    }
+    
+    const customTitle = parts.slice(2).join(' ').trim();
+    if (currentTab.url) {
+      const bookmarks = await loadBookmarksData();
+      if (!bookmarks[nickname]) bookmarks[nickname] = [];
+      
+      // まだ登録されていない場合のみ追加
+      if (!bookmarks[nickname].some(b => b.url === currentTab.url)) {
+        bookmarks[nickname].push({
+          url: currentTab.url,
+          title: customTitle || currentTab.title || '',
+          score: 1.0,
+          last_used_at: Date.now(),
+          created_at: Date.now()
+        });
+        await chrome.storage.local.set({ bookmarks });
+        await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
+      }
+    }
+    return;
+  } 
+
+  if (cmd === ':rm') {
+    const nickname = parts[1];
+    const urlToDelete = parts.slice(2).join(' ').trim();
+
+    if (!nickname) {
+      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      return;
+    }
+
+    const bookmarks = await loadBookmarksData();
+    if (bookmarks[nickname]) {
+      if (urlToDelete) {
+        const initialLength = bookmarks[nickname].length;
+        bookmarks[nickname] = bookmarks[nickname].filter(b => !isSameUrl(b.url, urlToDelete));
+        if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
+        
+        if (bookmarks[nickname]?.length < initialLength || !bookmarks[nickname]) {
+          await chrome.storage.local.set({ bookmarks });
+          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
+        } else {
+          await showToast(currentTab.id, chrome.i18n.getMessage("errorUrlNotFound", [nickname]) || `URL が見つかりませんでした。`);
+        }
+      } else {
+        if (bookmarks[nickname].length > 1) {
+          await showToast(currentTab.id, chrome.i18n.getMessage("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択して削除してください。");
+        } else {
+          delete bookmarks[nickname];
+          await chrome.storage.local.set({ bookmarks });
+          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
+        }
+      }
+    } else {
+      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
+    }
+    return;
+  }
+}
+
+
+// バックグラウンドの Service Worker 環境でのみオムニボックスのリスナーを登録します。
+// （オプションページで読み込まれた際にエラーが発生するのを防ぎます）
+if (typeof window === 'undefined') {
+
+  // オムニボックスで入力が変更されるたびに発火します
+  chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
+    if (!text) {
+      chrome.omnibox.setDefaultSuggestion({ 
+        description: 'Search Nickmark' 
+      });
+      return;
+    }
+
+    const bookmarks = await loadBookmarksData();
+
+    if (text.startsWith(':')) {
+      handleCommandModeSuggestions(text, suggest, bookmarks);
+    } else {
+      handleRegularSearchSuggestions(text, suggest, bookmarks);
+    }
+  });
+
+  // オムニボックスでエンターキーが押された時に発火します
+  chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "currentTab" | "newForegroundTab" | "newBackgroundTab") => {
+    const trimmed = text.trim();
+
+    // コマンドモードの処理
+    if (trimmed.startsWith(':')) {
+      const bookmarks = await loadBookmarksData();
+      const commandMatches = resolveCommandMatches(trimmed, bookmarks);
+      
+      let resolvedContent = trimmed;
+      if (commandMatches.length > 0) {
+        resolvedContent = commandMatches[0].content;
+      }
+
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await executeCommand(resolvedContent, currentTab);
+      return;
+    }
+
+    // 通常検索モードの処理
+    let targetUrl = trimmed;
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+      const bookmarks = await loadBookmarksData();
+      const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
+      for (const [nickname, entries] of Object.entries(bookmarks)) {
+        if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
+          for (const entry of entries) allMatches.push({ nickname, entry });
+        }
+      }
+      // スコアでソートし、一番高いものを選択
+      allMatches.sort((a, b) => (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url));
+      
+      if (allMatches.length > 0) {
+        targetUrl = allMatches[0].entry.url;
+      } else {
+        return; // 一致するものがなければ何もしない
+      }
+    }
+
+    // スコアを更新して遷移
+    await updateScore(targetUrl);
+    switch (disposition) {
+      case 'currentTab': chrome.tabs.update({ url: targetUrl }); break;
+      case 'newForegroundTab': chrome.tabs.create({ url: targetUrl, active: true }); break;
+      case 'newBackgroundTab': chrome.tabs.create({ url: targetUrl, active: false }); break;
+    }
+  });
+
+  // 拡張機能アイコンがクリックされた時にオプションページを開きます
+  chrome.action.onClicked.addListener(() => {
+    chrome.runtime.openOptionsPage();
+  });
+}
