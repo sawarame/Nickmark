@@ -30,7 +30,15 @@
     </Card>
 
     <Card class="mb-4">
-      <template #title>Manage Nickmarks</template>
+      <template #title>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Manage Nickmarks</span>
+          <div style="display: flex; gap: 0.5rem;">
+            <Button label="Export" icon="pi pi-download" severity="secondary" size="small" @click="downloadJsonFile" />
+            <Button label="Jsonで編集" icon="pi pi-code" size="small" @click="openJsonDialog" />
+          </div>
+        </div>
+      </template>
       <template #content>
         <DataTable :value="flatBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
           <Column field="nickname" header="Nickname" sortable></Column>
@@ -38,6 +46,7 @@
           <Column field="url" header="URL" sortable></Column>
           <Column header="Actions">
             <template #body="slotProps">
+              <Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit" @click="openEditDialog(slotProps.data)" />
               <Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete" @click="deleteBookmark(slotProps.data.nickname, slotProps.data.url)" />
             </template>
           </Column>
@@ -45,18 +54,41 @@
       </template>
     </Card>
 
-    <Card>
-      <template #title>Import / Export JSON</template>
-      <template #content>
-        <div class="field mb-2">
-          <Textarea v-model="jsonText" rows="10" class="w-full" style="font-family: monospace;" />
+    <Dialog v-model:visible="showEditDialog" modal header="Edit Nickmark" :style="{ width: '50vw' }">
+      <div class="form-grid">
+        <div class="field">
+          <label for="edit-nickname">Nickname</label>
+          <InputText id="edit-nickname" v-model="editBookmarkData.nickname" />
         </div>
-        <div class="flex gap-2 mt-2">
-          <Button label="Export to JSON" icon="pi pi-download" severity="secondary" @click="exportJson" />
-          <Button label="Import from JSON" icon="pi pi-upload" severity="secondary" @click="importJson" />
+        <div class="field">
+          <label for="edit-url">URL</label>
+          <InputText id="edit-url" v-model="editBookmarkData.url" />
         </div>
+        <div class="field">
+          <label for="edit-title">Title</label>
+          <InputText id="edit-title" v-model="editBookmarkData.title" />
+        </div>
+      </div>
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" text @click="showEditDialog = false" />
+        <Button label="Save" icon="pi pi-check" @click="saveEditBookmark" autofocus />
       </template>
-    </Card>
+    </Dialog>
+
+    <Dialog v-model:visible="showJsonDialog" modal header="Edit in JSON" maximizable :style="{ width: '90vw' }" :contentStyle="{ height: '70vh', display: 'flex', flexDirection: 'column' }">
+      <JsonEditor
+        v-model:text="jsonEditText"
+        mode="text"
+        :darkTheme="true"
+        style="flex: 1; min-height: 0;"
+      />
+      <template #footer>
+        <Button label="Cancel" icon="pi pi-times" text @click="showJsonDialog = false" />
+        <Button label="Save" icon="pi pi-check" @click="saveJsonEdit" autofocus :disabled="!isJsonValid" />
+      </template>
+    </Dialog>
+
+
   </div>
 </template>
 
@@ -64,6 +96,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
+import JsonEditor from 'vue3-ts-jsoneditor';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
@@ -71,6 +104,7 @@ import Column from 'primevue/column';
 import Card from 'primevue/card';
 import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
+import Dialog from 'primevue/dialog';
 
 import { BookmarkEntry, loadBookmarksData } from './background';
 
@@ -78,12 +112,38 @@ const toast = useToast();
 
 const title = ref('');
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
-const jsonText = ref('');
 
 const newBookmark = ref({
   nickname: '',
   url: '',
   title: ''
+});
+
+// Edit Dialog state
+const showEditDialog = ref(false);
+const editBookmarkData = ref({
+  originalNickname: '',
+  originalUrl: '',
+  nickname: '',
+  url: '',
+  title: '',
+  score: 1.0,
+  last_used_at: 0,
+  created_at: 0
+});
+
+// JSON Dialog state
+const showJsonDialog = ref(false);
+const jsonEditText = ref('');
+
+const isJsonValid = computed(() => {
+  if (!jsonEditText.value) return false;
+  try {
+    JSON.parse(jsonEditText.value);
+    return true;
+  } catch (e) {
+    return false;
+  }
 });
 
 const flatBookmarks = computed(() => {
@@ -202,18 +262,109 @@ const deleteBookmark = async (nickname: string, url: string) => {
   }
 };
 
-const exportJson = () => {
-  jsonText.value = JSON.stringify({ bookmarks: bookmarksData.value }, null, 2);
-  toast.add({ severity: 'info', summary: 'Exported', detail: 'Exported to text area.', life: 3000 });
+const downloadJsonFile = () => {
+  const dataStr = JSON.stringify({ bookmarks: bookmarksData.value }, null, 2);
+  const blob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `nickmark_backup_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+  toast.add({ severity: 'success', summary: 'Exported', detail: 'File downloaded successfully.', life: 3000 });
 };
 
-const importJson = async () => {
+const validateBookmarksJson = (bookmarks: any): boolean => {
+  if (!bookmarks || typeof bookmarks !== 'object') return false;
+  for (const nickname in bookmarks) {
+    if (nickname.trim() === '') {
+      toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname cannot be empty.', life: 3000 });
+      return false;
+    }
+    if (!Array.isArray(bookmarks[nickname])) {
+      toast.add({ severity: 'error', summary: 'Error', detail: `Invalid structure for nickname "${nickname}". Expected an array.`, life: 3000 });
+      return false;
+    }
+    for (const entry of bookmarks[nickname]) {
+      if (!entry.url || typeof entry.url !== 'string' || entry.url.trim() === '') {
+        toast.add({ severity: 'error', summary: 'Error', detail: `URL is required for nickname "${nickname}".`, life: 3000 });
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+const openEditDialog = (data: any) => {
+  editBookmarkData.value = {
+    originalNickname: data.nickname,
+    originalUrl: data.url,
+    nickname: data.nickname,
+    url: data.url,
+    title: data.title || '',
+    score: data.score,
+    last_used_at: data.last_used_at,
+    created_at: data.created_at
+  };
+  showEditDialog.value = true;
+};
+
+const saveEditBookmark = async () => {
+  const { originalNickname, originalUrl, nickname, url, title } = editBookmarkData.value;
+  const newNickname = nickname.trim();
+  const newUrl = url.trim();
+
+  if (!newNickname || !newUrl) {
+    toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname and URL are required.', life: 3000 });
+    return;
+  }
+
+  if (originalNickname !== newNickname || originalUrl !== newUrl) {
+    if (bookmarksData.value[newNickname] && bookmarksData.value[newNickname].some(b => b.url === newUrl && (newNickname !== originalNickname || b.url !== originalUrl))) {
+       toast.add({ severity: 'error', summary: 'Error', detail: 'This URL already exists for the new nickname.', life: 3000 });
+       return;
+    }
+  }
+
+  if (bookmarksData.value[originalNickname]) {
+    bookmarksData.value[originalNickname] = bookmarksData.value[originalNickname].filter(b => b.url !== originalUrl);
+    if (bookmarksData.value[originalNickname].length === 0) {
+      delete bookmarksData.value[originalNickname];
+    }
+  }
+
+  if (!bookmarksData.value[newNickname]) {
+    bookmarksData.value[newNickname] = [];
+  }
+  bookmarksData.value[newNickname].push({
+    url: newUrl,
+    title: title.trim(),
+    score: editBookmarkData.value.score,
+    last_used_at: editBookmarkData.value.last_used_at,
+    created_at: editBookmarkData.value.created_at
+  });
+
+  await chrome.storage.local.set({ bookmarks: bookmarksData.value });
+  showEditDialog.value = false;
+  toast.add({ severity: 'success', summary: 'Success', detail: 'Updated successfully.', life: 3000 });
+};
+
+const openJsonDialog = () => {
+  jsonEditText.value = JSON.stringify({ bookmarks: bookmarksData.value }, null, 2);
+  showJsonDialog.value = true;
+};
+
+const saveJsonEdit = async () => {
   try {
-    const data = JSON.parse(jsonText.value);
+    const data = JSON.parse(jsonEditText.value);
     if (data && typeof data === 'object' && 'bookmarks' in data) {
+      if (!validateBookmarksJson(data.bookmarks)) return;
       await chrome.storage.local.set({ bookmarks: data.bookmarks });
       await loadBookmarks();
-      toast.add({ severity: 'success', summary: 'Imported', detail: 'Imported successfully.', life: 3000 });
+      showJsonDialog.value = false;
+      toast.add({ severity: 'success', summary: 'Success', detail: 'JSON updated successfully.', life: 3000 });
     } else {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Invalid JSON structure. Missing "bookmarks" root key.', life: 3000 });
     }
