@@ -1,6 +1,9 @@
-# 開発ワークフロー (Development Workflow)
+---
+name: development
+description: 開発ワークフローに関するガイドラインとベストプラクティスを提供するスキル。
+---
 
-Nickmark 拡張機能の機能を開発、修正、検証する際の標準的なワークフローです。
+# 開発ワークフロー (Development Workflow)
 
 ## 1. 開発の準備
 1. プロレクトリのルートで `npm install` を実行し、依存パッケージをインストールする。
