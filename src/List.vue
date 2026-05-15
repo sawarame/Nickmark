@@ -480,4 +480,9 @@ body {
     width: 100%;
   }
 }
+
+/* Hide the problematic full-width button inside vue3-ts-jsoneditor */
+:deep(.jse-full-width) {
+  display: none !important;
+}
 </style>

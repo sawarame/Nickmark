@@ -5,7 +5,7 @@ module.exports = {
   mode: 'production',
   entry: {
     background: './src/background.ts',
-    options: './src/options.ts'
+    list: './src/list.ts'
   },
   output: {
     path: path.resolve(__dirname, 'Nickmark/js'),
