@@ -325,6 +325,7 @@ function handleRegularSearchSuggestions(
 
 /**
  * 現在のタブに一時的なトースト通知を表示します。
+ * スクリプトの実行権限がないページ（chrome:// やストア等）では、新しいタブで一覧画面を開いてメッセージを表示します。
  * @param {number} tabId 対象となるタブの ID
  * @param {string} message 表示するメッセージ
  */
@@ -373,9 +374,9 @@ async function showToast(tabId: number, message: string) {
       args: [message]
     });
   } catch (e) {
-    // スクリプト実行権限がないページの場合はブックマーク一覧画面を開いてエラーメッセージを表示
+    // スクリプト実行権限がないページの場合は新しくブックマーク一覧画面を開いてメッセージを表示
     const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
-    chrome.tabs.update(tabId, { url: optionsUrl });
+    chrome.tabs.create({ url: optionsUrl });
   }
 }
 
