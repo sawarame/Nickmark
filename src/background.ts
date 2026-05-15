@@ -165,6 +165,40 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     });
   }
 
+  // :open / :o コマンド
+  if (':open'.startsWith(cmd) || ':o'.startsWith(cmd) || cmd === ':open' || cmd === ':o') {
+    const nicknames = Object.keys(bookmarks);
+    if (!restTrimmed) {
+      commandMatches.push({
+        content: ':open ',
+        description: `<match>:open</match> [nickname] - Open all URLs in new tabs`
+      });
+      if (cmd === ':open' || cmd === ':o') {
+        for (const n of nicknames.slice(0, 8)) {
+          commandMatches.push({
+            content: `:open ${n}`,
+            description: `<match>:open</match> ${getNicknameSummary(n)}`
+          });
+        }
+      }
+    } else {
+      const matches = nicknames.filter(n => n.startsWith(restTrimmed));
+      if (matches.length === 0) {
+        commandMatches.push({
+          content: text,
+          description: `<match>:open</match> No nicknames match "${escapeXml(restTrimmed)}"`
+        });
+      } else {
+        for (const n of matches) {
+          commandMatches.push({
+            content: `:open ${n}`,
+            description: `<match>:open</match> ${getNicknameSummary(n)}`
+          });
+        }
+      }
+    }
+  }
+
   // :rm コマンド
   if (':rm'.startsWith(cmd) || cmd === ':rm') {
     const nicknames = Object.keys(bookmarks);
@@ -446,6 +480,26 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     }
     return;
   } 
+
+  if (cmd === ':open' || cmd === ':o') {
+    const nickname = parts[1];
+    if (!nickname) {
+      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      return;
+    }
+
+    const bookmarks = await loadBookmarksData();
+    const entries = bookmarks[nickname];
+    if (entries && entries.length > 0) {
+      for (const entry of entries) {
+        chrome.tabs.create({ url: entry.url, active: false });
+        await updateScore(entry.url);
+      }
+    } else {
+      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
+    }
+    return;
+  }
 
   if (cmd === ':rm') {
     const nickname = parts[1];

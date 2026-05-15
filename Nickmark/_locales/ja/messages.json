@@ -35,6 +35,17 @@
       }
     }
   },
+  "openedTabsMessage": {
+    "message": "ニックネーム「$2」のURLを $1 件開きました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
   "errorMultipleUrlsFound": {
     "message": "複数のURLが見つかりました。候補の中から選択してください。"
   },

@@ -35,6 +35,17 @@
       }
     }
   },
+  "openedTabsMessage": {
+    "message": "Opened $1 URLs for nickname '$2'.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
   "errorMultipleUrlsFound": {
     "message": "Multiple URLs found. Please select a candidate from the suggestions."
   },
