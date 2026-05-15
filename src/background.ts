@@ -157,11 +157,11 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     });
   }
 
-  // :list コマンド
-  if (':list'.startsWith(cmd) || cmd === ':list') {
+  // :ls コマンド
+  if (':ls'.startsWith(cmd) || cmd === ':ls') {
     commandMatches.push({
-      content: ':list',
-      description: `<match>:list</match> - Open Options / Manage Nickmarks`
+      content: ':ls',
+      description: `<match>:ls</match> - Open Options / Manage Nickmarks`
     });
   }
 
@@ -400,7 +400,7 @@ async function updateScore(url: string) {
 }
 
 /**
- * 確定したコマンド（:add, :list, :rm）を実行します。
+ * 確定したコマンド（:add, :ls, :rm）を実行します。
  * @param {string} resolvedContent 補完済みのコマンド文字列
  * @param {chrome.tabs.Tab} currentTab 現在アクティブなタブ
  */
@@ -409,7 +409,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   const cmd = parts[0];
   const rest = resolvedContent.substring(cmd.length).trim();
 
-  if (cmd === ':list') {
+  if (cmd === ':ls') {
     chrome.runtime.openOptionsPage();
     return;
   }
