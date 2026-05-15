@@ -203,14 +203,27 @@ const showCustomToast = (message: string) => {
 };
 
 onMounted(async () => {
-  title.value = chrome.i18n.getMessage('extensionName') ? chrome.i18n.getMessage('extensionName') + ' Options' : 'Nickmark Options';
+  title.value = chrome.i18n.getMessage('extensionName') ? chrome.i18n.getMessage('extensionName') + ' Bookmarks' : 'Nickmark Bookmarks';
   await loadBookmarks();
 
   // Check for message in URL
   const urlParams = new URLSearchParams(window.location.search);
   const msg = urlParams.get('msg');
+  const prefilledUrl = urlParams.get('url');
+  const prefilledTitle = urlParams.get('title');
+
+  if (prefilledUrl) {
+    newBookmark.value.url = prefilledUrl;
+  }
+  if (prefilledTitle) {
+    newBookmark.value.title = prefilledTitle;
+  }
+
   if (msg) {
     showCustomToast(msg);
+  }
+
+  if (msg || prefilledUrl || prefilledTitle) {
     // Clean up URL without refreshing
     const newUrl = window.location.origin + window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
@@ -363,7 +376,6 @@ const saveJsonEdit = async () => {
       if (!validateBookmarksJson(data.bookmarks)) return;
       await chrome.storage.local.set({ bookmarks: data.bookmarks });
       await loadBookmarks();
-      showJsonDialog.value = false;
       toast.add({ severity: 'success', summary: 'Success', detail: 'JSON updated successfully.', life: 3000 });
     } else {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Invalid JSON structure. Missing "bookmarks" root key.', life: 3000 });

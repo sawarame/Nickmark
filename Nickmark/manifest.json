@@ -19,7 +19,7 @@
     "keyword": "nm"
   },
   "options_ui": {
-    "page": "options.html",
+    "page": "list.html",
     "open_in_tab": true
   },
   "action": {

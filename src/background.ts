@@ -198,7 +198,15 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
         for (const n of matches) {
           const entries = bookmarks[n];
           if (n === nicknameInput && entries.length > 1) {
-            let found = false;
+            // 複数の URL がある場合は、誤削除防止のために警告/案内を先頭に表示する
+            if (!urlInput) {
+              const msg = chrome.i18n.getMessage("errorMultipleUrlsFound") || "Multiple URLs found. Select one below or Enter to manage.";
+              commandMatches.push({
+                content: `:rm ${n}`,
+                description: `⚠️ <match>${escapeXml(n)}</match> - ${msg}`
+              });
+            }
+
             for (const entry of entries) {
               if (!urlInput || entry.url.includes(urlInput)) {
                 const title = escapeXml(entry.title) || 'No title';
@@ -207,15 +215,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
                   content: `:rm ${n} ${entry.url}`,
                   description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
                 });
-                found = true;
               }
-            }
-            // 部分一致する URL が見つからなかった場合は親ニックネームのみの候補を出す
-            if (!found && cmd === ':rm') {
-              commandMatches.push({
-                content: `:rm ${n}`,
-                description: `<match>:rm</match> ${getNicknameSummary(n)}`
-              });
             }
           } else {
             commandMatches.push({
@@ -373,8 +373,8 @@ async function showToast(tabId: number, message: string) {
       args: [message]
     });
   } catch (e) {
-    // スクリプト実行権限がないページの場合はオプションページを開いてエラーメッセージを表示
-    const optionsUrl = chrome.runtime.getURL(`options.html?msg=${encodeURIComponent(message)}`);
+    // スクリプト実行権限がないページの場合はブックマーク一覧画面を開いてエラーメッセージを表示
+    const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
     chrome.tabs.update(tabId, { url: optionsUrl });
   }
 }
@@ -418,7 +418,10 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   if (cmd === ':add') {
     const nickname = parts[1];
     if (!nickname) {
-      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      const url = currentTab.url || '';
+      const title = currentTab.title || '';
+      const listUrl = chrome.runtime.getURL(`list.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
+      chrome.tabs.create({ url: listUrl });
       return;
     }
     
@@ -467,7 +470,9 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         }
       } else {
         if (bookmarks[nickname].length > 1) {
-          await showToast(currentTab.id, chrome.i18n.getMessage("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択して削除してください。");
+          const message = chrome.i18n.getMessage("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択するか、管理画面から削除してください。";
+          const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
+          chrome.tabs.create({ url: optionsUrl });
         } else {
           delete bookmarks[nickname];
           await chrome.storage.local.set({ bookmarks });
@@ -483,7 +488,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
 
 
 // バックグラウンドの Service Worker 環境でのみオムニボックスのリスナーを登録します。
-// （オプションページで読み込まれた際にエラーが発生するのを防ぎます）
+// （ブックマーク一覧画面で読み込まれた際にエラーが発生するのを防ぎます）
 if (typeof window === 'undefined') {
 
   // オムニボックスで入力が変更されるたびに発火します
@@ -514,8 +519,13 @@ if (typeof window === 'undefined') {
       const commandMatches = resolveCommandMatches(trimmed, bookmarks);
       
       let resolvedContent = trimmed;
+      // 提案がある場合は解決を試みる。
+      // ただし、:rm コマンドで複数の候補がある場合は、誤削除防止のため自動解決せずに入力値をそのまま使用する。
       if (commandMatches.length > 0) {
-        resolvedContent = commandMatches[0].content;
+        const isRm = trimmed.startsWith(':rm');
+        if (commandMatches.length === 1 || !isRm) {
+          resolvedContent = commandMatches[0].content;
+        }
       }
 
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -552,7 +562,7 @@ if (typeof window === 'undefined') {
     }
   });
 
-  // 拡張機能アイコンがクリックされた時にオプションページを開きます
+  // 拡張機能アイコンがクリックされた時にブックマーク一覧画面を開きます
   chrome.action.onClicked.addListener(() => {
     chrome.runtime.openOptionsPage();
   });
