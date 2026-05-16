@@ -25,10 +25,6 @@
           </div>
         </template>
       </Card>
-
-      <div class="footer-actions">
-        <Button :label="t('backToListBtn')" icon="pi pi-arrow-left" severity="secondary" @click="goBack" />
-      </div>
     </div>
   </div>
 </template>
@@ -69,10 +65,6 @@ const saveLanguage = async () => {
     detail: t('saveSuccess'), 
     life: 3000 
   });
-};
-
-const goBack = () => {
-  window.location.href = 'list.html';
 };
 
 onMounted(async () => {
@@ -118,11 +110,5 @@ onMounted(async () => {
 
 .w-full {
   width: 100%;
-}
-
-.footer-actions {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 2rem;
 }
 </style>

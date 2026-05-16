@@ -1,4 +1,4 @@
-import { initI18n, t } from './i18n';
+import { initI18n, t, getCurrentLocale } from './i18n';
 
 /**
  * ブックマークエントリの型定義
@@ -150,6 +150,14 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     commandMatches.push({
       content: ':prefs',
       description: `<match>:prefs</match> - Open Preferences / Language Settings`
+    });
+  }
+
+  // :help コマンド
+  if (':help'.startsWith(cmd) || cmd === ':help') {
+    commandMatches.push({
+      content: ':help',
+      description: `<match>:help</match> - Open Help / Documentation`
     });
   }
 
@@ -439,6 +447,15 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   if (cmd === ':prefs') {
     const prefsUrl = chrome.runtime.getURL('preferences.html');
     chrome.tabs.create({ url: prefsUrl });
+    return;
+  }
+
+  if (cmd === ':help') {
+    const locale = getCurrentLocale();
+    const helpUrl = locale === 'ja' 
+      ? 'https://sawara.me/extensions/nickmark' 
+      : 'https://sawara.me/en/extensions/nickmark';
+    chrome.tabs.create({ url: helpUrl });
     return;
   }
 
