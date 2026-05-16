@@ -3,7 +3,7 @@
     "message": "Nickmark"
   },
   "extensionDescription": {
-    "message": "ニックネームを使ってアドレスバーからブックマークへ瞬時にアクセスするための、キーボード操作特化型拡張機能。"
+    "message": "ニックネームを使ってアドレスバーからブックマークへ瞬時にアクセス。マウス移動を最小限にしたいパワーユーザー向けの拡張機能。"
   },
   "bookmarkAddedTitle": {
     "message": "登録完了"
