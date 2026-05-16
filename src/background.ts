@@ -1,3 +1,5 @@
+import { initI18n, t } from './i18n';
+
 /**
  * ブックマークエントリの型定義
  */
@@ -44,28 +46,6 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
   bookmarksCache = normalizedBookmarks;
   return normalizedBookmarks;
 }
-
-// ストレージの変更を監視し、キャッシュを常に最新の状態に保ちます
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes.bookmarks) {
-    const newVal = changes.bookmarks.newValue;
-    if (newVal) {
-      const normalized: Record<string, BookmarkEntry[]> = {};
-      for (const [nickname, entries] of Object.entries(newVal)) {
-        if (Array.isArray(entries)) {
-          normalized[nickname] = entries;
-        } else if (entries && typeof entries === 'object') {
-          normalized[nickname] = Object.values(entries) as BookmarkEntry[];
-        } else {
-          normalized[nickname] = [];
-        }
-      }
-      bookmarksCache = normalized;
-    } else {
-      bookmarksCache = {};
-    }
-  }
-});
 
 // 1日あたりのスコア減衰率
 const DECAY_RATE = 0.95;
@@ -165,6 +145,14 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     });
   }
 
+  // :prefs コマンド
+  if (':prefs'.startsWith(cmd) || cmd === ':prefs') {
+    commandMatches.push({
+      content: ':prefs',
+      description: `<match>:prefs</match> - Open Preferences / Language Settings`
+    });
+  }
+
   // :open / :o コマンド
   if (':open'.startsWith(cmd) || ':o'.startsWith(cmd) || cmd === ':open' || cmd === ':o') {
     const nicknames = Object.keys(bookmarks);
@@ -234,7 +222,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
           if (n === nicknameInput && entries.length > 1) {
             // 複数の URL がある場合は、誤削除防止のために警告/案内を先頭に表示する
             if (!urlInput) {
-              const msg = chrome.i18n.getMessage("errorMultipleUrlsFound") || "Multiple URLs found. Select one below or Enter to manage.";
+              const msg = t("errorMultipleUrlsFound") || "Multiple URLs found. Select one below or Enter to manage.";
               commandMatches.push({
                 content: `:rm ${n}`,
                 description: `⚠️ <match>${escapeXml(n)}</match> - ${msg}`
@@ -448,6 +436,12 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     return;
   }
 
+  if (cmd === ':prefs') {
+    const prefsUrl = chrome.runtime.getURL('preferences.html');
+    chrome.tabs.create({ url: prefsUrl });
+    return;
+  }
+
   if (!currentTab || !currentTab.id) return;
 
   if (cmd === ':add') {
@@ -475,7 +469,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
           created_at: Date.now()
         });
         await chrome.storage.local.set({ bookmarks });
-        await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
+        await showToast(currentTab.id, t("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
       }
     }
     return;
@@ -484,7 +478,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   if (cmd === ':open' || cmd === ':o') {
     const nickname = parts[1];
     if (!nickname) {
-      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
       return;
     }
 
@@ -496,7 +490,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         await updateScore(entry.url);
       }
     } else {
-      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
+      await showToast(currentTab.id, t("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
     }
     return;
   }
@@ -506,7 +500,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     const urlToDelete = parts.slice(2).join(' ').trim();
 
     if (!nickname) {
-      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameRequired") || 'ニックネームを指定してください。');
+      await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
       return;
     }
 
@@ -519,32 +513,61 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         
         if (bookmarks[nickname]?.length < initialLength || !bookmarks[nickname]) {
           await chrome.storage.local.set({ bookmarks });
-          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
+          await showToast(currentTab.id, t("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
         } else {
-          await showToast(currentTab.id, chrome.i18n.getMessage("errorUrlNotFound", [nickname]) || `URL が見つかりませんでした。`);
+          await showToast(currentTab.id, t("errorUrlNotFound", [nickname]) || `URL が見つかりませんでした。`);
         }
       } else {
         if (bookmarks[nickname].length > 1) {
-          const message = chrome.i18n.getMessage("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択するか、管理画面から削除してください。";
+          const message = t("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択するか、管理画面から削除してください。";
           const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
           chrome.tabs.create({ url: optionsUrl });
         } else {
           delete bookmarks[nickname];
           await chrome.storage.local.set({ bookmarks });
-          await showToast(currentTab.id, chrome.i18n.getMessage("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
+          await showToast(currentTab.id, t("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
         }
       }
     } else {
-      await showToast(currentTab.id, chrome.i18n.getMessage("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
+      await showToast(currentTab.id, t("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
     }
     return;
   }
 }
 
 
-// バックグラウンドの Service Worker 環境でのみオムニボックスのリスナーを登録します。
-// （ブックマーク一覧画面で読み込まれた際にエラーが発生するのを防ぎます）
+// バックグラウンドの Service Worker 環境でのみ初期化とリスナー登録を行います。
 if (typeof window === 'undefined') {
+
+  // i18n 初期化
+  initI18n();
+
+  // ストレージの変更を監視し、キャッシュや言語設定を常に最新の状態に保ちます
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local') {
+      if (changes.language) {
+        initI18n();
+      }
+      if (changes.bookmarks) {
+        const newVal = changes.bookmarks.newValue;
+        if (newVal) {
+          const normalized: Record<string, BookmarkEntry[]> = {};
+          for (const [nickname, entries] of Object.entries(newVal)) {
+            if (Array.isArray(entries)) {
+              normalized[nickname] = entries;
+            } else if (entries && typeof entries === 'object') {
+              normalized[nickname] = Object.values(entries) as BookmarkEntry[];
+            } else {
+              normalized[nickname] = [];
+            }
+          }
+          bookmarksCache = normalized;
+        } else {
+          bookmarksCache = {};
+        }
+      }
+    }
+  });
 
   // オムニボックスで入力が変更されるたびに発火します
   chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {

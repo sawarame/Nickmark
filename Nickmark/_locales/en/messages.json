@@ -67,5 +67,80 @@
         "content": "$1"
       }
     }
+  },
+  "preferencesTitle": {
+    "message": "Preferences"
+  },
+  "languageSetting": {
+    "message": "Language"
+  },
+  "languageJapanese": {
+    "message": "Japanese"
+  },
+  "languageEnglish": {
+    "message": "English"
+  },
+  "saveSuccess": {
+    "message": "Settings saved successfully."
+  },
+  "addBookmarkTitle": {
+    "message": "Add Nickmark"
+  },
+  "nicknameLabel": {
+    "message": "Nickname"
+  },
+  "urlLabel": {
+    "message": "URL"
+  },
+  "titleLabel": {
+    "message": "Title"
+  },
+  "addBtn": {
+    "message": "Add"
+  },
+  "manageNickmarksTitle": {
+    "message": "Manage Nickmarks"
+  },
+  "exportBtn": {
+    "message": "Export"
+  },
+  "editJsonBtn": {
+    "message": "Edit in JSON"
+  },
+  "actionsLabel": {
+    "message": "Actions"
+  },
+  "errorNicknameUrlRequired": {
+    "message": "Nickname and URL are required."
+  },
+  "errorUrlExists": {
+    "message": "This URL already exists for this nickname."
+  },
+  "successAdded": {
+    "message": "Added successfully."
+  },
+  "successDeleted": {
+    "message": "Deleted successfully."
+  },
+  "successUpdated": {
+    "message": "Updated successfully."
+  },
+  "successExported": {
+    "message": "Exported"
+  },
+  "successFileDownloaded": {
+    "message": "File downloaded successfully."
+  },
+  "successJsonUpdated": {
+    "message": "JSON updated successfully."
+  },
+  "errorInvalidJsonStructure": {
+    "message": "Invalid JSON structure. Missing 'bookmarks' root key."
+  },
+  "errorInvalidJsonFormat": {
+    "message": "Invalid JSON format."
+  },
+  "backToListBtn": {
+    "message": "Back to List"
   }
 }

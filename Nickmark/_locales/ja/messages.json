@@ -67,5 +67,80 @@
         "content": "$1"
       }
     }
+  },
+  "preferencesTitle": {
+    "message": "設定"
+  },
+  "languageSetting": {
+    "message": "使用言語"
+  },
+  "languageJapanese": {
+    "message": "日本語"
+  },
+  "languageEnglish": {
+    "message": "英語"
+  },
+  "saveSuccess": {
+    "message": "設定を保存しました。"
+  },
+  "addBookmarkTitle": {
+    "message": "ニックネーム登録"
+  },
+  "nicknameLabel": {
+    "message": "ニックネーム"
+  },
+  "urlLabel": {
+    "message": "URL"
+  },
+  "titleLabel": {
+    "message": "タイトル"
+  },
+  "addBtn": {
+    "message": "登録"
+  },
+  "manageNickmarksTitle": {
+    "message": "ニックネーム管理"
+  },
+  "exportBtn": {
+    "message": "エクスポート"
+  },
+  "editJsonBtn": {
+    "message": "JSONで編集"
+  },
+  "actionsLabel": {
+    "message": "操作"
+  },
+  "errorNicknameUrlRequired": {
+    "message": "ニックネームとURLは必須です。"
+  },
+  "errorUrlExists": {
+    "message": "このURLはこのニックネームですでに存在します。"
+  },
+  "successAdded": {
+    "message": "正常に追加されました。"
+  },
+  "successDeleted": {
+    "message": "正常に削除されました。"
+  },
+  "successUpdated": {
+    "message": "正常に更新されました。"
+  },
+  "successExported": {
+    "message": "エクスポート完了"
+  },
+  "successFileDownloaded": {
+    "message": "ファイルが正常にダウンロードされました。"
+  },
+  "successJsonUpdated": {
+    "message": "JSONが正常に更新されました。"
+  },
+  "errorInvalidJsonStructure": {
+    "message": "無効なJSON構造です。'bookmarks'ルートキーがありません。"
+  },
+  "errorInvalidJsonFormat": {
+    "message": "無効なJSON形式です。"
+  },
+  "backToListBtn": {
+    "message": "一覧に戻る"
   }
 }

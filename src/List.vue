@@ -1,5 +1,5 @@
 <template>
-  <div class="container">
+  <div class="container" v-if="isLoaded">
     <Toast />
     
     <div class="header">
@@ -7,23 +7,23 @@
     </div>
 
     <Card class="mb-4">
-      <template #title>Add Nickmark</template>
+      <template #title>{{ t('addBookmarkTitle') || 'Add Nickmark' }}</template>
       <template #content>
         <div class="form-grid">
           <div class="field">
-            <label for="nickname">Nickname</label>
+            <label for="nickname">{{ t('nicknameLabel') || 'Nickname' }}</label>
             <InputText id="nickname" v-model="newBookmark.nickname" placeholder="e.g. gh" />
           </div>
           <div class="field">
-            <label for="url">URL</label>
+            <label for="url">{{ t('urlLabel') || 'URL' }}</label>
             <InputText id="url" v-model="newBookmark.url" placeholder="https://github.com/..." />
           </div>
           <div class="field">
-            <label for="titleInput">Title (Optional)</label>
+            <label for="titleInput">{{ t('titleLabel') || 'Title (Optional)' }}</label>
             <InputText id="titleInput" v-model="newBookmark.title" placeholder="My GitHub" />
           </div>
           <div class="field-btn">
-            <Button label="Add" icon="pi pi-plus" @click="addBookmark" />
+            <Button :label="t('addBtn') || 'Add'" icon="pi pi-plus" @click="addBookmark" />
           </div>
         </div>
       </template>
@@ -32,19 +32,20 @@
     <Card class="mb-4">
       <template #title>
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span>Manage Nickmarks</span>
+          <span>{{ t('manageNickmarksTitle') || 'Manage Nickmarks' }}</span>
           <div style="display: flex; gap: 0.5rem;">
-            <Button label="Export" icon="pi pi-download" severity="secondary" size="small" @click="downloadJsonFile" />
-            <Button label="Jsonで編集" icon="pi pi-code" size="small" @click="openJsonDialog" />
+            <Button :label="t('exportBtn') || 'Export'" icon="pi pi-download" severity="secondary" size="small" @click="downloadJsonFile" />
+            <Button :label="t('editJsonBtn') || 'Jsonで編集'" icon="pi pi-code" size="small" @click="openJsonDialog" />
+            <Button icon="pi pi-cog" severity="secondary" size="small" text rounded @click="openPreferences" />
           </div>
         </div>
       </template>
       <template #content>
         <DataTable :value="flatBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
-          <Column field="nickname" header="Nickname" sortable></Column>
-          <Column field="title" header="Title" sortable></Column>
-          <Column field="url" header="URL" sortable></Column>
-          <Column header="Actions">
+          <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable></Column>
+          <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
+          <Column field="url" :header="t('urlLabel') || 'URL'" sortable></Column>
+          <Column :header="t('actionsLabel') || 'Actions'">
             <template #body="slotProps">
               <Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit" @click="openEditDialog(slotProps.data)" />
               <Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete" @click="deleteBookmark(slotProps.data.nickname, slotProps.data.url)" />
@@ -107,11 +108,13 @@ import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 
 import { BookmarkEntry, loadBookmarksData } from './background';
+import { initI18n, t } from './i18n';
 
 const toast = useToast();
 
 const title = ref('');
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
+const isLoaded = ref(false);
 
 const newBookmark = ref({
   nickname: '',
@@ -203,7 +206,8 @@ const showCustomToast = (message: string) => {
 };
 
 onMounted(async () => {
-  title.value = chrome.i18n.getMessage('extensionName') ? chrome.i18n.getMessage('extensionName') + ' Bookmarks' : 'Nickmark Bookmarks';
+  await initI18n();
+  title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   await loadBookmarks();
 
   // Check for message in URL
@@ -228,7 +232,12 @@ onMounted(async () => {
     const newUrl = window.location.origin + window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
   }
+  isLoaded.value = true;
 });
+
+const openPreferences = () => {
+  window.location.href = 'preferences.html';
+};
 
 const addBookmark = async () => {
   const { nickname, url, title } = newBookmark.value;
@@ -236,7 +245,7 @@ const addBookmark = async () => {
   const trimmedUrl = url.trim();
 
   if (!trimmedNickname || !trimmedUrl) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname and URL are required.', life: 3000 });
+    toast.add({ severity: 'error', summary: 'Error', detail: t('errorNicknameUrlRequired') || 'Nickname and URL are required.', life: 3000 });
     return;
   }
 
@@ -245,7 +254,7 @@ const addBookmark = async () => {
   }
 
   if (bookmarksData.value[trimmedNickname].some(b => b.url === trimmedUrl)) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'This URL already exists for this nickname.', life: 3000 });
+    toast.add({ severity: 'error', summary: 'Error', detail: t('errorUrlExists') || 'This URL already exists for this nickname.', life: 3000 });
     return;
   }
 
@@ -261,7 +270,7 @@ const addBookmark = async () => {
   await chrome.storage.local.set({ bookmarks: bookmarksData.value });
   
   newBookmark.value = { nickname: '', url: '', title: '' };
-  toast.add({ severity: 'success', summary: 'Success', detail: 'Added successfully.', life: 3000 });
+  toast.add({ severity: 'success', summary: t('successAdded') || 'Success', detail: t('successAdded') || 'Added successfully.', life: 3000 });
 };
 
 const deleteBookmark = async (nickname: string, url: string) => {
@@ -271,7 +280,7 @@ const deleteBookmark = async (nickname: string, url: string) => {
       delete bookmarksData.value[nickname];
     }
     await chrome.storage.local.set({ bookmarks: bookmarksData.value });
-    toast.add({ severity: 'success', summary: 'Success', detail: 'Deleted successfully.', life: 3000 });
+    toast.add({ severity: 'success', summary: t('successDeleted') || 'Success', detail: t('successDeleted') || 'Deleted successfully.', life: 3000 });
   }
 };
 
@@ -286,7 +295,7 @@ const downloadJsonFile = () => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  toast.add({ severity: 'success', summary: 'Exported', detail: 'File downloaded successfully.', life: 3000 });
+  toast.add({ severity: 'success', summary: t('successExported') || 'Exported', detail: t('successFileDownloaded') || 'File downloaded successfully.', life: 3000 });
 };
 
 const validateBookmarksJson = (bookmarks: any): boolean => {
@@ -361,7 +370,7 @@ const saveEditBookmark = async () => {
 
   await chrome.storage.local.set({ bookmarks: bookmarksData.value });
   showEditDialog.value = false;
-  toast.add({ severity: 'success', summary: 'Success', detail: 'Updated successfully.', life: 3000 });
+  toast.add({ severity: 'success', summary: t('successUpdated') || 'Success', detail: t('successUpdated') || 'Updated successfully.', life: 3000 });
 };
 
 const openJsonDialog = () => {
@@ -376,12 +385,12 @@ const saveJsonEdit = async () => {
       if (!validateBookmarksJson(data.bookmarks)) return;
       await chrome.storage.local.set({ bookmarks: data.bookmarks });
       await loadBookmarks();
-      toast.add({ severity: 'success', summary: 'Success', detail: 'JSON updated successfully.', life: 3000 });
+      toast.add({ severity: 'success', summary: t('successJsonUpdated') || 'Success', detail: t('successJsonUpdated') || 'JSON updated successfully.', life: 3000 });
     } else {
-      toast.add({ severity: 'error', summary: 'Error', detail: 'Invalid JSON structure. Missing "bookmarks" root key.', life: 3000 });
+      toast.add({ severity: 'error', summary: 'Error', detail: t('errorInvalidJsonStructure') || 'Invalid JSON structure. Missing "bookmarks" root key.', life: 3000 });
     }
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Invalid JSON format.', life: 3000 });
+    toast.add({ severity: 'error', summary: 'Error', detail: t('errorInvalidJsonFormat') || 'Invalid JSON format.', life: 3000 });
   }
 };
 </script>
