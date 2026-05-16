@@ -137,6 +137,14 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     });
   }
 
+  // :addall / :aa コマンド
+  if (':addall'.startsWith(cmd) || ':aa'.startsWith(cmd) || cmd === ':addall' || cmd === ':aa') {
+    commandMatches.push({
+      content: ':addall ' + restTrimmed,
+      description: `<match>:addall</match> ${escapeXml(rawRest) || '[nickname]'} - Add all tabs in current window`
+    });
+  }
+
   // :ls コマンド
   if (':ls'.startsWith(cmd) || cmd === ':ls') {
     commandMatches.push({
@@ -460,6 +468,43 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   }
 
   if (!currentTab || !currentTab.id) return;
+
+  if (cmd === ':addall' || cmd === ':aa') {
+    const nickname = parts[1];
+    if (!nickname) {
+      await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
+      return;
+    }
+
+    const tabs = await chrome.tabs.query({ currentWindow: true });
+    const bookmarks = await loadBookmarksData();
+    if (!bookmarks[nickname]) bookmarks[nickname] = [];
+
+    let addedCount = 0;
+    for (const tab of tabs) {
+      if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://')) {
+        // まだ登録されていない場合のみ追加
+        if (!bookmarks[nickname].some(b => b.url === tab.url)) {
+          bookmarks[nickname].push({
+            url: tab.url,
+            title: tab.title || '',
+            score: 1.0,
+            last_used_at: Date.now(),
+            created_at: Date.now()
+          });
+          addedCount++;
+        }
+      }
+    }
+
+    if (addedCount > 0) {
+      await chrome.storage.local.set({ bookmarks });
+      await showToast(currentTab.id, t("bookmarkAllAddedMessage", [addedCount.toString(), nickname]) || `${addedCount} 件のタブを '${nickname}' として登録しました！`);
+    } else {
+      await showToast(currentTab.id, t("successAdded") || '正常に追加されました。');
+    }
+    return;
+  }
 
   if (cmd === ':add') {
     const nickname = parts[1];
