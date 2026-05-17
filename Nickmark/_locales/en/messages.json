@@ -153,5 +153,53 @@
   },
   "backToListBtn": {
     "message": "Back to List"
+  },
+  "syncTitle": {
+    "message": "Sync"
+  },
+  "enableSyncLabel": {
+    "message": "Google Account Sync"
+  },
+  "syncDescription": {
+    "message": "Sync your bookmarks across devices using your Google account (Limit: 100KB)."
+  },
+  "migrationTitle": {
+    "message": "Data Migration"
+  },
+  "confirmEnableSyncWithData": {
+    "message": "Existing cloud data found. Which data do you want to use?"
+  },
+  "confirmDisableSyncWithData": {
+    "message": "Local data already exists. Which data do you want to keep?"
+  },
+  "useCloudDataBtn": {
+    "message": "Use Cloud Data"
+  },
+  "overwriteCloudBtn": {
+    "message": "Overwrite Cloud"
+  },
+  "overwriteLocalBtn": {
+    "message": "Overwrite Local"
+  },
+  "keepLocalDataBtn": {
+    "message": "Keep Local Data"
+  },
+  "cancelBtn": {
+    "message": "Cancel"
+  },
+  "errorSyncQuotaExceeded": {
+    "message": "Local data exceeds 100KB. Please reduce data before enabling sync."
+  },
+  "syncEnabledMessage": {
+    "message": "Sync has been enabled."
+  },
+  "syncDisabledMessage": {
+    "message": "Sync has been disabled. Data copied to local."
+  },
+  "syncDisabledMessageOnly": {
+    "message": "Sync has been disabled. Local data kept."
+  },
+  "migrationSuccess": {
+    "message": "Data migration successful."
   }
 }

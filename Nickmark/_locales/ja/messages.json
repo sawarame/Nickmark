@@ -153,5 +153,53 @@
   },
   "backToListBtn": {
     "message": "一覧に戻る"
+  },
+  "syncTitle": {
+    "message": "同期"
+  },
+  "enableSyncLabel": {
+    "message": "Google アカウント同期"
+  },
+  "syncDescription": {
+    "message": "Google アカウントを使用して、複数のデバイス間でブックマークを同期します（上限 100KB）。"
+  },
+  "migrationTitle": {
+    "message": "データ移行"
+  },
+  "confirmEnableSyncWithData": {
+    "message": "既存のクラウドデータが見つかりました。どちらのデータを使用しますか？"
+  },
+  "confirmDisableSyncWithData": {
+    "message": "ローカルデータがすでに存在します。どちらのデータを保持しますか？"
+  },
+  "useCloudDataBtn": {
+    "message": "クラウドデータを使用"
+  },
+  "overwriteCloudBtn": {
+    "message": "クラウドを上書き"
+  },
+  "overwriteLocalBtn": {
+    "message": "ローカルを上書き"
+  },
+  "keepLocalDataBtn": {
+    "message": "ローカルを保持"
+  },
+  "cancelBtn": {
+    "message": "キャンセル"
+  },
+  "errorSyncQuotaExceeded": {
+    "message": "ローカルデータが 100KB を超えています。同期を有効にする前にデータを減らしてください。"
+  },
+  "syncEnabledMessage": {
+    "message": "同期が有効になりました。"
+  },
+  "syncDisabledMessage": {
+    "message": "同期が解除されました。データをローカルにコピーしました。"
+  },
+  "syncDisabledMessageOnly": {
+    "message": "同期が解除されました。ローカルデータはそのまま保持されます。"
+  },
+  "migrationSuccess": {
+    "message": "データの移行が完了しました。"
   }
 }

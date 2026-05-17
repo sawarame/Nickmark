@@ -107,7 +107,7 @@ import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 
-import { BookmarkEntry, loadBookmarksData } from './background';
+import { BookmarkEntry, loadBookmarksData, saveBookmarksData } from './background';
 import { initI18n, t } from './i18n';
 
 const toast = useToast();
@@ -267,7 +267,7 @@ const addBookmark = async () => {
     created_at: now
   });
 
-  await chrome.storage.local.set({ bookmarks: bookmarksData.value });
+  await saveBookmarksData(bookmarksData.value);
   
   newBookmark.value = { nickname: '', url: '', title: '' };
   toast.add({ severity: 'success', summary: t('successAdded') || 'Success', detail: t('successAdded') || 'Added successfully.', life: 3000 });
@@ -279,7 +279,7 @@ const deleteBookmark = async (nickname: string, url: string) => {
     if (bookmarksData.value[nickname].length === 0) {
       delete bookmarksData.value[nickname];
     }
-    await chrome.storage.local.set({ bookmarks: bookmarksData.value });
+    await saveBookmarksData(bookmarksData.value);
     toast.add({ severity: 'success', summary: t('successDeleted') || 'Success', detail: t('successDeleted') || 'Deleted successfully.', life: 3000 });
   }
 };
@@ -368,7 +368,7 @@ const saveEditBookmark = async () => {
     created_at: editBookmarkData.value.created_at
   });
 
-  await chrome.storage.local.set({ bookmarks: bookmarksData.value });
+  await saveBookmarksData(bookmarksData.value);
   showEditDialog.value = false;
   toast.add({ severity: 'success', summary: t('successUpdated') || 'Success', detail: t('successUpdated') || 'Updated successfully.', life: 3000 });
 };
@@ -383,7 +383,7 @@ const saveJsonEdit = async () => {
     const data = JSON.parse(jsonEditText.value);
     if (data && typeof data === 'object' && 'bookmarks' in data) {
       if (!validateBookmarksJson(data.bookmarks)) return;
-      await chrome.storage.local.set({ bookmarks: data.bookmarks });
+      await saveBookmarksData(data.bookmarks);
       await loadBookmarks();
       toast.add({ severity: 'success', summary: t('successJsonUpdated') || 'Success', detail: t('successJsonUpdated') || 'JSON updated successfully.', life: 3000 });
     } else {

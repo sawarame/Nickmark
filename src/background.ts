@@ -20,6 +20,83 @@ export interface NickmarkData {
 
 // 入力中に何度もストレージを読み込むのを防ぐためのローカルキャッシュ
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
+let isSyncEnabledCache: boolean | null = null;
+
+const SYNC_CHUNK_SIZE = 8000; // 8192 bytes limit, using 8000 for safety
+const SYNC_KEY_PREFIX = 'sync_data_';
+
+/**
+ * 同期が有効かどうかを取得します。
+ */
+export async function getSyncEnabled(): Promise<boolean> {
+  if (isSyncEnabledCache !== null) return isSyncEnabledCache;
+  const data = await chrome.storage.local.get('isSyncEnabled');
+  isSyncEnabledCache = !!data.isSyncEnabled;
+  return isSyncEnabledCache;
+}
+
+/**
+ * 同期設定を更新します。
+ */
+export async function setSyncEnabled(enabled: boolean) {
+  isSyncEnabledCache = enabled;
+  await chrome.storage.local.set({ isSyncEnabled: enabled });
+}
+
+/**
+ * 指定したストレージから生データを読み込み、チャンク化を解除します。
+ */
+async function loadFromStorage(area: 'local' | 'sync'): Promise<Record<string, BookmarkEntry[]>> {
+  if (area === 'local') {
+    const data = await chrome.storage.local.get('bookmarks');
+    return (data.bookmarks as Record<string, BookmarkEntry[]>) || {};
+  } else {
+    const allSyncData = await chrome.storage.sync.get(null);
+    const keys = Object.keys(allSyncData)
+      .filter(k => k.startsWith(SYNC_KEY_PREFIX))
+      .sort((a, b) => {
+        const idxA = parseInt(a.replace(SYNC_KEY_PREFIX, ''), 10);
+        const idxB = parseInt(b.replace(SYNC_KEY_PREFIX, ''), 10);
+        return idxA - idxB;
+      });
+    
+    if (keys.length === 0) return {};
+    
+    const jsonStr = keys.map(k => allSyncData[k]).join('');
+    try {
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error('Failed to parse sync data:', e);
+      return {};
+    }
+  }
+}
+
+/**
+ * 指定したストレージにデータを保存し、必要に応じてチャンク化します。
+ */
+async function saveToStorage(area: 'local' | 'sync', bookmarks: Record<string, BookmarkEntry[]>) {
+  if (area === 'local') {
+    await chrome.storage.local.set({ bookmarks });
+  } else {
+    const jsonStr = JSON.stringify(bookmarks);
+    const chunks: Record<string, string> = {};
+    
+    // Clear old sync data first
+    const allSyncData = await chrome.storage.sync.get(null);
+    const oldKeys = Object.keys(allSyncData).filter(k => k.startsWith(SYNC_KEY_PREFIX));
+    if (oldKeys.length > 0) {
+      await chrome.storage.sync.remove(oldKeys);
+    }
+
+    // Save in chunks
+    for (let i = 0; i < jsonStr.length; i += SYNC_CHUNK_SIZE) {
+      const chunk = jsonStr.substring(i, i + SYNC_CHUNK_SIZE);
+      chunks[`${SYNC_KEY_PREFIX}${i / SYNC_CHUNK_SIZE}`] = chunk;
+    }
+    await chrome.storage.sync.set(chunks);
+  }
+}
 
 /**
  * ストレージからブックマークデータを読み込みます。
@@ -29,8 +106,9 @@ let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
   if (bookmarksCache) return bookmarksCache;
 
-  const data = await chrome.storage.local.get('bookmarks');
-  const rawBookmarks = data.bookmarks || {};
+  const isSync = await getSyncEnabled();
+  const rawBookmarks = await loadFromStorage(isSync ? 'sync' : 'local');
+  
   const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
   
   for (const [nickname, entries] of Object.entries(rawBookmarks)) {
@@ -45,6 +123,49 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
   
   bookmarksCache = normalizedBookmarks;
   return normalizedBookmarks;
+}
+
+/**
+ * ブックマークデータを保存します。
+ * 同期設定に応じて、適切なストレージ（local または sync）に保存します。
+ */
+export async function saveBookmarksData(bookmarks: Record<string, BookmarkEntry[]>) {
+  const isSync = await getSyncEnabled();
+  await saveToStorage(isSync ? 'sync' : 'local', bookmarks);
+  bookmarksCache = bookmarks;
+}
+
+/**
+ * 指定されたストレージ領域のデータと、最新の更新日時を取得します。
+ */
+export async function getStorageDataWithTimestamp(area: 'local' | 'sync'): Promise<{ bookmarks: Record<string, BookmarkEntry[]>, lastUpdated: number }> {
+  const rawBookmarks = await loadFromStorage(area);
+  const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
+  let latest = 0;
+
+  for (const [nickname, entries] of Object.entries(rawBookmarks)) {
+    let normalizedEntries: BookmarkEntry[] = [];
+    if (Array.isArray(entries)) {
+      normalizedEntries = entries;
+    } else if (entries && typeof entries === 'object') {
+      normalizedEntries = Object.values(entries) as BookmarkEntry[];
+    }
+
+    normalizedBookmarks[nickname] = normalizedEntries;
+    for (const entry of normalizedEntries) {
+      latest = Math.max(latest, entry.last_used_at || 0, entry.created_at || 0);
+    }
+  }
+  
+  return { bookmarks: normalizedBookmarks, lastUpdated: latest };
+}
+
+/**
+ * データサイズ（JSON文字列長）が 100KB を超えているかチェックします。
+ */
+export function isOverQuota(bookmarks: Record<string, BookmarkEntry[]>): boolean {
+  const jsonStr = JSON.stringify(bookmarks);
+  return jsonStr.length > 100 * 1024; // 100KB limit
 }
 
 // 1日あたりのスコア減衰率
@@ -434,7 +555,7 @@ async function updateScore(url: string) {
       }
     }
   }
-  if (updated) await chrome.storage.local.set({ bookmarks });
+  if (updated) await saveBookmarksData(bookmarks);
 }
 
 /**
@@ -498,7 +619,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     }
 
     if (addedCount > 0) {
-      await chrome.storage.local.set({ bookmarks });
+      await saveBookmarksData(bookmarks);
       await showToast(currentTab.id, t("bookmarkAllAddedMessage", [addedCount.toString(), nickname]) || `${addedCount} 件のタブを '${nickname}' として登録しました！`);
     } else {
       await showToast(currentTab.id, t("successAdded") || '正常に追加されました。');
@@ -530,7 +651,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
           last_used_at: Date.now(),
           created_at: Date.now()
         });
-        await chrome.storage.local.set({ bookmarks });
+        await saveBookmarksData(bookmarks);
         await showToast(currentTab.id, t("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
       }
     }
@@ -574,7 +695,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
         
         if (bookmarks[nickname]?.length < initialLength || !bookmarks[nickname]) {
-          await chrome.storage.local.set({ bookmarks });
+          await saveBookmarksData(bookmarks);
           await showToast(currentTab.id, t("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
         } else {
           await showToast(currentTab.id, t("errorUrlNotFound", [nickname]) || `URL が見つかりませんでした。`);
@@ -586,7 +707,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
           chrome.tabs.create({ url: optionsUrl });
         } else {
           delete bookmarks[nickname];
-          await chrome.storage.local.set({ bookmarks });
+          await saveBookmarksData(bookmarks);
           await showToast(currentTab.id, t("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
         }
       }
@@ -605,28 +726,23 @@ if (typeof window === 'undefined') {
   initI18n();
 
   // ストレージの変更を監視し、キャッシュや言語設定を常に最新の状態に保ちます
-  chrome.storage.onChanged.addListener((changes, area) => {
+  chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area === 'local') {
       if (changes.language) {
         initI18n();
       }
-      if (changes.bookmarks) {
-        const newVal = changes.bookmarks.newValue;
-        if (newVal) {
-          const normalized: Record<string, BookmarkEntry[]> = {};
-          for (const [nickname, entries] of Object.entries(newVal)) {
-            if (Array.isArray(entries)) {
-              normalized[nickname] = entries;
-            } else if (entries && typeof entries === 'object') {
-              normalized[nickname] = Object.values(entries) as BookmarkEntry[];
-            } else {
-              normalized[nickname] = [];
-            }
-          }
-          bookmarksCache = normalized;
-        } else {
-          bookmarksCache = {};
-        }
+      if (changes.isSyncEnabled) {
+        isSyncEnabledCache = !!changes.isSyncEnabled.newValue;
+        bookmarksCache = null; // 設定が変わったらキャッシュをクリア
+      }
+    }
+    
+    // 現在の設定（Sync有効か否か）に合わせたストレージ変更のみ反映する
+    const isSync = await getSyncEnabled();
+    if ((isSync && area === 'sync') || (!isSync && area === 'local')) {
+      if (changes.bookmarks || Object.keys(changes).some(k => k.startsWith(SYNC_KEY_PREFIX))) {
+        // キャッシュを無効化して次回読み込み時に最新化する
+        bookmarksCache = null;
       }
     }
   });
