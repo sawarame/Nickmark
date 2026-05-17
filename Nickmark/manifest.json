@@ -10,7 +10,8 @@
     "unlimitedStorage",
     "tabs",
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus"
   ],
   "background": {
     "service_worker": "js/background.js"

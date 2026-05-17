@@ -201,5 +201,8 @@
   },
   "migrationSuccess": {
     "message": "Data migration successful."
+  },
+  "helpMenu": {
+    "message": "Help page"
   }
 }

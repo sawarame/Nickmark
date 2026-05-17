@@ -729,7 +729,11 @@ if (typeof window === 'undefined') {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area === 'local') {
       if (changes.language) {
-        initI18n();
+        await initI18n();
+        // 言語設定が変更されたらコンテキストメニューのタイトルも更新する
+        chrome.contextMenus.update('help-page', {
+          title: t('helpMenu')
+        });
       }
       if (changes.isSyncEnabled) {
         isSyncEnabledCache = !!changes.isSyncEnabled.newValue;
@@ -744,6 +748,27 @@ if (typeof window === 'undefined') {
         // キャッシュを無効化して次回読み込み時に最新化する
         bookmarksCache = null;
       }
+    }
+  });
+
+  // 拡張機能のインストール・更新時にコンテキストメニューを作成
+  chrome.runtime.onInstalled.addListener(async () => {
+    await initI18n();
+    chrome.contextMenus.create({
+      id: 'help-page',
+      title: t('helpMenu'),
+      contexts: ['action']
+    });
+  });
+
+  // コンテキストメニューのクリックイベント
+  chrome.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId === 'help-page') {
+      const locale = getCurrentLocale();
+      const helpUrl = locale === 'ja' 
+        ? 'https://sawara.me/extensions/nickmark' 
+        : 'https://sawara.me/en/extensions/nickmark';
+      chrome.tabs.create({ url: helpUrl });
     }
   });
 
