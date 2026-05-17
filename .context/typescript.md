@@ -1,8 +1,3 @@
----
-name: typescript
-description: TypeScriptに関するガイドラインとベストプラクティスを提供するスキル。
----
-
 # TypeScript コーディングルール (TypeScript Rules)
 
 ## 1. コンパイラ設定

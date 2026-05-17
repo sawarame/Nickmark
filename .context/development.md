@@ -1,8 +1,3 @@
----
-name: development
-description: 開発ワークフローに関するガイドラインとベストプラクティスを提供するスキル。
----
-
 # 開発ワークフロー (Development Workflow)
 
 ## 1. 開発の準備
