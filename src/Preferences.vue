@@ -158,10 +158,16 @@ const handleSyncToggle = async (newValue: boolean) => {
       showMigrationDialog.value = true;
     } else {
       // 同期データがない場合は自動コピーして有効化
-      await setSyncEnabled(true);
-      await saveBookmarksData(local.bookmarks);
-      syncEnabled.value = true;
-      toast.add({ severity: 'success', summary: 'Sync Enabled', detail: t('syncEnabledMessage') || 'Sync has been enabled.', life: 3000 });
+      try {
+        await setSyncEnabled(true);
+        await saveBookmarksData(local.bookmarks);
+        syncEnabled.value = true;
+        toast.add({ severity: 'success', summary: 'Sync Enabled', detail: t('syncEnabledMessage') || 'Sync has been enabled.', life: 3000 });
+      } catch (e: any) {
+        await setSyncEnabled(false);
+        const detail = e.message === 'QUOTA_EXCEEDED' ? t('errorSyncQuotaExceeded') : e.message;
+        toast.add({ severity: 'error', summary: 'Error', detail: detail || 'Failed to enable sync.', life: 5000 });
+      }
     }
   } else {
     // OFF にする場合
@@ -177,28 +183,40 @@ const handleSyncToggle = async (newValue: boolean) => {
       showMigrationDialog.value = true;
     } else {
       // ローカルデータがない場合は同期データをコピーして無効化
-      await setSyncEnabled(false);
-      await saveBookmarksData(sync.bookmarks);
-      syncEnabled.value = false;
-      toast.add({ severity: 'info', summary: 'Sync Disabled', detail: t('syncDisabledMessage') || 'Sync has been disabled. Data copied to local.', life: 3000 });
+      try {
+        await setSyncEnabled(false);
+        await saveBookmarksData(sync.bookmarks);
+        syncEnabled.value = false;
+        toast.add({ severity: 'info', summary: 'Sync Disabled', detail: t('syncDisabledMessage') || 'Sync has been disabled. Data copied to local.', life: 3000 });
+      } catch (e: any) {
+        await setSyncEnabled(true);
+        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to disable sync safely.', life: 5000 });
+      }
     }
   }
 };
 
 const performMigration = async () => {
-  if (migrationType.value === 'enable') {
-    // Local -> Sync
-    await setSyncEnabled(true);
-    if (localInfo.value) await saveBookmarksData(localInfo.value.bookmarks);
-    syncEnabled.value = true;
-  } else {
-    // Sync -> Local
-    await setSyncEnabled(false);
-    if (syncInfo.value) await saveBookmarksData(syncInfo.value.bookmarks);
-    syncEnabled.value = false;
+  try {
+    if (migrationType.value === 'enable') {
+      // Local -> Sync
+      await setSyncEnabled(true);
+      if (localInfo.value) await saveBookmarksData(localInfo.value.bookmarks);
+      syncEnabled.value = true;
+    } else {
+      // Sync -> Local
+      await setSyncEnabled(false);
+      if (syncInfo.value) await saveBookmarksData(syncInfo.value.bookmarks);
+      syncEnabled.value = false;
+    }
+    showMigrationDialog.value = false;
+    toast.add({ severity: 'success', summary: 'Success', detail: t('migrationSuccess') || 'Data migration successful.', life: 3000 });
+  } catch (e: any) {
+    // 失敗した場合は設定を元に戻す試みをする
+    await setSyncEnabled(migrationType.value !== 'enable');
+    const detail = e.message === 'QUOTA_EXCEEDED' ? t('errorSyncQuotaExceeded') : e.message;
+    toast.add({ severity: 'error', summary: 'Migration Failed', detail: detail || 'Error occurred during migration.', life: 5000 });
   }
-  showMigrationDialog.value = false;
-  toast.add({ severity: 'success', summary: 'Success', detail: t('migrationSuccess') || 'Data migration successful.', life: 3000 });
 };
 
 const useExistingSyncData = async () => {

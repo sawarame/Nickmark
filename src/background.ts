@@ -22,7 +22,7 @@ export interface NickmarkData {
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
 
-const SYNC_CHUNK_SIZE = 8000; // 8192 bytes limit, using 8000 for safety
+const SYNC_CHUNK_SIZE = 2000; // 8192 bytes limit. 2000 chars * 3 bytes (UTF-8) = 6000 bytes. Safe for Japanese.
 const SYNC_KEY_PREFIX = 'sync_data_';
 
 /**
@@ -67,7 +67,9 @@ async function loadFromStorage(area: 'local' | 'sync'): Promise<Record<string, B
       return JSON.parse(jsonStr);
     } catch (e) {
       console.error('Failed to parse sync data:', e);
-      return {};
+      // パースに失敗した場合は空を返さず、エラーを投げることで
+      // 呼び出し元が不完全なデータに基づいてストレージを上書きするのを防ぐ
+      throw new Error('CORRUPTED_SYNC_DATA');
     }
   }
 }
@@ -80,20 +82,27 @@ async function saveToStorage(area: 'local' | 'sync', bookmarks: Record<string, B
     await chrome.storage.local.set({ bookmarks });
   } else {
     const jsonStr = JSON.stringify(bookmarks);
-    const chunks: Record<string, string> = {};
     
-    // Clear old sync data first
-    const allSyncData = await chrome.storage.sync.get(null);
-    const oldKeys = Object.keys(allSyncData).filter(k => k.startsWith(SYNC_KEY_PREFIX));
-    if (oldKeys.length > 0) {
-      await chrome.storage.sync.remove(oldKeys);
+    // Sync の制限チェック (100KB)
+    if (jsonStr.length > 100 * 1024) {
+      console.error('Data size exceeds sync quota:', jsonStr.length);
+      throw new Error('QUOTA_EXCEEDED');
     }
 
-    // Save in chunks
+    const chunks: Record<string, string> = {};
+    let chunkCount = 0;
     for (let i = 0; i < jsonStr.length; i += SYNC_CHUNK_SIZE) {
       const chunk = jsonStr.substring(i, i + SYNC_CHUNK_SIZE);
-      chunks[`${SYNC_KEY_PREFIX}${i / SYNC_CHUNK_SIZE}`] = chunk;
+      chunks[`${SYNC_KEY_PREFIX}${chunkCount}`] = chunk;
+      chunkCount++;
     }
+
+    // 既存の同期データを完全にクリアする。
+    // これにより、古い形式の巨大なデータ（8KB超え）や、
+    // 不適切なキー形式のデータが残っていることによる Quota エラーを確実に回避する。
+    await chrome.storage.sync.clear();
+
+    // 新しいデータを保存
     await chrome.storage.sync.set(chunks);
   }
 }
@@ -251,7 +260,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   };
 
   // :add コマンド
-  if (':add'.startsWith(cmd) || cmd === ':add') {
+  if (':add'.startsWith(cmd) || cmd === ':add' || cmd === ':a') {
     commandMatches.push({
       content: ':add ' + restTrimmed,
       description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [title(optional)]'} - Add current tab`
@@ -619,15 +628,23 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     }
 
     if (addedCount > 0) {
-      await saveBookmarksData(bookmarks);
-      await showToast(currentTab.id, t("bookmarkAllAddedMessage", [addedCount.toString(), nickname]) || `${addedCount} 件のタブを '${nickname}' として登録しました！`);
+      try {
+        await saveBookmarksData(bookmarks);
+        await showToast(currentTab.id, t("bookmarkAllAddedMessage", [addedCount.toString(), nickname]) || `${addedCount} 件のタブを '${nickname}' として登録しました！`);
+      } catch (e: any) {
+        if (e.message === 'QUOTA_EXCEEDED') {
+          await showToast(currentTab.id, t("errorSyncQuotaExceeded") || 'データサイズ制限（100KB）を超えたため保存できませんでした。');
+        } else {
+          await showToast(currentTab.id, 'Error: ' + e.message);
+        }
+      }
     } else {
       await showToast(currentTab.id, t("successAdded") || '正常に追加されました。');
     }
     return;
   }
 
-  if (cmd === ':add') {
+  if (cmd === ':add' || cmd === ':a') {
     const nickname = parts[1];
     if (!nickname) {
       const url = currentTab.url || '';
@@ -651,8 +668,16 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
           last_used_at: Date.now(),
           created_at: Date.now()
         });
-        await saveBookmarksData(bookmarks);
-        await showToast(currentTab.id, t("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
+        try {
+          await saveBookmarksData(bookmarks);
+          await showToast(currentTab.id, t("bookmarkAddedMessage", [nickname]) || `'${nickname}' として登録しました！`);
+        } catch (e: any) {
+          if (e.message === 'QUOTA_EXCEEDED') {
+            await showToast(currentTab.id, t("errorSyncQuotaExceeded") || 'データサイズ制限（100KB）を超えたため保存できませんでした。');
+          } else {
+            await showToast(currentTab.id, 'Error: ' + e.message);
+          }
+        }
       }
     }
     return;
@@ -695,9 +720,14 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         if (bookmarks[nickname].length === 0) delete bookmarks[nickname];
         
         if (bookmarks[nickname]?.length < initialLength || !bookmarks[nickname]) {
-          await saveBookmarksData(bookmarks);
-          await showToast(currentTab.id, t("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
-        } else {
+          try {
+            await saveBookmarksData(bookmarks);
+            await showToast(currentTab.id, t("bookmarkUrlRemovedMessage", [nickname]) || `'${nickname}' の URL を削除しました。`);
+          } catch (e: any) {
+            await showToast(currentTab.id, 'Error: ' + e.message);
+          }
+        }
+ else {
           await showToast(currentTab.id, t("errorUrlNotFound", [nickname]) || `URL が見つかりませんでした。`);
         }
       } else {
@@ -707,8 +737,12 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
           chrome.tabs.create({ url: optionsUrl });
         } else {
           delete bookmarks[nickname];
-          await saveBookmarksData(bookmarks);
-          await showToast(currentTab.id, t("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
+          try {
+            await saveBookmarksData(bookmarks);
+            await showToast(currentTab.id, t("bookmarkRemovedMessage", [nickname]) || `'${nickname}' を削除しました。`);
+          } catch (e: any) {
+            await showToast(currentTab.id, 'Error: ' + e.message);
+          }
         }
       }
     } else {
