@@ -492,8 +492,41 @@ function handleRegularSearchSuggestions(
 }
 
 /**
+ * ブックマーク一覧画面を既存のタブで開くか、なければ新しく開きます。
+ * メッセージがある場合はトーストとして表示します。
+ */
+async function openOrReuseListTab(params?: { msg?: string; url?: string; title?: string }) {
+  const listUrl = chrome.runtime.getURL('list.html');
+  const tabs = await chrome.tabs.query({ url: listUrl + '*' });
+
+  if (tabs.length > 0) {
+    const tab = tabs[0];
+    if (tab.id !== undefined) {
+      // 既存のタブをアクティブにする
+      await chrome.tabs.update(tab.id, { active: true });
+      if (tab.windowId !== undefined) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+      // ページの状態を更新するメッセージを送信
+      chrome.tabs.sendMessage(tab.id, { action: 'updatePage', ...params });
+    }
+  } else {
+    // 存在しない場合は新しく開く
+    let url = listUrl;
+    if (params) {
+      const query = new URLSearchParams();
+      if (params.msg) query.append('msg', params.msg);
+      if (params.url) query.append('url', params.url);
+      if (params.title) query.append('title', params.title);
+      url += '?' + query.toString();
+    }
+    chrome.tabs.create({ url });
+  }
+}
+
+/**
  * 現在のタブに一時的なトースト通知を表示します。
- * スクリプトの実行権限がないページ（chrome:// やストア等）では、新しいタブで一覧画面を開いてメッセージを表示します。
+ * スクリプトの実行権限がないページ（chrome:// やストア等）では、既存の一覧画面があればそこに移動し、なければ新しいタブで開いてメッセージを表示します。
  * @param {number} tabId 対象となるタブの ID
  * @param {string} message 表示するメッセージ
  */
@@ -542,9 +575,8 @@ async function showToast(tabId: number, message: string) {
       args: [message]
     });
   } catch (e) {
-    // スクリプト実行権限がないページの場合は新しくブックマーク一覧画面を開いてメッセージを表示
-    const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
-    chrome.tabs.create({ url: optionsUrl });
+    // スクリプト実行権限がないページの場合はブックマーク一覧画面で表示
+    await openOrReuseListTab({ msg: message });
   }
 }
 
@@ -649,8 +681,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     if (!nickname) {
       const url = currentTab.url || '';
       const title = currentTab.title || '';
-      const listUrl = chrome.runtime.getURL(`list.html?url=${encodeURIComponent(url)}&title=${encodeURIComponent(title)}`);
-      chrome.tabs.create({ url: listUrl });
+      await openOrReuseListTab({ url, title });
       return;
     }
     
@@ -733,8 +764,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
       } else {
         if (bookmarks[nickname].length > 1) {
           const message = t("errorMultipleUrlsFound") || "複数の URL が登録されています。候補から選択するか、管理画面から削除してください。";
-          const optionsUrl = chrome.runtime.getURL(`list.html?msg=${encodeURIComponent(message)}`);
-          chrome.tabs.create({ url: optionsUrl });
+          await openOrReuseListTab({ msg: message });
         } else {
           delete bookmarks[nickname];
           try {

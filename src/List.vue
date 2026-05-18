@@ -210,6 +210,17 @@ onMounted(async () => {
   title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   await loadBookmarks();
 
+  // バックグラウンドからのメッセージ待受
+  chrome.runtime.onMessage.addListener((request) => {
+    if (request.action === 'updatePage') {
+      if (request.msg) showCustomToast(request.msg);
+      if (request.url) newBookmark.value.url = request.url;
+      if (request.title) newBookmark.value.title = request.title;
+    } else if (request.action === 'showToast' && request.message) {
+      showCustomToast(request.message);
+    }
+  });
+
   // Check for message in URL
   const urlParams = new URLSearchParams(window.location.search);
   const msg = urlParams.get('msg');
