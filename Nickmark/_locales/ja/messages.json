@@ -118,6 +118,15 @@
   "editJsonBtn": {
     "message": "JSONで編集"
   },
+  "isPinnedLabel": {
+    "message": "ピン留め"
+  },
+  "pinTooltip": {
+    "message": "上位に固定"
+  },
+  "unpinTooltip": {
+    "message": "固定を解除"
+  },
   "actionsLabel": {
     "message": "操作"
   },

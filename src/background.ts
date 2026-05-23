@@ -9,6 +9,7 @@ export interface BookmarkEntry {
   score: number;
   last_used_at: number;
   created_at: number;
+  is_pinned?: boolean;
 }
 
 /**
@@ -455,8 +456,11 @@ function handleRegularSearchSuggestions(
     }
   }
 
-  // スコアの降順、次に URL の昇順でソートします
+  // ピン留め、スコアの降順、次に URL の昇順でソートします
   allMatches.sort((a, b) => {
+    const pA = a.entry.is_pinned ? 1 : 0;
+    const pB = b.entry.is_pinned ? 1 : 0;
+    if (pB !== pA) return pB - pA;
     if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
     return a.entry.url.localeCompare(b.entry.url);
   });
@@ -888,8 +892,12 @@ if (typeof window === 'undefined') {
           for (const entry of entries) allMatches.push({ nickname, entry });
         }
       }
-      // スコアでソートし、一番高いものを選択
-      allMatches.sort((a, b) => (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url));
+      // ピン留め優先、次にスコアでソートし、一番高いものを選択
+      allMatches.sort((a, b) => {
+        const pA = a.entry.is_pinned ? 1 : 0;
+        const pB = b.entry.is_pinned ? 1 : 0;
+        return (pB - pA) || (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url);
+      });
       
       if (allMatches.length > 0) {
         targetUrl = allMatches[0].entry.url;

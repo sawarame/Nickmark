@@ -118,6 +118,15 @@
   "editJsonBtn": {
     "message": "Edit in JSON"
   },
+  "isPinnedLabel": {
+    "message": "Pinned"
+  },
+  "pinTooltip": {
+    "message": "Pin to top"
+  },
+  "unpinTooltip": {
+    "message": "Unpin"
+  },
   "actionsLabel": {
     "message": "Actions"
   },

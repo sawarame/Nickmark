@@ -45,6 +45,18 @@
           <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable></Column>
           <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
           <Column field="url" :header="t('urlLabel') || 'URL'" sortable></Column>
+          <Column :header="t('isPinnedLabel') || 'Pinned'" class="text-center" style="width: 4rem">
+            <template #body="slotProps">
+              <Button 
+                icon="pi pi-thumbtack" 
+                :severity="slotProps.data.is_pinned ? 'primary' : 'secondary'" 
+                :text="!slotProps.data.is_pinned"
+                rounded 
+                @click="togglePin(slotProps.data)" 
+                v-tooltip="slotProps.data.is_pinned ? t('unpinTooltip') : t('pinTooltip')"
+              />
+            </template>
+          </Column>
           <Column :header="t('actionsLabel') || 'Actions'">
             <template #body="slotProps">
               <Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit" @click="openEditDialog(slotProps.data)" />
@@ -68,6 +80,10 @@
         <div class="field">
           <label for="edit-title">Title</label>
           <InputText id="edit-title" v-model="editBookmarkData.title" />
+        </div>
+        <div class="field-checkbox">
+          <Checkbox id="edit-pinned" v-model="editBookmarkData.is_pinned" :binary="true" />
+          <label for="edit-pinned" style="margin-left: 0.5rem;">{{ t('isPinnedLabel') || 'Pinned' }}</label>
         </div>
       </div>
       <template #footer>
@@ -107,6 +123,7 @@ import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 
+import Checkbox from 'primevue/checkbox';
 import { BookmarkEntry, loadBookmarksData, saveBookmarksData } from './background';
 import { initI18n, t } from './i18n';
 
@@ -132,7 +149,8 @@ const editBookmarkData = ref({
   title: '',
   score: 1.0,
   last_used_at: 0,
-  created_at: 0
+  created_at: 0,
+  is_pinned: false
 });
 
 // JSON Dialog state
@@ -295,6 +313,18 @@ const deleteBookmark = async (nickname: string, url: string) => {
   }
 };
 
+const togglePin = async (data: any) => {
+  const nickname = data.nickname;
+  const url = data.url;
+  if (bookmarksData.value[nickname]) {
+    const entry = bookmarksData.value[nickname].find(b => b.url === url);
+    if (entry) {
+      entry.is_pinned = !entry.is_pinned;
+      await saveBookmarksData(bookmarksData.value);
+    }
+  }
+};
+
 const downloadJsonFile = () => {
   const dataStr = JSON.stringify({ bookmarks: bookmarksData.value }, null, 2);
   const blob = new Blob([dataStr], { type: 'application/json' });
@@ -339,13 +369,14 @@ const openEditDialog = (data: any) => {
     title: data.title || '',
     score: data.score,
     last_used_at: data.last_used_at,
-    created_at: data.created_at
+    created_at: data.created_at,
+    is_pinned: !!data.is_pinned
   };
   showEditDialog.value = true;
 };
 
 const saveEditBookmark = async () => {
-  const { originalNickname, originalUrl, nickname, url, title } = editBookmarkData.value;
+  const { originalNickname, originalUrl, nickname, url, title, is_pinned } = editBookmarkData.value;
   const newNickname = nickname.trim();
   const newUrl = url.trim();
 
@@ -376,7 +407,8 @@ const saveEditBookmark = async () => {
     title: title.trim(),
     score: editBookmarkData.value.score,
     last_used_at: editBookmarkData.value.last_used_at,
-    created_at: editBookmarkData.value.created_at
+    created_at: editBookmarkData.value.created_at,
+    is_pinned: is_pinned
   });
 
   await saveBookmarksData(bookmarksData.value);
@@ -466,6 +498,12 @@ body {
 .field:nth-child(2),
 .field:nth-child(3) {
   flex: 2 1 200px;
+}
+
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  margin-top: 1rem;
 }
 
 .field-btn {
