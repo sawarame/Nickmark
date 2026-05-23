@@ -25,7 +25,7 @@ jobs:
 
       # 2. Chrome Web Storeにアップロード＆審査へ提出
       - name: Upload and Publish
-        run: npx chrome-webstore-upload-cli@latest upload --source Nickmark.zip --auto-publish
+        run: npx chrome-webstore-upload-cli@latest --source Nickmark.zip
         env:
           EXTENSION_ID: ${{ secrets.EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}
