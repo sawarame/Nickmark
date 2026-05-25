@@ -15,7 +15,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: "24"
 
       # 1. 依存関係のインストールとビルド
       - name: Install dependencies & Build
@@ -25,7 +25,7 @@ jobs:
 
       # 2. Chrome Web Storeにアップロード＆審査へ提出
       - name: Upload and Publish
-        run: npx chrome-webstore-upload-cli@latest --source Nickmark.zip
+        run: npx chrome-webstore-upload-cli@latest --source package.zip
         env:
           EXTENSION_ID: ${{ secrets.EXTENSION_ID }}
           CLIENT_ID: ${{ secrets.CLIENT_ID }}

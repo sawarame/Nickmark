@@ -2,7 +2,7 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
-const iconDir = path.join(__dirname, 'Nickmark', 'icons');
+const iconDir = path.join(__dirname, 'package', 'icons');
 if (!fs.existsSync(iconDir)) {
   fs.mkdirSync(iconDir, { recursive: true });
 }

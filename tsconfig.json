@@ -9,7 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "Nickmark/js",
+    "outDir": "package/js",
     "sourceMap": true,
     "types": ["chrome"],
     "ignoreDeprecations": "6.0"

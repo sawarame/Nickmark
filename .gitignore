@@ -25,5 +25,5 @@ TestResults.xml
 .DS_Store
 
 /node_modules
-/Nickmark/js
-/Nickmark.zip
+/package/js
+/package.zip

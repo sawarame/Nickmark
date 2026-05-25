@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "rimraf ./Nickmark/js && rimraf Nickmark.zip && npx webpack && (cd Nickmark && zip -r ../Nickmark.zip .)",
+    "build": "rimraf ./package/js && rimraf package.zip && npx webpack && (cd package && zip -r ../package.zip .)",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

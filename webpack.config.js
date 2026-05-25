@@ -9,7 +9,7 @@ module.exports = {
     preferences: './src/preferences.ts'
   },
   output: {
-    path: path.resolve(__dirname, 'Nickmark/js'),
+    path: path.resolve(__dirname, 'package/js'),
     filename: '[name].js'
   },
   module: {
