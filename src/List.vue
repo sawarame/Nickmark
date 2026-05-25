@@ -48,7 +48,9 @@
             <template #body="slotProps">
               <div class="flex align-items-center gap-2">
                 <img :src="getFaviconUrl(slotProps.data.url)" class="favicon-img" alt="" />
-                <span class="url-text">{{ slotProps.data.url }}</span>
+                <a :href="slotProps.data.url" target="_blank" rel="noopener noreferrer" class="url-link">
+                  <span class="url-text">{{ slotProps.data.url }}</span>
+                </a>
               </div>
             </template>
           </Column>
@@ -539,6 +541,16 @@ body {
 .url-text {
   word-break: break-all;
   font-size: 0.9rem;
+}
+
+.url-link {
+  text-decoration: none;
+  color: var(--p-primary-color);
+  display: flex;
+}
+
+.url-link:hover {
+  text-decoration: underline;
 }
 
 .w-full {
