@@ -44,7 +44,14 @@
         <DataTable :value="flatBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
           <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable></Column>
           <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
-          <Column field="url" :header="t('urlLabel') || 'URL'" sortable></Column>
+          <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
+            <template #body="slotProps">
+              <div class="flex align-items-center gap-2">
+                <img :src="getFaviconUrl(slotProps.data.url)" class="favicon-img" alt="" />
+                <span class="url-text">{{ slotProps.data.url }}</span>
+              </div>
+            </template>
+          </Column>
           <Column :header="t('isPinnedLabel') || 'Pinned'" class="text-center" style="width: 4rem">
             <template #body="slotProps">
               <Button 
@@ -182,6 +189,17 @@ const flatBookmarks = computed(() => {
 
 const loadBookmarks = async () => {
   bookmarksData.value = await loadBookmarksData();
+};
+
+const getFaviconUrl = (pageUrl: string) => {
+  try {
+    const url = new URL(chrome.runtime.getURL('/_favicon/'));
+    url.searchParams.set('pageUrl', pageUrl);
+    url.searchParams.set('size', '32');
+    return url.toString();
+  } catch (e) {
+    return '';
+  }
 };
 
 const showCustomToast = (message: string) => {
@@ -508,6 +526,19 @@ body {
 
 .field-btn {
   flex: 0 0 auto;
+}
+
+.favicon-img {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.url-text {
+  word-break: break-all;
+  font-size: 0.9rem;
 }
 
 .w-full {
