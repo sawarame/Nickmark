@@ -4,6 +4,17 @@
     
     <div class="header">
       <h1>{{ title }}</h1>
+      <Button
+        icon="pi pi-cog"
+        severity="secondary"
+        text
+        rounded
+        size="large"
+        class="prefs-btn"
+        :aria-label="t('preferencesTitle') || 'Preferences'"
+        v-tooltip.left="t('preferencesTitle') || 'Preferences'"
+        @click="openPreferences"
+      />
     </div>
 
     <Card class="mb-4">
@@ -15,12 +26,12 @@
             <InputText id="nickname" v-model="newBookmark.nickname" placeholder="e.g. gh" />
           </div>
           <div class="field">
-            <label for="url">{{ t('urlLabel') || 'URL' }}</label>
-            <InputText id="url" v-model="newBookmark.url" placeholder="https://github.com/..." />
-          </div>
-          <div class="field">
             <label for="titleInput">{{ t('titleLabel') || 'Title (Optional)' }}</label>
             <InputText id="titleInput" v-model="newBookmark.title" placeholder="My GitHub" />
+          </div>
+          <div class="field">
+            <label for="url">{{ t('urlLabel') || 'URL' }}</label>
+            <InputText id="url" v-model="newBookmark.url" placeholder="https://github.com/..." />
           </div>
           <div class="field-btn">
             <Button :label="t('addBtn') || 'Add'" icon="pi pi-plus" @click="addBookmark" />
@@ -36,7 +47,6 @@
           <div style="display: flex; gap: 0.5rem;">
             <Button :label="t('exportBtn') || 'Export'" icon="pi pi-download" severity="secondary" size="small" @click="downloadJsonFile" />
             <Button :label="t('editJsonBtn') || 'Jsonで編集'" icon="pi pi-code" size="small" @click="openJsonDialog" />
-            <Button icon="pi pi-cog" severity="secondary" size="small" text rounded @click="openPreferences" />
           </div>
         </div>
       </template>
@@ -76,32 +86,39 @@
       </template>
     </Card>
 
-    <Dialog v-model:visible="showEditDialog" modal header="Edit Nickmark" :style="{ width: '50vw' }">
+    <Dialog v-model:visible="showEditDialog" modal :header="t('editBookmarkTitle') || 'Edit Nickmark'" :style="{ width: '1100px', maxWidth: '95vw' }">
       <div class="form-grid">
         <div class="field">
-          <label for="edit-nickname">Nickname</label>
+          <label for="edit-nickname">{{ t('nicknameLabel') || 'Nickname' }}</label>
           <InputText id="edit-nickname" v-model="editBookmarkData.nickname" />
         </div>
         <div class="field">
-          <label for="edit-url">URL</label>
-          <InputText id="edit-url" v-model="editBookmarkData.url" />
-        </div>
-        <div class="field">
-          <label for="edit-title">Title</label>
+          <label for="edit-title">{{ t('titleLabel') || 'Title' }}</label>
           <InputText id="edit-title" v-model="editBookmarkData.title" />
         </div>
-        <div class="field-checkbox">
-          <Checkbox id="edit-pinned" v-model="editBookmarkData.is_pinned" :binary="true" />
-          <label for="edit-pinned" style="margin-left: 0.5rem;">{{ t('isPinnedLabel') || 'Pinned' }}</label>
+        <div class="field">
+          <label for="edit-url">{{ t('urlLabel') || 'URL' }}</label>
+          <InputText id="edit-url" v-model="editBookmarkData.url" />
+        </div>
+        <div class="field-btn">
+          <Button
+            icon="pi pi-thumbtack"
+            :severity="editBookmarkData.is_pinned ? 'primary' : 'secondary'"
+            :text="!editBookmarkData.is_pinned"
+            rounded
+            :aria-label="t('isPinnedLabel') || 'Pinned'"
+            v-tooltip="editBookmarkData.is_pinned ? t('unpinTooltip') : t('pinTooltip')"
+            @click="editBookmarkData.is_pinned = !editBookmarkData.is_pinned"
+          />
         </div>
       </div>
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" text @click="showEditDialog = false" />
-        <Button label="Save" icon="pi pi-check" @click="saveEditBookmark" autofocus />
+        <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="showEditDialog = false" />
+        <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="saveEditBookmark" autofocus />
       </template>
     </Dialog>
 
-    <Dialog v-model:visible="showJsonDialog" modal header="Edit in JSON" maximizable :style="{ width: '90vw' }" :contentStyle="{ height: '70vh', display: 'flex', flexDirection: 'column' }">
+    <Dialog v-model:visible="showJsonDialog" modal :header="t('editJsonBtn') || 'Edit in JSON'" maximizable :style="{ width: '90vw' }" :contentStyle="{ height: '70vh', display: 'flex', flexDirection: 'column' }">
       <JsonEditor
         v-model:text="jsonEditText"
         mode="text"
@@ -109,8 +126,8 @@
         style="flex: 1; min-height: 0;"
       />
       <template #footer>
-        <Button label="Cancel" icon="pi pi-times" text @click="showJsonDialog = false" />
-        <Button label="Save" icon="pi pi-check" @click="saveJsonEdit" autofocus :disabled="!isJsonValid" />
+        <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="showJsonDialog = false" />
+        <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="saveJsonEdit" autofocus :disabled="!isJsonValid" />
       </template>
     </Dialog>
 
@@ -132,7 +149,6 @@ import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 
-import Checkbox from 'primevue/checkbox';
 import { BookmarkEntry, loadBookmarksData, saveBookmarksData } from './background';
 import { initI18n, t } from './i18n';
 
@@ -401,13 +417,13 @@ const saveEditBookmark = async () => {
   const newUrl = url.trim();
 
   if (!newNickname || !newUrl) {
-    toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname and URL are required.', life: 3000 });
+    toast.add({ severity: 'error', summary: 'Error', detail: t('errorNicknameUrlRequired') || 'Nickname and URL are required.', life: 3000 });
     return;
   }
 
   if (originalNickname !== newNickname || originalUrl !== newUrl) {
     if (bookmarksData.value[newNickname] && bookmarksData.value[newNickname].some(b => b.url === newUrl && (newNickname !== originalNickname || b.url !== originalUrl))) {
-       toast.add({ severity: 'error', summary: 'Error', detail: 'This URL already exists for the new nickname.', life: 3000 });
+       toast.add({ severity: 'error', summary: 'Error', detail: t('errorUrlExists') || 'This URL already exists for this nickname.', life: 3000 });
        return;
     }
   }
@@ -470,7 +486,7 @@ body {
 
 <style scoped>
 .container {
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   background-color: var(--p-surface-100);
@@ -478,7 +494,20 @@ body {
 }
 
 .header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 2rem;
+}
+
+/* 設定画面へ移動する歯車ボタンを大きく表示 */
+.prefs-btn {
+  width: 3rem;
+  height: 3rem;
+}
+
+.prefs-btn :deep(.p-button-icon) {
+  font-size: 1.5rem;
 }
 
 .header h1 {
@@ -518,12 +547,6 @@ body {
 .field:nth-child(2),
 .field:nth-child(3) {
   flex: 2 1 200px;
-}
-
-.field-checkbox {
-  display: flex;
-  align-items: center;
-  margin-top: 1rem;
 }
 
 .field-btn {
