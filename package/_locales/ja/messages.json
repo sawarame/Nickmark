@@ -97,6 +97,12 @@
   "addBookmarkTitle": {
     "message": "ニックネーム登録"
   },
+  "editBookmarkTitle": {
+    "message": "ニックネーム編集"
+  },
+  "saveBtn": {
+    "message": "保存"
+  },
   "nicknameLabel": {
     "message": "ニックネーム"
   },

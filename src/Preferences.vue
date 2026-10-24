@@ -4,6 +4,16 @@
 
     <div :key="renderKey">
       <div class="header">
+        <Button
+          icon="pi pi-arrow-left"
+          severity="secondary"
+          text
+          rounded
+          size="large"
+          :aria-label="t('backToListBtn')"
+          v-tooltip="t('backToListBtn')"
+          @click="goBack"
+        />
         <h1>{{ t('preferencesTitle') }}</h1>
       </div>
 
@@ -44,7 +54,7 @@
     </div>
 
     <!-- Migration / Conflict Resolution Dialog -->
-    <Dialog v-model:visible="showMigrationDialog" modal :header="t('migrationTitle') || 'Data Migration'" :style="{ width: '650px' }" :closable="false">
+    <Dialog v-model:visible="showMigrationDialog" modal :header="t('migrationTitle') || 'Data Migration'" :style="{ width: '750px', maxWidth: '90vw' }" :closable="false">
       <div class="migration-content">
         <p>{{ migrationMessage }}</p>
 
@@ -254,6 +264,13 @@ const getBookmarkCount = (bookmarks: Record<string, any>) => {
   return count;
 };
 
+/**
+ * ブックマーク一覧画面へ戻ります。
+ */
+const goBack = () => {
+  window.location.href = 'list.html';
+};
+
 onMounted(async () => {
   await loadSettings();
 });
@@ -261,7 +278,7 @@ onMounted(async () => {
 
 <style scoped>
 .container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
   background-color: var(--p-surface-100);
@@ -269,6 +286,9 @@ onMounted(async () => {
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   margin-bottom: 2rem;
 }
 
