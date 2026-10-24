@@ -238,11 +238,23 @@ function isSameUrl(u1: string, u2: string): boolean {
  */
 function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkEntry[]>): { content: string, description: string }[] {
   const firstSpaceIndex = text.indexOf(' ');
-  const cmd = firstSpaceIndex === -1 ? text : text.substring(0, firstSpaceIndex);
-  const restTrimmed = (firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1)).trim();
-  const rawRest = firstSpaceIndex === -1 ? '' : text.substring(firstSpaceIndex + 1);
+  const hasSpace = firstSpaceIndex !== -1;
+  const cmd = !hasSpace ? text : text.substring(0, firstSpaceIndex);
+  const restTrimmed = (!hasSpace ? '' : text.substring(firstSpaceIndex + 1)).trim();
+  const rawRest = !hasSpace ? '' : text.substring(firstSpaceIndex + 1);
 
   const commandMatches: { content: string, description: string }[] = [];
+
+  /**
+   * コマンド名が入力にマッチするかを判定します。
+   * スペース入力前は前方一致、スペース入力後はコマンド確定とみなして完全一致で判定します。
+   */
+  const isCmdMatch = (targetCmds: string[]): boolean => {
+    if (hasSpace) {
+      return targetCmds.includes(cmd);
+    }
+    return targetCmds.some(target => target.startsWith(cmd));
+  };
 
   /**
    * ニックネームのサマリー（タイトルや URL 件数など）を HTML (XML) 形式で取得します。
@@ -260,8 +272,8 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
     return `<match>${escapedN}</match>`;
   };
 
-  // :add コマンド
-  if (':add'.startsWith(cmd) || cmd === ':add' || cmd === ':a') {
+  // :add / :a コマンド
+  if (isCmdMatch([':add', ':a'])) {
     commandMatches.push({
       content: ':add ' + restTrimmed,
       description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [title(optional)]'} - Add current tab`
@@ -269,7 +281,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :addall / :aa コマンド
-  if (':addall'.startsWith(cmd) || ':aa'.startsWith(cmd) || cmd === ':addall' || cmd === ':aa') {
+  if (isCmdMatch([':addall', ':aa'])) {
     commandMatches.push({
       content: ':addall ' + restTrimmed,
       description: `<match>:addall</match> ${escapeXml(rawRest) || '[nickname]'} - Add all tabs in current window`
@@ -277,7 +289,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :ls コマンド
-  if (':ls'.startsWith(cmd) || cmd === ':ls') {
+  if (isCmdMatch([':ls'])) {
     commandMatches.push({
       content: ':ls',
       description: `<match>:ls</match> - Open Options / Manage Nickmarks`
@@ -285,7 +297,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :prefs コマンド
-  if (':prefs'.startsWith(cmd) || cmd === ':prefs') {
+  if (isCmdMatch([':prefs'])) {
     commandMatches.push({
       content: ':prefs',
       description: `<match>:prefs</match> - Open Preferences / Language Settings`
@@ -293,7 +305,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :help コマンド
-  if (':help'.startsWith(cmd) || cmd === ':help') {
+  if (isCmdMatch([':help'])) {
     commandMatches.push({
       content: ':help',
       description: `<match>:help</match> - Open Help / Documentation`
@@ -301,7 +313,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :open / :o コマンド
-  if (':open'.startsWith(cmd) || ':o'.startsWith(cmd) || cmd === ':open' || cmd === ':o') {
+  if (isCmdMatch([':open', ':o'])) {
     const nicknames = Object.keys(bookmarks);
     if (!restTrimmed) {
       commandMatches.push({
@@ -335,7 +347,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   }
 
   // :rm コマンド
-  if (':rm'.startsWith(cmd) || cmd === ':rm') {
+  if (isCmdMatch([':rm'])) {
     const nicknames = Object.keys(bookmarks);
     
     if (!restTrimmed) {
@@ -413,8 +425,10 @@ function handleCommandModeSuggestions(
 ) {
   const commandMatches = resolveCommandMatches(text, bookmarks);
   const suggestions: chrome.omnibox.SuggestResult[] = [];
+  const hasSpace = text.includes(' ');
 
-  if (commandMatches.length === 1) {
+  if (commandMatches.length === 1 || (hasSpace && commandMatches.length > 0)) {
+    // コマンドが1つに絞られた場合、またはスペース入力によりコマンドが確定している場合は実行表示にする
     chrome.omnibox.setDefaultSuggestion({ description: `Run command: ${commandMatches[0].description}` });
   } else if (commandMatches.length > 1) {
     chrome.omnibox.setDefaultSuggestion({ description: `Search commands for: <match>${escapeXml(text)}</match>` });
