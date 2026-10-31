@@ -22,6 +22,7 @@ export interface NickmarkData {
 // 入力中に何度もストレージを読み込むのを防ぐためのローカルキャッシュ
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
+let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
 
 const SYNC_CHUNK_SIZE = 2000; // 8192 bytes limit. 2000 chars * 3 bytes (UTF-8) = 6000 bytes. Safe for Japanese.
 const SYNC_KEY_PREFIX = 'sync_data_';
@@ -111,38 +112,51 @@ async function saveToStorage(area: 'local' | 'sync', bookmarks: Record<string, B
 /**
  * ストレージからブックマークデータを読み込みます。
  * キャッシュが存在する場合はキャッシュを返します。
+ * 同時呼び出し時は同一の Promise を共有して重複読み込みを防ぎます。
  * @returns {Promise<Record<string, BookmarkEntry[]>>} 正規化されたブックマークデータのプロミス
  */
 export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
   if (bookmarksCache) return bookmarksCache;
+  if (loadBookmarksPromise) return loadBookmarksPromise;
 
-  const isSync = await getSyncEnabled();
-  const rawBookmarks = await loadFromStorage(isSync ? 'sync' : 'local');
-  
-  const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
-  
-  for (const [nickname, entries] of Object.entries(rawBookmarks)) {
-    if (Array.isArray(entries)) {
-      normalizedBookmarks[nickname] = entries;
-    } else if (entries && typeof entries === 'object') {
-      normalizedBookmarks[nickname] = Object.values(entries) as BookmarkEntry[];
-    } else {
-      normalizedBookmarks[nickname] = [];
+  loadBookmarksPromise = (async () => {
+    try {
+      const isSync = await getSyncEnabled();
+      const rawBookmarks = await loadFromStorage(isSync ? 'sync' : 'local');
+      
+      const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
+      
+      for (const [nickname, entries] of Object.entries(rawBookmarks)) {
+        if (Array.isArray(entries)) {
+          normalizedBookmarks[nickname] = entries;
+        } else if (entries && typeof entries === 'object') {
+          normalizedBookmarks[nickname] = Object.values(entries) as BookmarkEntry[];
+        } else {
+          normalizedBookmarks[nickname] = [];
+        }
+      }
+      
+      bookmarksCache = normalizedBookmarks;
+      return normalizedBookmarks;
+    } finally {
+      loadBookmarksPromise = null;
     }
-  }
-  
-  bookmarksCache = normalizedBookmarks;
-  return normalizedBookmarks;
+  })();
+
+  return loadBookmarksPromise;
 }
 
 /**
  * ブックマークデータを保存します。
  * 同期設定に応じて、適切なストレージ（local または sync）に保存します。
+ * @param {Record<string, BookmarkEntry[]>} bookmarks 保存するブックマークデータ
+ * @returns {Promise<void>}
  */
-export async function saveBookmarksData(bookmarks: Record<string, BookmarkEntry[]>) {
+export async function saveBookmarksData(bookmarks: Record<string, BookmarkEntry[]>): Promise<void> {
   const isSync = await getSyncEnabled();
   await saveToStorage(isSync ? 'sync' : 'local', bookmarks);
   bookmarksCache = bookmarks;
+  loadBookmarksPromise = null;
 }
 
 /**
@@ -801,11 +815,40 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
 }
 
 
+// オムニボックス入力のデバウンス制御用変数
+let omniboxDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let lastPendingSuggest: ((suggestResults: chrome.omnibox.SuggestResult[]) => void) | null = null;
+let currentRequestId = 0;
+
+/**
+ * 保留中のサジェストタイマーとコールバックをクリアし、Chrome への応答を完了させます。
+ * @returns {void}
+ */
+function clearPendingSuggest(): void {
+  if (omniboxDebounceTimer) {
+    clearTimeout(omniboxDebounceTimer);
+    omniboxDebounceTimer = null;
+  }
+  if (lastPendingSuggest) {
+    try {
+      lastPendingSuggest([]);
+    } catch (e) {
+      // 既にコールバックが解決されている場合などの安全対策
+    }
+    lastPendingSuggest = null;
+  }
+}
+
 // バックグラウンドの Service Worker 環境でのみ初期化とリスナー登録を行います。
 if (typeof window === 'undefined') {
 
   // i18n 初期化
   initI18n();
+
+  // 起動時にブックマークキャッシュを先読み
+  loadBookmarksData().catch((err) => {
+    console.error('Failed to pre-warm bookmarks cache on startup:', err);
+  });
 
   // ストレージの変更を監視し、キャッシュや言語設定を常に最新の状態に保ちます
   chrome.storage.onChanged.addListener(async (changes, area) => {
@@ -820,6 +863,7 @@ if (typeof window === 'undefined') {
       if (changes.isSyncEnabled) {
         isSyncEnabledCache = !!changes.isSyncEnabled.newValue;
         bookmarksCache = null; // 設定が変わったらキャッシュをクリア
+        loadBookmarksPromise = null;
       }
     }
     
@@ -829,6 +873,7 @@ if (typeof window === 'undefined') {
       if (changes.bookmarks || Object.keys(changes).some(k => k.startsWith(SYNC_KEY_PREFIX))) {
         // キャッシュを無効化して次回読み込み時に最新化する
         bookmarksCache = null;
+        loadBookmarksPromise = null;
       }
     }
   });
@@ -854,26 +899,70 @@ if (typeof window === 'undefined') {
     }
   });
 
+  // オムニボックスでキーワードが入力され、セッションが開始された時に発火します
+  chrome.omnibox.onInputStarted.addListener(() => {
+    chrome.omnibox.setDefaultSuggestion({ 
+      description: 'Search Nickmark' 
+    });
+    // 入力開始時にバックグラウンドでキャッシュを先読み（ウォームアップ）しておく
+    loadBookmarksData().catch((err) => {
+      console.error('Failed to pre-warm bookmarks cache:', err);
+    });
+  });
+
+  // オムニボックスの入力がキャンセル（フォーカスアウトやEscキーなど）された時に発火します
+  chrome.omnibox.onInputCancelled.addListener(() => {
+    clearPendingSuggest();
+  });
+
   // オムニボックスで入力が変更されるたびに発火します
-  chrome.omnibox.onInputChanged.addListener(async (text, suggest) => {
-    if (!text) {
+  chrome.omnibox.onInputChanged.addListener((text, suggest) => {
+    // 前回の保留中サジェストを空配列で解決してキャンセル
+    clearPendingSuggest();
+
+    const trimmed = text.trim();
+
+    // 入力が空の場合は即座にデフォルト表示を設定し、空候補を返して待機状態を解除する
+    if (!trimmed) {
       chrome.omnibox.setDefaultSuggestion({ 
         description: 'Search Nickmark' 
       });
+      suggest([]);
       return;
     }
 
-    const bookmarks = await loadBookmarksData();
+    lastPendingSuggest = suggest;
+    const thisRequestId = ++currentRequestId;
 
-    if (text.startsWith(':')) {
-      handleCommandModeSuggestions(text, suggest, bookmarks);
-    } else {
-      handleRegularSearchSuggestions(text, suggest, bookmarks);
-    }
+    // 連続キーストロークによる負荷を軽減するためのデバウンス（150ms）
+    omniboxDebounceTimer = setTimeout(async () => {
+      try {
+        const bookmarks = await loadBookmarksData();
+
+        // 待機中に新しい入力が来ていた場合は古いリクエストの処理を中断
+        if (thisRequestId !== currentRequestId) return;
+
+        if (text.startsWith(':')) {
+          handleCommandModeSuggestions(text, suggest, bookmarks);
+        } else {
+          handleRegularSearchSuggestions(text, suggest, bookmarks);
+        }
+      } catch (error) {
+        console.error('Failed to handle omnibox suggestions:', error);
+        // エラー時でも必ず suggest を呼び出して Chrome を待機状態にしない
+        suggest([]);
+      } finally {
+        if (thisRequestId === currentRequestId) {
+          lastPendingSuggest = null;
+          omniboxDebounceTimer = null;
+        }
+      }
+    }, 150);
   });
 
   // オムニボックスでエンターキーが押された時に発火します
   chrome.omnibox.onInputEntered.addListener(async (text: string, disposition: "currentTab" | "newForegroundTab" | "newBackgroundTab") => {
+    clearPendingSuggest();
     const trimmed = text.trim();
 
     // コマンドモードの処理
