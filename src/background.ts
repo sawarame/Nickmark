@@ -10,6 +10,7 @@ export interface BookmarkEntry {
   last_used_at: number;
   created_at: number;
   is_pinned?: boolean;
+  default_value?: string;
 }
 
 /**
@@ -245,23 +246,259 @@ function isSameUrl(u1: string, u2: string): boolean {
 }
 
 /**
- * コマンド入力文字列を解析し、マッチするコマンドのリストを返します。
- * @param {string} text 入力されたコマンド文字列（例: ":add mynick"）
- * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
- * @returns {{ content: string, description: string }[]} マッチしたコマンド候補の配列
+ * URL 文字列に動的パラメータのプレースホルダー（%s）が含まれているかを判定します。
+ * @param url - 判定対象の URL 文字列
+ * @returns プレースホルダー `%s` を含む場合は true、それ以外は false
  */
-function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkEntry[]>): { content: string, description: string }[] {
+export function isDynamicUrl(url: string): boolean {
+  return url.includes('%s');
+}
+
+/**
+ * 動的 URL において引数が省略された場合の遷移先 URL を解決します。
+ * `default_value` が設定されていれば `%s` にそのデフォルト値を展開した URL を返し、
+ * 未設定の場合は URL のオリジン（トップページ）を返します。
+ * @param entry - 対象のブックマークエントリ
+ * @returns 解決された遷移先 URL
+ */
+export function resolveFallbackUrl(entry: BookmarkEntry): string {
+  if (entry.default_value && entry.default_value.trim()) {
+    return expandDynamicUrl(entry.url, entry.default_value);
+  }
+  try {
+    const parsed = new URL(entry.url);
+    if (parsed.origin && parsed.origin !== 'null' && !parsed.origin.includes('%s')) {
+      return parsed.origin;
+    }
+  } catch (e) {
+    // そのままでは URL としてパースできない場合は仮文字列に置換して再試行する
+  }
+  try {
+    const sanitized = entry.url.replace(/%s/g, '');
+    const parsedFallback = new URL(sanitized);
+    if (parsedFallback.origin && parsedFallback.origin !== 'null') {
+      return parsedFallback.origin;
+    }
+  } catch (e) {
+    // オリジン抽出に失敗した場合はプレースホルダーを除去した文字列を返す
+  }
+  return entry.url.replace(/%s/g, '');
+}
+
+/**
+ * 動的 URL の `%s` プレースホルダーを入力クエリで展開します。
+ * パス領域（`?` および `#` より前）の `%s` は `/` を区切りとして保持しつつセグメントごとにエンコードし、
+ * クエリ・ハッシュ領域（`?` または `#` 以降）の `%s` は全体を `encodeURIComponent` でエンコードします。
+ * @param templateUrl - `%s` を含むテンプレート URL
+ * @param query - 埋め込む引数文字列
+ * @returns プレースホルダー展開後の URL
+ */
+export function expandDynamicUrl(templateUrl: string, query: string): string {
+  const trimmedQuery = query.trim();
+  const queryIdx = templateUrl.indexOf('?');
+  const hashIdx = templateUrl.indexOf('#');
+  let boundaryIdx = templateUrl.length;
+  if (queryIdx !== -1) boundaryIdx = Math.min(boundaryIdx, queryIdx);
+  if (hashIdx !== -1) boundaryIdx = Math.min(boundaryIdx, hashIdx);
+
+  // パス用：スラッシュは維持し、各パスセグメントのみエンコードする
+  const encodedForPath = trimmedQuery
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/');
+
+  // クエリ・ハッシュ用：スラッシュも含めて全体をエンコードする
+  const encodedForQuery = encodeURIComponent(trimmedQuery);
+
+  return templateUrl.replace(/%s/g, (_match: string, offset: number) => {
+    return offset < boundaryIdx ? encodedForPath : encodedForQuery;
+  });
+}
+
+/**
+ * 展開済みの遷移先 URL が、指定された動的 URL エントリから生成されたものかを判定します。
+ * @param entry - 動的 URL を持つブックマークエントリ
+ * @param targetUrl - 実際に遷移した URL
+ * @returns エントリに一致する場合は true、それ以外は false
+ */
+function matchesDynamicEntry(entry: BookmarkEntry, targetUrl: string): boolean {
+  if (!isDynamicUrl(entry.url)) return false;
+  if (isSameUrl(resolveFallbackUrl(entry), targetUrl)) return true;
+
+  // 正規表現の特殊文字をエスケープした上で %s をワイルドカード (.+) に変換して比較する
+  const escapedPattern = entry.url
+    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    .replace(/%s/g, '.+');
+  try {
+    const regex = new RegExp(`^${escapedPattern}$`);
+    return regex.test(targetUrl);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * ブックマークデータ内のニックネーム一覧を優先度順（ピン留め ＞ 最大スコア降順 ＞ 名前昇順）で取得します。
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns ソート済みのニックネーム配列
+ */
+function getSortedNicknames(bookmarks: Record<string, BookmarkEntry[]>): string[] {
+  return Object.keys(bookmarks).sort((a, b) => {
+    const entriesA = bookmarks[a] || [];
+    const entriesB = bookmarks[b] || [];
+    const pinA = entriesA.some(e => e.is_pinned) ? 1 : 0;
+    const pinB = entriesB.some(e => e.is_pinned) ? 1 : 0;
+    if (pinB !== pinA) return pinB - pinA;
+
+    const maxScoreA = entriesA.reduce((max, e) => Math.max(max, e.score || 0), 0);
+    const maxScoreB = entriesB.reduce((max, e) => Math.max(max, e.score || 0), 0);
+    if (maxScoreB !== maxScoreA) return maxScoreB - maxScoreA;
+
+    return a.localeCompare(b);
+  });
+}
+
+/**
+ * 通常検索におけるマッチ結果の型定義
+ */
+export interface ResolvedSearchMatch {
+  nickname: string;
+  entry: BookmarkEntry;
+  resolvedUrl: string;
+  tier: number;
+  isDynamic: boolean;
+  dynamicArg: string;
+}
+
+/**
+ * 通常検索の入力テキストを解析し、マッチ度ティア・ピン留め・スコア順にソートされた候補リストを返します。
+ * @param text - オムニボックスに入力された検索文字列
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns ソート済みの検索マッチ結果配列
+ */
+export function resolveRegularSearchMatches(
+  text: string,
+  bookmarks: Record<string, BookmarkEntry[]>
+): ResolvedSearchMatch[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  // 1語目（ニックネーム候補）と2語目以降（動的URLの引数または絞り込みキーワード）に分割する
+  const firstSpaceMatch = trimmed.match(/\s+/);
+  const firstToken = firstSpaceMatch ? trimmed.slice(0, firstSpaceMatch.index) : trimmed;
+  const restQuery = firstSpaceMatch
+    ? trimmed.slice((firstSpaceMatch.index ?? 0) + firstSpaceMatch[0].length).trim()
+    : '';
+
+  const firstTokenLower = firstToken.toLowerCase();
+  const restTokensLower = restQuery ? restQuery.toLowerCase().split(/\s+/).filter(Boolean) : [];
+  const allTokensLower = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+
+  const allMatches: ResolvedSearchMatch[] = [];
+
+  for (const [nickname, entries] of Object.entries(bookmarks)) {
+    const nickLower = nickname.toLowerCase();
+    let nickTier: number | null = null;
+
+    if (nickLower === firstTokenLower) {
+      nickTier = 1; // ニックネーム完全一致
+    } else if (nickLower.startsWith(firstTokenLower)) {
+      nickTier = 2; // ニックネーム前方一致
+    } else if (nickLower.includes(firstTokenLower)) {
+      nickTier = 3; // ニックネーム部分一致
+    }
+
+    for (const entry of entries) {
+      const dynamic = isDynamicUrl(entry.url);
+      let addedInNickTier = false;
+
+      if (nickTier !== null) {
+        if (dynamic) {
+          // 動的URLの場合は2語目以降を引数として %s に展開し、引数未入力ならフォールバックURLを使用する
+          const resolvedUrl = restQuery ? expandDynamicUrl(entry.url, restQuery) : resolveFallbackUrl(entry);
+          allMatches.push({
+            nickname,
+            entry,
+            resolvedUrl,
+            tier: nickTier,
+            isDynamic: true,
+            dynamicArg: restQuery
+          });
+          addedInNickTier = true;
+        } else {
+          // 通常URLの場合は2語目以降があればタイトル・URL（およびニックネーム）でAND絞り込みを行う
+          const searchable = `${nickname} ${entry.title || ''} ${entry.url}`.toLowerCase();
+          const passesFilter =
+            restTokensLower.length === 0 || restTokensLower.every(token => searchable.includes(token));
+
+          if (passesFilter) {
+            allMatches.push({
+              nickname,
+              entry,
+              resolvedUrl: entry.url,
+              tier: nickTier,
+              isDynamic: false,
+              dynamicArg: ''
+            });
+            addedInNickTier = true;
+          }
+        }
+      }
+
+      // ニックネーム基準でヒットしなかった場合でも、全キーワードがタイトル・URL等に含まれれば横断検索（Tier 4）としてヒットさせる
+      if (!addedInNickTier) {
+        const fullSearchable = `${nickname} ${entry.title || ''} ${entry.url} ${entry.default_value || ''}`.toLowerCase();
+        if (allTokensLower.every(token => fullSearchable.includes(token))) {
+          allMatches.push({
+            nickname,
+            entry,
+            resolvedUrl: dynamic ? resolveFallbackUrl(entry) : entry.url,
+            tier: 4,
+            isDynamic: dynamic,
+            dynamicArg: ''
+          });
+        }
+      }
+    }
+  }
+
+  // マッチ度ティア昇順 ＞ ピン留め優先 ＞ スコア降順 ＞ URL昇順 でソートする
+  allMatches.sort((a, b) => {
+    if (a.tier !== b.tier) return a.tier - b.tier;
+    const pA = a.entry.is_pinned ? 1 : 0;
+    const pB = b.entry.is_pinned ? 1 : 0;
+    if (pB !== pA) return pB - pA;
+    if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
+    return a.resolvedUrl.localeCompare(b.resolvedUrl);
+  });
+
+  return allMatches;
+}
+
+/**
+ * コマンド入力文字列を解析し、マッチするコマンドのリストを返します。
+ * @param text - 入力されたコマンド文字列（例: ":add mynick"）
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns マッチしたコマンド候補の配列
+ */
+export function resolveCommandMatches(
+  text: string,
+  bookmarks: Record<string, BookmarkEntry[]>
+): { content: string; description: string }[] {
   const firstSpaceIndex = text.indexOf(' ');
   const hasSpace = firstSpaceIndex !== -1;
   const cmd = !hasSpace ? text : text.substring(0, firstSpaceIndex);
   const restTrimmed = (!hasSpace ? '' : text.substring(firstSpaceIndex + 1)).trim();
   const rawRest = !hasSpace ? '' : text.substring(firstSpaceIndex + 1);
 
-  const commandMatches: { content: string, description: string }[] = [];
+  const commandMatches: { content: string; description: string }[] = [];
+  const sortedNicknames = getSortedNicknames(bookmarks);
 
   /**
    * コマンド名が入力にマッチするかを判定します。
    * スペース入力前は前方一致、スペース入力後はコマンド確定とみなして完全一致で判定します。
+   * @param targetCmds - 判定対象のコマンド名リスト
+   * @returns マッチする場合は true
    */
   const isCmdMatch = (targetCmds: string[]): boolean => {
     if (hasSpace) {
@@ -271,7 +508,9 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
   };
 
   /**
-   * ニックネームのサマリー（タイトルや URL 件数など）を HTML (XML) 形式で取得します。
+   * ニックネームのサマリー（タイトルや URL 件数など）をオムニボックス用の XML 形式で取得します。
+   * @param n - 対象のニックネーム
+   * @returns フォーマット済みの説明文字列
    */
   const getNicknameSummary = (n: string): string => {
     const entries = bookmarks[n] || [];
@@ -288,18 +527,60 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
 
   // :add / :a コマンド
   if (isCmdMatch([':add', ':a'])) {
+    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
+    const isDirectUrl = restParts.length >= 2 && /^https?:\/\/\S+$/i.test(restParts[1]);
+    const modeHint = isDirectUrl ? 'Add custom URL' : 'Add current tab (or [nickname] [https://...] [title])';
+
+    // 新規ニックネーム登録時に既存候補へ意図せず補完されないよう、先頭は常に入力値そのままを維持する
     commandMatches.push({
       content: ':add ' + restTrimmed,
-      description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [title(optional)]'} - Add current tab`
+      description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [url(optional)] [title(optional)]'} - ${modeHint}`
     });
+
+    // スペース入力後かつニックネーム入力段階（0〜1トークン）の場合は、2行目以降に既存ニックネーム候補を補完表示する
+    if (hasSpace && restParts.length <= 1) {
+      const nicknameInput = restParts[0] || '';
+      const nickCandidates = nicknameInput
+        ? sortedNicknames.filter(
+            n => n.toLowerCase().startsWith(nicknameInput.toLowerCase()) && n !== nicknameInput
+          )
+        : sortedNicknames;
+
+      for (const n of nickCandidates.slice(0, 8)) {
+        commandMatches.push({
+          content: `:add ${n}`,
+          description: `<match>:add</match> ${getNicknameSummary(n)}`
+        });
+      }
+    }
   }
 
   // :addall / :aa コマンド
   if (isCmdMatch([':addall', ':aa'])) {
+    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
+
+    // 先頭は常に入力値そのままを維持する
     commandMatches.push({
       content: ':addall ' + restTrimmed,
       description: `<match>:addall</match> ${escapeXml(rawRest) || '[nickname]'} - Add all tabs in current window`
     });
+
+    // スペース入力後かつニックネーム入力段階では既存ニックネーム候補を2行目以降に補完表示する
+    if (hasSpace && restParts.length <= 1) {
+      const nicknameInput = restParts[0] || '';
+      const nickCandidates = nicknameInput
+        ? sortedNicknames.filter(
+            n => n.toLowerCase().startsWith(nicknameInput.toLowerCase()) && n !== nicknameInput
+          )
+        : sortedNicknames;
+
+      for (const n of nickCandidates.slice(0, 8)) {
+        commandMatches.push({
+          content: `:addall ${n}`,
+          description: `<match>:addall</match> ${getNicknameSummary(n)}`
+        });
+      }
+    }
   }
 
   // :ls コマンド
@@ -328,14 +609,13 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
 
   // :open / :o コマンド
   if (isCmdMatch([':open', ':o'])) {
-    const nicknames = Object.keys(bookmarks);
     if (!restTrimmed) {
       commandMatches.push({
         content: ':open ',
         description: `<match>:open</match> [nickname] - Open all URLs in new tabs`
       });
       if (cmd === ':open' || cmd === ':o') {
-        for (const n of nicknames.slice(0, 8)) {
+        for (const n of sortedNicknames.slice(0, 8)) {
           commandMatches.push({
             content: `:open ${n}`,
             description: `<match>:open</match> ${getNicknameSummary(n)}`
@@ -343,7 +623,8 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
         }
       }
     } else {
-      const matches = nicknames.filter(n => n.startsWith(restTrimmed));
+      const lowerInput = restTrimmed.toLowerCase();
+      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerInput));
       if (matches.length === 0) {
         commandMatches.push({
           content: text,
@@ -362,15 +643,13 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
 
   // :rm コマンド
   if (isCmdMatch([':rm'])) {
-    const nicknames = Object.keys(bookmarks);
-    
     if (!restTrimmed) {
       commandMatches.push({
         content: ':rm ',
         description: `<match>:rm</match> [nickname] - Remove Nickmark`
       });
       if (cmd === ':rm') {
-        for (const n of nicknames.slice(0, 8)) {
+        for (const n of sortedNicknames.slice(0, 8)) {
           commandMatches.push({
             content: `:rm ${n}`,
             description: `<match>:rm</match> ${getNicknameSummary(n)}`
@@ -381,8 +660,9 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
       const nicknameParts = restTrimmed.split(/\s+/);
       const nicknameInput = nicknameParts[0];
       const urlInput = nicknameParts.slice(1).join(' ').trim();
+      const lowerNickInput = nicknameInput.toLowerCase();
 
-      const matches = nicknames.filter(n => n.startsWith(nicknameInput));
+      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerNickInput));
       
       if (matches.length === 0) {
         commandMatches.push({
@@ -392,7 +672,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
       } else {
         for (const n of matches) {
           const entries = bookmarks[n];
-          if (n === nicknameInput && entries.length > 1) {
+          if (n.toLowerCase() === lowerNickInput && entries.length > 1) {
             // 複数の URL がある場合は、誤削除防止のために警告/案内を先頭に表示する
             if (!urlInput) {
               const msg = t("errorMultipleUrlsFound") || "Multiple URLs found. Select one below or Enter to manage.";
@@ -403,7 +683,7 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
             }
 
             for (const entry of entries) {
-              if (!urlInput || entry.url.includes(urlInput)) {
+              if (!urlInput || entry.url.toLowerCase().includes(urlInput.toLowerCase())) {
                 const title = escapeXml(entry.title) || 'No title';
                 const url = escapeXml(entry.url);
                 commandMatches.push({
@@ -428,15 +708,16 @@ function resolveCommandMatches(text: string, bookmarks: Record<string, BookmarkE
 
 /**
  * コマンドモード入力時のサジェストを処理します。
- * @param {string} text 入力されたテキスト
- * @param {function} suggest サジェスト結果を返すためのコールバック関数
- * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
+ * @param text - 入力されたテキスト
+ * @param suggest - サジェスト結果を返すためのコールバック関数
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns なし
  */
 function handleCommandModeSuggestions(
   text: string, 
   suggest: (suggestResults: chrome.omnibox.SuggestResult[]) => void, 
   bookmarks: Record<string, BookmarkEntry[]>
-) {
+): void {
   const commandMatches = resolveCommandMatches(text, bookmarks);
   const suggestions: chrome.omnibox.SuggestResult[] = [];
   const hasSpace = text.includes(' ');
@@ -463,46 +744,46 @@ function handleCommandModeSuggestions(
 }
 
 /**
+ * 検索マッチ結果からオムニボックス表示用の説明文（XML）を生成します。
+ * @param match - 検索マッチ結果
+ * @returns XML エスケープ済みのサジェスト説明文
+ */
+function formatSearchMatchDescription(match: ResolvedSearchMatch): string {
+  const mTitle = escapeXml(match.entry.title) || 'No title';
+  const mUrl = escapeXml(match.resolvedUrl);
+  const dynamicBadge = match.isDynamic
+    ? match.dynamicArg
+      ? ` <dim>(${escapeXml(match.dynamicArg)})</dim>`
+      : ' <dim>[%s]</dim>'
+    : '';
+  return `<match>${escapeXml(match.nickname)}</match>${dynamicBadge}: ${mTitle} - <url>${mUrl}</url>`;
+}
+
+/**
  * 通常検索モード入力時のサジェストを処理します。
- * @param {string} text 入力されたテキスト
- * @param {function} suggest サジェスト結果を返すためのコールバック関数
- * @param {Record<string, BookmarkEntry[]>} bookmarks 現在のブックマークデータ
+ * @param text - 入力されたテキスト
+ * @param suggest - サジェスト結果を返すためのコールバック関数
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns なし
  */
 function handleRegularSearchSuggestions(
   text: string, 
   suggest: (suggestResults: chrome.omnibox.SuggestResult[]) => void, 
   bookmarks: Record<string, BookmarkEntry[]>
-) {
+): void {
   const trimmed = text.trim();
-  const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
-
-  for (const [nickname, entries] of Object.entries(bookmarks)) {
-    if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-      for (const entry of entries) {
-        allMatches.push({ nickname, entry });
-      }
-    }
-  }
-
-  // ピン留め、スコアの降順、次に URL の昇順でソートします
-  allMatches.sort((a, b) => {
-    const pA = a.entry.is_pinned ? 1 : 0;
-    const pB = b.entry.is_pinned ? 1 : 0;
-    if (pB !== pA) return pB - pA;
-    if (b.entry.score !== a.entry.score) return b.entry.score - a.entry.score;
-    return a.entry.url.localeCompare(b.entry.url);
-  });
+  const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
 
   if (allMatches.length === 1) {
-    const top = allMatches[0];
-    const topTitle = escapeXml(top.entry.title) || 'No title';
-    const topUrl = escapeXml(top.entry.url);
     chrome.omnibox.setDefaultSuggestion({
-      description: `Go to <match>${escapeXml(top.nickname)}</match>: ${topTitle} - <url>${topUrl}</url>`
+      description: `Go to ${formatSearchMatchDescription(allMatches[0])}`
     });
   } else if (allMatches.length > 0) {
+    const top = allMatches[0];
+    const topTitle = escapeXml(top.entry.title) || 'No title';
+    const topUrl = escapeXml(top.resolvedUrl);
     chrome.omnibox.setDefaultSuggestion({
-      description: `Search for: <match>${escapeXml(trimmed)}</match>`
+      description: `Search for: <match>${escapeXml(trimmed)}</match> <dim>- ${topTitle} (${topUrl})</dim>`
     });
   } else {
     chrome.omnibox.setDefaultSuggestion({
@@ -512,11 +793,9 @@ function handleRegularSearchSuggestions(
 
   const suggestions: chrome.omnibox.SuggestResult[] = [];
   for (const match of allMatches.slice(0, 10)) {
-    const mTitle = escapeXml(match.entry.title) || 'No title';
-    const mUrl = escapeXml(match.entry.url);
     suggestions.push({
-      content: match.entry.url,
-      description: `<match>${escapeXml(match.nickname)}</match>: ${mTitle} - <url>${mUrl}</url>`
+      content: match.resolvedUrl,
+      description: formatSearchMatchDescription(match)
     });
   }
 
@@ -614,14 +893,20 @@ async function showToast(tabId: number, message: string) {
 
 /**
  * 対象の URL が使用された際に、スコアと最終使用日時を更新します。
- * @param {string} url 使用された URL
+ * 動的 URL から展開された遷移先 URL の場合も、元のテンプレートエントリを特定して更新します。
+ * @param url - 実際に使用（遷移）された URL
+ * @param templateUrl - 元のブックマークエントリの URL（既知の場合に指定）
+ * @returns 処理完了を示す Promise
  */
-async function updateScore(url: string) {
+async function updateScore(url: string, templateUrl?: string): Promise<void> {
   const bookmarks = await loadBookmarksData();
   let updated = false;
   for (const entries of Object.values(bookmarks)) {
     for (const entry of entries) {
-      if (entry.url === url) {
+      const isMatched = templateUrl
+        ? entry.url === templateUrl
+        : entry.url === url || matchesDynamicEntry(entry, url);
+      if (isMatched) {
         entry.score = calculateNewScore(entry.score, entry.last_used_at);
         entry.last_used_at = Date.now();
         updated = true;
@@ -632,14 +917,14 @@ async function updateScore(url: string) {
 }
 
 /**
- * 確定したコマンド（:add, :ls, :rm）を実行します。
- * @param {string} resolvedContent 補完済みのコマンド文字列
- * @param {chrome.tabs.Tab} currentTab 現在アクティブなタブ
+ * 確定したコマンド（:add, :addall, :open, :ls, :prefs, :help, :rm）を実行します。
+ * @param resolvedContent - 補完済みのコマンド文字列
+ * @param currentTab - 現在アクティブなタブ
+ * @returns 処理完了を示す Promise
  */
-async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.Tab) {
+async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.Tab): Promise<void> {
   const parts = resolvedContent.split(/\s+/);
   const cmd = parts[0];
-  const rest = resolvedContent.substring(cmd.length).trim();
 
   if (cmd === ':ls') {
     chrome.runtime.openOptionsPage();
@@ -678,7 +963,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     for (const tab of tabs) {
       if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://')) {
         // まだ登録されていない場合のみ追加
-        if (!bookmarks[nickname].some(b => b.url === tab.url)) {
+        if (!bookmarks[nickname].some(b => isSameUrl(b.url, tab.url!))) {
           bookmarks[nickname].push({
             url: tab.url,
             title: tab.title || '',
@@ -703,7 +988,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         }
       }
     } else {
-      await showToast(currentTab.id, t("successAdded") || '正常に追加されました。');
+      await showToast(currentTab.id, t("bookmarkAlreadyExistsMessage", [nickname]) || `このURLはすでにニックネーム「${nickname}」に登録されています。`);
     }
     return;
   }
@@ -716,17 +1001,27 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
       await openOrReuseListTab({ url, title });
       return;
     }
-    
-    const customTitle = parts.slice(2).join(' ').trim();
-    if (currentTab.url) {
+
+    // 第2引数が http:// または https:// で始まる場合は直接 URL 指定モードとして扱う
+    const secondArg = parts[2] || '';
+    const isDirectUrl = /^https?:\/\/\S+$/i.test(secondArg);
+    const targetUrl = isDirectUrl ? secondArg : (currentTab.url || '');
+    const customTitle = isDirectUrl
+      ? parts.slice(3).join(' ').trim()
+      : parts.slice(2).join(' ').trim();
+    const defaultTitle = isDirectUrl ? '' : (currentTab.title || '');
+
+    if (targetUrl) {
       const bookmarks = await loadBookmarksData();
       if (!bookmarks[nickname]) bookmarks[nickname] = [];
-      
-      // まだ登録されていない場合のみ追加
-      if (!bookmarks[nickname].some(b => b.url === currentTab.url)) {
+
+      const existingEntry = bookmarks[nickname].find(b => isSameUrl(b.url, targetUrl));
+
+      if (!existingEntry) {
+        // 未登録の URL の場合は新規追加する
         bookmarks[nickname].push({
-          url: currentTab.url,
-          title: customTitle || currentTab.title || '',
+          url: targetUrl,
+          title: customTitle || defaultTitle,
           score: 1.0,
           last_used_at: Date.now(),
           created_at: Date.now()
@@ -741,6 +1036,22 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
             await showToast(currentTab.id, 'Error: ' + e.message);
           }
         }
+      } else if (customTitle) {
+        // 既に登録済みでもカスタムタイトルが指定されている場合はタイトルを上書き更新する
+        existingEntry.title = customTitle;
+        try {
+          await saveBookmarksData(bookmarks);
+          await showToast(currentTab.id, t("bookmarkTitleUpdatedMessage", [nickname]) || `ニックネーム「${nickname}」のタイトルを更新しました！`);
+        } catch (e: any) {
+          if (e.message === 'QUOTA_EXCEEDED') {
+            await showToast(currentTab.id, t("errorSyncQuotaExceeded") || 'データサイズ制限（100KB）を超えたため保存できませんでした。');
+          } else {
+            await showToast(currentTab.id, 'Error: ' + e.message);
+          }
+        }
+      } else {
+        // 既に登録済みでタイトル指定もない場合は登録済みである旨を通知する
+        await showToast(currentTab.id, t("bookmarkAlreadyExistsMessage", [nickname]) || `このURLはすでにニックネーム「${nickname}」に登録されています。`);
       }
     }
     return;
@@ -757,8 +1068,10 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     const entries = bookmarks[nickname];
     if (entries && entries.length > 0) {
       for (const entry of entries) {
-        chrome.tabs.create({ url: entry.url, active: false });
-        await updateScore(entry.url);
+        // 動的 URL が含まれる場合はフォールバック先 URL を開く
+        const urlToOpen = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
+        chrome.tabs.create({ url: urlToOpen, active: false });
+        await updateScore(urlToOpen, entry.url);
       }
     } else {
       await showToast(currentTab.id, t("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
@@ -987,30 +1300,22 @@ if (typeof window === 'undefined') {
 
     // 通常検索モードの処理
     let targetUrl = trimmed;
+    let matchedTemplateUrl: string | undefined;
+
     if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
       const bookmarks = await loadBookmarksData();
-      const allMatches: { nickname: string; entry: BookmarkEntry }[] = [];
-      for (const [nickname, entries] of Object.entries(bookmarks)) {
-        if (nickname.includes(trimmed) || trimmed.includes(nickname)) {
-          for (const entry of entries) allMatches.push({ nickname, entry });
-        }
-      }
-      // ピン留め優先、次にスコアでソートし、一番高いものを選択
-      allMatches.sort((a, b) => {
-        const pA = a.entry.is_pinned ? 1 : 0;
-        const pB = b.entry.is_pinned ? 1 : 0;
-        return (pB - pA) || (b.entry.score - a.entry.score) || a.entry.url.localeCompare(b.entry.url);
-      });
-      
+      const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
+
       if (allMatches.length > 0) {
-        targetUrl = allMatches[0].entry.url;
+        targetUrl = allMatches[0].resolvedUrl;
+        matchedTemplateUrl = allMatches[0].entry.url;
       } else {
         return; // 一致するものがなければ何もしない
       }
     }
 
     // スコアを更新して遷移
-    await updateScore(targetUrl);
+    await updateScore(targetUrl, matchedTemplateUrl);
     switch (disposition) {
       case 'currentTab': chrome.tabs.update({ url: targetUrl }); break;
       case 'newForegroundTab': chrome.tabs.create({ url: targetUrl, active: true }); break;

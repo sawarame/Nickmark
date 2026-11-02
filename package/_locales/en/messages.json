@@ -219,5 +219,27 @@
   },
   "helpMenu": {
     "message": "Help page"
+  },
+  "defaultValueLabel": {
+    "message": "Default value when query is omitted (Optional)"
+  },
+  "defaultValuePlaceholder": {
+    "message": "Default value for %s (navigates to site's top page if left blank)"
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "This URL is already registered under nickname '$1'.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkTitleUpdatedMessage": {
+    "message": "Updated title for nickname '$1'!",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }

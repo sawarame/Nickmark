@@ -37,6 +37,15 @@
             <Button :label="t('addBtn') || 'Add'" icon="pi pi-plus" @click="addBookmark" />
           </div>
         </div>
+        <div v-if="newBookmark.url.includes('%s')" class="default-value-field">
+          <label for="defaultValue">{{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}</label>
+          <InputText
+            id="defaultValue"
+            v-model="newBookmark.default_value"
+            :placeholder="t('defaultValuePlaceholder') || 'Default value for %s (navigates to site\'s top page if left blank)'"
+            class="w-full"
+          />
+        </div>
       </template>
     </Card>
 
@@ -57,8 +66,8 @@
           <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
             <template #body="slotProps">
               <div class="flex align-items-center gap-2">
-                <img :src="getFaviconUrl(slotProps.data.url)" class="favicon-img" alt="" />
-                <a :href="slotProps.data.url" target="_blank" rel="noopener noreferrer" class="url-link">
+                <img :src="getFaviconUrl(getNavigableUrl(slotProps.data))" class="favicon-img" alt="" />
+                <a :href="getNavigableUrl(slotProps.data)" target="_blank" rel="noopener noreferrer" class="url-link">
                   <span class="url-text">{{ slotProps.data.url }}</span>
                 </a>
               </div>
@@ -112,6 +121,15 @@
           />
         </div>
       </div>
+      <div v-if="editBookmarkData.url.includes('%s')" class="default-value-field">
+        <label for="edit-default-value">{{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}</label>
+        <InputText
+          id="edit-default-value"
+          v-model="editBookmarkData.default_value"
+          :placeholder="t('defaultValuePlaceholder') || 'Default value for %s (navigates to site\'s top page if left blank)'"
+          class="w-full"
+        />
+      </div>
       <template #footer>
         <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="showEditDialog = false" />
         <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="saveEditBookmark" autofocus />
@@ -149,7 +167,7 @@ import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 
-import { BookmarkEntry, loadBookmarksData, saveBookmarksData } from './background';
+import { BookmarkEntry, loadBookmarksData, saveBookmarksData, isDynamicUrl, resolveFallbackUrl } from './background';
 import { initI18n, t } from './i18n';
 
 const toast = useToast();
@@ -161,10 +179,11 @@ const isLoaded = ref(false);
 const newBookmark = ref({
   nickname: '',
   url: '',
-  title: ''
+  title: '',
+  default_value: ''
 });
 
-// Edit Dialog state
+// 編集ダイアログの状態
 const showEditDialog = ref(false);
 const editBookmarkData = ref({
   originalNickname: '',
@@ -172,6 +191,7 @@ const editBookmarkData = ref({
   nickname: '',
   url: '',
   title: '',
+  default_value: '',
   score: 1.0,
   last_used_at: 0,
   created_at: 0,
@@ -207,6 +227,16 @@ const flatBookmarks = computed(() => {
 
 const loadBookmarks = async () => {
   bookmarksData.value = await loadBookmarksData();
+};
+
+/**
+ * ブックマークエントリから実際にリンク・ファビコン取得に使用できる遷移先 URL を返します。
+ * 動的 URL（`%s` を含む）の場合はフォールバック URL を返します。
+ * @param entry - 対象のブックマークエントリ
+ * @returns 遷移可能な URL 文字列
+ */
+const getNavigableUrl = (entry: BookmarkEntry): string => {
+  return isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
 };
 
 const getFaviconUrl = (pageUrl: string) => {
@@ -304,10 +334,16 @@ const openPreferences = () => {
   window.location.href = 'preferences.html';
 };
 
-const addBookmark = async () => {
-  const { nickname, url, title } = newBookmark.value;
+/**
+ * フォームの入力内容から新しいブックマークを登録します。
+ * URL に `%s` が含まれる場合のみ、入力された `default_value`（引数省略時のデフォルト値）を保存します。
+ * @returns 処理完了を示す Promise
+ */
+const addBookmark = async (): Promise<void> => {
+  const { nickname, url, title, default_value } = newBookmark.value;
   const trimmedNickname = nickname.trim();
   const trimmedUrl = url.trim();
+  const trimmedDefault = isDynamicUrl(trimmedUrl) ? (default_value || '').trim() : '';
 
   if (!trimmedNickname || !trimmedUrl) {
     toast.add({ severity: 'error', summary: 'Error', detail: t('errorNicknameUrlRequired') || 'Nickname and URL are required.', life: 3000 });
@@ -324,17 +360,22 @@ const addBookmark = async () => {
   }
 
   const now = Date.now();
-  bookmarksData.value[trimmedNickname].push({
+  const entryToAdd: BookmarkEntry = {
     url: trimmedUrl,
     title: title.trim(),
     score: 1.0,
     last_used_at: now,
     created_at: now
-  });
+  };
+  if (trimmedDefault) {
+    entryToAdd.default_value = trimmedDefault;
+  }
+
+  bookmarksData.value[trimmedNickname].push(entryToAdd);
 
   await saveBookmarksData(bookmarksData.value);
   
-  newBookmark.value = { nickname: '', url: '', title: '' };
+  newBookmark.value = { nickname: '', url: '', title: '', default_value: '' };
   toast.add({ severity: 'success', summary: t('successAdded') || 'Success', detail: t('successAdded') || 'Added successfully.', life: 3000 });
 };
 
@@ -375,6 +416,11 @@ const downloadJsonFile = () => {
   toast.add({ severity: 'success', summary: t('successExported') || 'Exported', detail: t('successFileDownloaded') || 'File downloaded successfully.', life: 3000 });
 };
 
+/**
+ * JSON エディタで編集されたブックマークデータの構造を検証します。
+ * @param bookmarks - パースされた bookmarks オブジェクト
+ * @returns 構造が妥当な場合は true、不正な場合は false
+ */
 const validateBookmarksJson = (bookmarks: any): boolean => {
   if (!bookmarks || typeof bookmarks !== 'object') return false;
   for (const nickname in bookmarks) {
@@ -391,18 +437,28 @@ const validateBookmarksJson = (bookmarks: any): boolean => {
         toast.add({ severity: 'error', summary: 'Error', detail: `URL is required for nickname "${nickname}".`, life: 3000 });
         return false;
       }
+      if (entry.default_value !== undefined && typeof entry.default_value !== 'string') {
+        toast.add({ severity: 'error', summary: 'Error', detail: `Invalid default_value for nickname "${nickname}". Expected a string.`, life: 3000 });
+        return false;
+      }
     }
   }
   return true;
 };
 
-const openEditDialog = (data: any) => {
+/**
+ * 指定されたブックマーク行のデータを編集ダイアログに読み込んで表示します。
+ * @param data - テーブル行のブックマークデータ
+ * @returns なし
+ */
+const openEditDialog = (data: any): void => {
   editBookmarkData.value = {
     originalNickname: data.nickname,
     originalUrl: data.url,
     nickname: data.nickname,
     url: data.url,
     title: data.title || '',
+    default_value: data.default_value || '',
     score: data.score,
     last_used_at: data.last_used_at,
     created_at: data.created_at,
@@ -411,10 +467,16 @@ const openEditDialog = (data: any) => {
   showEditDialog.value = true;
 };
 
-const saveEditBookmark = async () => {
-  const { originalNickname, originalUrl, nickname, url, title, is_pinned } = editBookmarkData.value;
+/**
+ * 編集ダイアログでの変更内容を保存します。
+ * URL から `%s` が削除された場合は不要な `default_value` を除去して保存します。
+ * @returns 処理完了を示す Promise
+ */
+const saveEditBookmark = async (): Promise<void> => {
+  const { originalNickname, originalUrl, nickname, url, title, default_value, is_pinned } = editBookmarkData.value;
   const newNickname = nickname.trim();
   const newUrl = url.trim();
+  const trimmedDefault = isDynamicUrl(newUrl) ? (default_value || '').trim() : '';
 
   if (!newNickname || !newUrl) {
     toast.add({ severity: 'error', summary: 'Error', detail: t('errorNicknameUrlRequired') || 'Nickname and URL are required.', life: 3000 });
@@ -438,14 +500,18 @@ const saveEditBookmark = async () => {
   if (!bookmarksData.value[newNickname]) {
     bookmarksData.value[newNickname] = [];
   }
-  bookmarksData.value[newNickname].push({
+  const updatedEntry: BookmarkEntry = {
     url: newUrl,
     title: title.trim(),
     score: editBookmarkData.value.score,
     last_used_at: editBookmarkData.value.last_used_at,
     created_at: editBookmarkData.value.created_at,
     is_pinned: is_pinned
-  });
+  };
+  if (trimmedDefault) {
+    updatedEntry.default_value = trimmedDefault;
+  }
+  bookmarksData.value[newNickname].push(updatedEntry);
 
   await saveBookmarksData(bookmarksData.value);
   showEditDialog.value = false;
@@ -551,6 +617,14 @@ body {
 
 .field-btn {
   flex: 0 0 auto;
+}
+
+/* 動的URL (%s) 入力時に表示する引数省略時のデフォルト値入力欄 */
+.default-value-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1rem;
 }
 
 .favicon-img {
