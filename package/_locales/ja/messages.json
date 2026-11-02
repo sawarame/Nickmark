@@ -219,5 +219,27 @@
   },
   "helpMenu": {
     "message": "ヘルプページ"
+  },
+  "defaultValueLabel": {
+    "message": "引数省略時のデフォルト値（任意）"
+  },
+  "defaultValuePlaceholder": {
+    "message": "%s に埋め込むデフォルト値（未入力時はサイトのトップページへ遷移）"
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "このURLはすでにニックネーム「$1」に登録されています。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkTitleUpdatedMessage": {
+    "message": "ニックネーム「$1」のタイトルを更新しました！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
