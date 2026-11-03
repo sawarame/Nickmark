@@ -241,5 +241,33 @@
         "content": "$1"
       }
     }
+  },
+  "errorUserScriptsNotAllowed": {
+    "message": "ブックマークレットを実行するには、拡張機能の詳細設定（chrome://extensions）で「ユーザー スクリプトを許可する」を有効にしてください。"
+  },
+  "openExtensionSettingsBtn": {
+    "message": "拡張機能の設定を開く"
+  },
+  "errorBookmarkletRestrictedPage": {
+    "message": "このページ（ブラウザ内部ページやストア等）ではブックマークレットを実行できません。"
+  },
+  "errorBookmarkletEmpty": {
+    "message": "ブックマークレットのコードが空です。"
+  },
+  "errorBookmarkletExecutionFailed": {
+    "message": "ブックマークレットの実行中にエラーが発生しました: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorOpenSkippedAllBookmarklets": {
+    "message": "ニックネーム「$1」はブックマークレットのみのため、:open での別タブ起動をスキップしました。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }

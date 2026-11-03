@@ -211,21 +211,111 @@ function calculateNewScore(oldScore: number, lastUsedAt: number): number {
 
 /**
  * オムニボックスの XML 記述用にテキストを安全にエスケープします。
- * @param {any} unsafe エスケープする文字列
- * @returns {string} エスケープされた文字列
+ * 改行や XML で無効な制御文字も除去・空白化してパースエラーを防ぎます。
+ * @param unsafe - エスケープ対象の任意の値
+ * @returns XML エスケープ済みの安全な文字列
  */
 function escapeXml(unsafe: any): string {
   if (!unsafe) return '';
-  return String(unsafe).replace(/[<>&'"]/g, function (c) {
-    switch (c) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '＆'; // Chrome の XML パーサーのバグを回避するため、全角のアンパサンドを使用します
-      case '\'': return '&apos;';
-      case '"': return '&quot;';
-      default: return c;
-    }
-  });
+  return String(unsafe)
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[<>&'"]/g, function (c) {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '＆'; // Chrome の XML パーサーのバグを回避するため、全角のアンパサンドを使用します
+        case '\'': return '&apos;';
+        case '"': return '&quot;';
+        default: return c;
+      }
+    });
+}
+
+/**
+ * 指定された URL 文字列がブックマークレット（`javascript:` スキーム）であるかを判定します。
+ * @param url - 判定対象の URL 文字列
+ * @returns `javascript:` で始まる場合は true、それ以外は false
+ */
+export function isBookmarkletUrl(url: string): boolean {
+  if (!url) return false;
+  return /^javascript:/i.test(url.trim());
+}
+
+/**
+ * ブックマークレット URL から先頭の `javascript:` を除去し、パーセントエンコードを展開した実行用コードを抽出します。
+ * 全体の `decodeURIComponent` が生の `%`（剰余演算子や `100%` 等）によって失敗した場合は、
+ * 妥当なパーセントエンコード列（`%XX` の連続）のみを安全にデコードします。
+ * @param url - `javascript:` で始まるブックマークレット文字列
+ * @returns デコード済みの JavaScript コード文字列
+ */
+export function extractBookmarkletCode(url: string): string {
+  const rawCode = url.trim().replace(/^javascript:/i, '');
+  try {
+    return decodeURIComponent(rawCode);
+  } catch (e) {
+    // 生の '%' が含まれる場合でも '%20' などの有効なエンコード箇所のみ展開する
+    return rawCode.replace(/(?:%[0-9A-Fa-f]{2})+/g, (encodedSeq) => {
+      try {
+        return decodeURIComponent(encodedSeq);
+      } catch {
+        return encodedSeq;
+      }
+    });
+  }
+}
+
+/**
+ * `chrome.userScripts` API が現在の環境で有効（「ユーザー スクリプトを許可する」がオン）かどうかを判定します。
+ * @returns 利用可能な場合は true、未許可または非対応の場合は false
+ */
+export function isUserScriptsAvailable(): boolean {
+  try {
+    return (
+      typeof chrome !== 'undefined' &&
+      !!chrome.userScripts &&
+      typeof chrome.userScripts.execute === 'function'
+    );
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 指定されたタブ URL がブラウザの仕様上スクリプト注入を禁止されている保護ページ（`chrome://` やウェブストア等）かを判定します。
+ * @param url - 判定対象のタブ URL
+ * @returns スクリプト実行不可のページであれば true、実行可能であれば false
+ */
+export function isRestrictedTabUrl(url?: string): boolean {
+  if (!url) return true;
+  const trimmed = url.trim();
+  // http, https, file 以外の内部スキーム（chrome://, edge://, about:, chrome-extension:// 等）は実行不可
+  if (!/^(?:https?|file):\/\//i.test(trimmed)) {
+    return true;
+  }
+  // Chrome ウェブストア上では拡張機能によるスクリプト注入がブラウザ側で禁止されている
+  if (
+    /^https:\/\/chromewebstore\.google\.com(?:\/|$)/i.test(trimmed) ||
+    /^https:\/\/chrome\.google\.com\/webstore(?:\/|$)/i.test(trimmed)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * オムニボックスのサジェスト表示用に URL 文字列を整形します。
+ * 長大なワンライナーになりやすいブックマークレットの場合は連続空白を圧縮し、一定文字数で省略します。
+ * @param url - 表示対象の URL またはブックマークレット文字列
+ * @param maxLength - ブックマークレット省略時の最大文字数（デフォルト: 100）
+ * @returns サジェスト表示用に整形された文字列
+ */
+function formatUrlForOmniboxDisplay(url: string, maxLength: number = 100): string {
+  if (!url) return '';
+  if (!isBookmarkletUrl(url)) return url;
+  const normalized = url.replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  return normalized.slice(0, maxLength) + '...';
 }
 
 /**
@@ -247,10 +337,12 @@ function isSameUrl(u1: string, u2: string): boolean {
 
 /**
  * URL 文字列に動的パラメータのプレースホルダー（%s）が含まれているかを判定します。
+ * ブックマークレット（`javascript:`）内の `%s` はコード破損を防ぐため動的 URL として扱いません。
  * @param url - 判定対象の URL 文字列
- * @returns プレースホルダー `%s` を含む場合は true、それ以外は false
+ * @returns 通常 URL かつプレースホルダー `%s` を含む場合は true、それ以外は false
  */
 export function isDynamicUrl(url: string): boolean {
+  if (isBookmarkletUrl(url)) return false;
   return url.includes('%s');
 }
 
@@ -633,7 +725,7 @@ export function resolveCommandMatches(
     const escapedN = escapeXml(n);
     if (entries.length === 1) {
       const title = escapeXml(entries[0].title) || 'No title';
-      const url = escapeXml(entries[0].url);
+      const url = escapeXml(formatUrlForOmniboxDisplay(entries[0].url));
       return `<match>${escapedN}</match> ${title} - <url>${url}</url>`;
     } else if (entries.length > 1) {
       return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
@@ -644,8 +736,13 @@ export function resolveCommandMatches(
   // :add / :a コマンド
   if (isCmdMatch([':add', ':a'])) {
     const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
+    const isBookmarkletArg = restParts.length >= 2 && isBookmarkletUrl(restParts[1]);
     const isDirectUrl = restParts.length >= 2 && /^https?:\/\/\S+$/i.test(restParts[1]);
-    const modeHint = isDirectUrl ? 'Add custom URL' : 'Add current tab (or [nickname] [https://...] [title])';
+    const modeHint = isBookmarkletArg
+      ? 'Add bookmarklet'
+      : isDirectUrl
+        ? 'Add custom URL'
+        : 'Add current tab (or [nickname] [https://... | javascript:...] [title])';
 
     // 新規ニックネーム登録時に既存候補へ意図せず補完されないよう、先頭は常に入力値そのままを維持する
     commandMatches.push({
@@ -801,7 +898,7 @@ export function resolveCommandMatches(
             for (const entry of entries) {
               if (!urlInput || entry.url.toLowerCase().includes(urlInput.toLowerCase())) {
                 const title = escapeXml(entry.title) || 'No title';
-                const url = escapeXml(entry.url);
+                const url = escapeXml(formatUrlForOmniboxDisplay(entry.url));
                 commandMatches.push({
                   content: `:rm ${n} ${entry.url}`,
                   description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
@@ -866,13 +963,16 @@ function handleCommandModeSuggestions(
  */
 function formatSearchMatchDescription(match: ResolvedSearchMatch): string {
   const mTitle = escapeXml(match.entry.title) || 'No title';
-  const mUrl = escapeXml(match.resolvedUrl);
-  const dynamicBadge = match.isDynamic
-    ? match.dynamicArg
-      ? ` <dim>(${escapeXml(match.dynamicArg)})</dim>`
-      : ' <dim>[%s]</dim>'
-    : '';
-  return `<match>${escapeXml(match.nickname)}</match>${dynamicBadge}: ${mTitle} - <url>${mUrl}</url>`;
+  const isBookmarklet = isBookmarkletUrl(match.resolvedUrl);
+  const mUrl = escapeXml(formatUrlForOmniboxDisplay(match.resolvedUrl));
+  const typeBadge = isBookmarklet
+    ? ' <dim>[JS]</dim>'
+    : match.isDynamic
+      ? match.dynamicArg
+        ? ` <dim>(${escapeXml(match.dynamicArg)})</dim>`
+        : ' <dim>[%s]</dim>'
+      : '';
+  return `<match>${escapeXml(match.nickname)}</match>${typeBadge}: ${mTitle} - <url>${mUrl}</url>`;
 }
 
 /**
@@ -979,13 +1079,14 @@ function handleRegularSearchSuggestions(
   const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
 
   if (allMatches.length === 1) {
+    const actionLabel = isBookmarkletUrl(allMatches[0].resolvedUrl) ? 'Run' : 'Go to';
     chrome.omnibox.setDefaultSuggestion({
-      description: `Go to ${formatSearchMatchDescription(allMatches[0])}`
+      description: `${actionLabel} ${formatSearchMatchDescription(allMatches[0])}`
     });
   } else if (allMatches.length > 0) {
     const top = allMatches[0];
     const topTitle = escapeXml(top.entry.title) || 'No title';
-    const topUrl = escapeXml(top.resolvedUrl);
+    const topUrl = escapeXml(formatUrlForOmniboxDisplay(top.resolvedUrl));
     chrome.omnibox.setDefaultSuggestion({
       description: `Search for: <match>${escapeXml(trimmed)}</match> <dim>- ${topTitle} (${topUrl})</dim>`
     });
@@ -1037,14 +1138,17 @@ async function openOrReuseListTab(params?: { msg?: string; url?: string; title?:
 /**
  * 現在のタブに一時的なトースト通知を表示します。
  * スクリプトの実行権限がないページ（chrome:// やストア等）では、既存の一覧画面があればそこに移動し、なければ新しいタブで開いてメッセージを表示します。
- * @param {number} tabId 対象となるタブの ID
- * @param {string} message 表示するメッセージ
+ * @param tabId - 対象となるタブの ID
+ * @param message - 表示するメッセージ文字列
+ * @param durationMs - トーストの表示時間（ミリ秒、デフォルト: 3000）
+ * @returns 処理完了を示す Promise
  */
-async function showToast(tabId: number, message: string) {
+async function showToast(tabId: number, message: string, durationMs: number = 3000): Promise<void> {
+  // 事前にスクリプト実行不可ページと判明している場合は直接一覧画面で通知を表示する
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      func: (msg) => {
+      func: (msg: string, duration: number) => {
         const id = 'nickmark-toast';
         const existing = document.getElementById(id);
         if (existing) existing.remove();
@@ -1058,12 +1162,14 @@ async function showToast(tabId: number, message: string) {
           left: '50%',
           transform: 'translateX(-50%)',
           zIndex: '2147483647',
+          maxWidth: '80vw',
           padding: '12px 24px',
           backgroundColor: '#323232',
           color: '#ffffff',
           borderRadius: '8px',
           fontSize: '14px',
           fontWeight: '500',
+          lineHeight: '1.5',
           boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
           transition: 'opacity 0.3s, transform 0.3s',
           fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -1080,9 +1186,9 @@ async function showToast(tabId: number, message: string) {
           div.style.opacity = '0';
           div.style.transform = 'translateX(-50%)';
           setTimeout(() => div.remove(), 300);
-        }, 3000);
+        }, duration);
       },
-      args: [message]
+      args: [message, durationMs]
     });
   } catch (e) {
     // スクリプト実行権限がないページの場合はブックマーク一覧画面で表示
@@ -1119,6 +1225,105 @@ async function updateScore(url: string, templateUrl?: string, nickname?: string)
     }
   }
   if (updated) await saveBookmarksData(bookmarks);
+}
+
+/**
+ * `chrome.userScripts` API を使用して、現在アクティブなタブのメインワールド（MAIN）でブックマークレットを実行します。
+ * 特殊ページ（`chrome://` やストア等）や「ユーザー スクリプトを許可する」が未有効な場合はエラートーストを表示します。
+ * @param bookmarkletUrl - `javascript:` で始まるブックマークレット文字列
+ * @param currentTab - 実行対象となる現在アクティブなタブ
+ * @param matchedTemplateUrl - スコア更新用の元テンプレート URL
+ * @param matchedNickname - スコア更新用の対象ニックネーム
+ * @returns 処理完了を示す Promise
+ */
+async function executeBookmarkletOnTab(
+  bookmarkletUrl: string,
+  currentTab: chrome.tabs.Tab | undefined,
+  matchedTemplateUrl?: string,
+  matchedNickname?: string
+): Promise<void> {
+  if (!currentTab || currentTab.id === undefined) return;
+
+  // chrome:// やウェブストア等のスクリプト注入が禁止されている保護ページをガードする
+  if (isRestrictedTabUrl(currentTab.url)) {
+    await showToast(
+      currentTab.id,
+      t('errorBookmarkletRestrictedPage') ||
+        'このページ（ブラウザ内部ページやストア等）ではブックマークレットを実行できません。',
+      4500
+    );
+    return;
+  }
+
+  // 拡張機能の詳細設定で「ユーザー スクリプトを許可する」が有効になっているか確認する
+  if (!isUserScriptsAvailable()) {
+    await showToast(
+      currentTab.id,
+      t('errorUserScriptsNotAllowed') ||
+        'ブックマークレットを実行するには、拡張機能の詳細設定（chrome://extensions）で「ユーザー スクリプトを許可する」を有効にしてください。',
+      5000
+    );
+    return;
+  }
+
+  // 先頭の javascript: を除去し、%20 などのパーセントエンコードをデコードする
+  const code = extractBookmarkletCode(bookmarkletUrl).trim();
+  if (!code) {
+    await showToast(
+      currentTab.id,
+      t('errorBookmarkletEmpty') || 'ブックマークレットのコードが空です。',
+      4000
+    );
+    return;
+  }
+
+  try {
+    const results = await chrome.userScripts.execute({
+      target: { tabId: currentTab.id },
+      js: [{ code }],
+      world: 'MAIN',
+      injectImmediately: true
+    });
+
+    // 実行結果にエラーが含まれている場合はトーストで通知する
+    const failedResult = results?.find((res) => 'error' in res && !!res.error);
+    if (failedResult && 'error' in failedResult && failedResult.error) {
+      await showToast(
+        currentTab.id,
+        t('errorBookmarkletExecutionFailed', [failedResult.error]) ||
+          `ブックマークレットの実行中にエラーが発生しました: ${failedResult.error}`,
+        5000
+      );
+      return;
+    }
+
+    // 正常に実行されたら対象エントリのスコアと最終使用日時を更新する
+    await updateScore(bookmarkletUrl, matchedTemplateUrl, matchedNickname);
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    if (/Cannot access|extensions gallery cannot be scripted|scheme/i.test(errMsg)) {
+      await showToast(
+        currentTab.id,
+        t('errorBookmarkletRestrictedPage') ||
+          'このページ（ブラウザ内部ページやストア等）ではブックマークレットを実行できません。',
+        4500
+      );
+    } else if (/userScripts|User scripts/i.test(errMsg)) {
+      await showToast(
+        currentTab.id,
+        t('errorUserScriptsNotAllowed') ||
+          'ブックマークレットを実行するには、拡張機能の詳細設定（chrome://extensions）で「ユーザー スクリプトを許可する」を有効にしてください。',
+        5000
+      );
+    } else {
+      await showToast(
+        currentTab.id,
+        t('errorBookmarkletExecutionFailed', [errMsg]) ||
+          `ブックマークレットの実行中にエラーが発生しました: ${errMsg}`,
+        5000
+      );
+    }
+  }
 }
 
 /**
@@ -1207,13 +1412,24 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
       return;
     }
 
-    // 第2引数が http:// または https:// で始まる場合は直接 URL 指定モードとして扱う
+    // 第2引数が http(s):// または javascript: で始まる場合は直接 URL 指定モードとして扱う
     const secondArg = parts[2] || '';
-    const isDirectUrl = /^https?:\/\/\S+$/i.test(secondArg);
-    const targetUrl = isDirectUrl ? secondArg : (currentTab.url || '');
-    const customTitle = isDirectUrl
-      ? parts.slice(3).join(' ').trim()
-      : parts.slice(2).join(' ').trim();
+    const isBookmarkletArg = isBookmarkletUrl(secondArg);
+    const isDirectHttpUrl = /^https?:\/\/\S+$/i.test(secondArg);
+    const isDirectUrl = isBookmarkletArg || isDirectHttpUrl;
+
+    // ブックマークレットはコード内にスペースを含み得るため、ニックネーム以降の文字列全体をコードとして取得する
+    const rawAfterNicknameMatch = resolvedContent.match(/^:(?:add|a)\s+\S+\s+([\s\S]+)$/);
+    const targetUrl = isBookmarkletArg
+      ? (rawAfterNicknameMatch ? rawAfterNicknameMatch[1].trim() : secondArg)
+      : isDirectHttpUrl
+        ? secondArg
+        : (currentTab.url || '');
+    const customTitle = isBookmarkletArg
+      ? ''
+      : isDirectHttpUrl
+        ? parts.slice(3).join(' ').trim()
+        : parts.slice(2).join(' ').trim();
     const defaultTitle = isDirectUrl ? '' : (currentTab.title || '');
 
     if (targetUrl) {
@@ -1272,11 +1488,30 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
     const bookmarks = await loadBookmarksData();
     const entries = bookmarks[nickname];
     if (entries && entries.length > 0) {
+      let openedCount = 0;
+      let skippedBookmarkletCount = 0;
+
       for (const entry of entries) {
+        // ブックマークレットは新規タブで開く対象ではないためスキップする
+        if (isBookmarkletUrl(entry.url)) {
+          skippedBookmarkletCount++;
+          continue;
+        }
         // 動的 URL が含まれる場合はフォールバック先 URL を開く
         const urlToOpen = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
         chrome.tabs.create({ url: urlToOpen, active: false });
         await updateScore(urlToOpen, entry.url, nickname);
+        openedCount++;
+      }
+
+      // 登録エントリがすべてブックマークレットで1件も開けなかった場合のみ通知する
+      if (openedCount === 0 && skippedBookmarkletCount > 0) {
+        await showToast(
+          currentTab.id,
+          t("errorOpenSkippedAllBookmarklets", [nickname]) ||
+            `ニックネーム「${nickname}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
+          4000
+        );
       }
     } else {
       await showToast(currentTab.id, t("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
@@ -1286,7 +1521,9 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
 
   if (cmd === ':rm') {
     const nickname = parts[1];
-    const urlToDelete = parts.slice(2).join(' ').trim();
+    // ブックマークレット内の連続スペース等を潰さないよう、元のコマンド文字列から削除対象 URL を抽出する
+    const rawAfterRmMatch = resolvedContent.match(/^:rm\s+\S+\s+([\s\S]+)$/);
+    const urlToDelete = rawAfterRmMatch ? rawAfterRmMatch[1].trim() : '';
 
     if (!nickname) {
       await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
@@ -1543,7 +1780,14 @@ if (typeof window === 'undefined') {
       }
     }
 
-    // スコアを更新して遷移
+    // ブックマークレットの場合は新規タブを開かず、現在アクティブなタブ上でスクリプトを実行する
+    if (isBookmarkletUrl(targetUrl)) {
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      await executeBookmarkletOnTab(targetUrl, currentTab, matchedTemplateUrl, matchedNickname);
+      return;
+    }
+
+    // 通常 URL の場合はスコアを更新して遷移する
     await updateScore(targetUrl, matchedTemplateUrl, matchedNickname);
     switch (disposition) {
       case 'currentTab': chrome.tabs.update({ url: targetUrl }); break;

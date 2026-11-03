@@ -241,5 +241,33 @@
         "content": "$1"
       }
     }
+  },
+  "errorUserScriptsNotAllowed": {
+    "message": "To run bookmarklets, please enable 'Allow User Scripts' in the extension details (chrome://extensions)."
+  },
+  "openExtensionSettingsBtn": {
+    "message": "Open Extension Settings"
+  },
+  "errorBookmarkletRestrictedPage": {
+    "message": "Bookmarklets cannot be executed on this page (browser internal pages, web store, etc.)."
+  },
+  "errorBookmarkletEmpty": {
+    "message": "The bookmarklet code is empty."
+  },
+  "errorBookmarkletExecutionFailed": {
+    "message": "Failed to execute bookmarklet: $1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorOpenSkippedAllBookmarklets": {
+    "message": "Skipped opening '$1' in new tabs because it only contains bookmarklets.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
