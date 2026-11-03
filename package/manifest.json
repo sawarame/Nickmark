@@ -4,6 +4,7 @@
   "version": "1.1.2",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
+  "minimum_chrome_version": "135",
   "permissions": [
     "omnibox",
     "storage",
@@ -11,6 +12,7 @@
     "tabs",
     "activeTab",
     "scripting",
+    "userScripts",
     "contextMenus",
     "favicon"
   ],

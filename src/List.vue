@@ -17,6 +17,20 @@
       />
     </div>
 
+    <Message v-if="hasAnyBookmarklet && !userScriptsAllowed" severity="warn" class="mb-4">
+      <div class="user-scripts-banner-content">
+        <span>{{ t('errorUserScriptsNotAllowed') }}</span>
+        <Button
+          size="small"
+          severity="warn"
+          outlined
+          icon="pi pi-external-link"
+          :label="t('openExtensionSettingsBtn') || 'Open Extension Settings'"
+          @click="openExtensionDetails"
+        />
+      </div>
+    </Message>
+
     <Card class="mb-4">
       <template #title>{{ t('addBookmarkTitle') || 'Add Nickmark' }}</template>
       <template #content>
@@ -31,13 +45,13 @@
           </div>
           <div class="field">
             <label for="url">{{ t('urlLabel') || 'URL' }}</label>
-            <InputText id="url" v-model="newBookmark.url" placeholder="https://github.com/..." />
+            <InputText id="url" v-model="newBookmark.url" placeholder="https://... or javascript:..." />
           </div>
           <div class="field-btn">
             <Button :label="t('addBtn') || 'Add'" icon="pi pi-plus" @click="addBookmark" />
           </div>
         </div>
-        <div v-if="newBookmark.url.includes('%s')" class="default-value-field">
+        <div v-if="isDynamicUrl(newBookmark.url)" class="default-value-field">
           <label for="defaultValue">{{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}</label>
           <InputText
             id="defaultValue"
@@ -65,7 +79,11 @@
           <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
           <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
             <template #body="slotProps">
-              <div class="flex align-items-center gap-2">
+              <div v-if="isBookmarkletUrl(slotProps.data.url)" class="flex align-items-center gap-2">
+                <i class="pi pi-code bookmarklet-icon" aria-hidden="true"></i>
+                <span class="url-text bookmarklet-text" :title="slotProps.data.url">{{ slotProps.data.url }}</span>
+              </div>
+              <div v-else class="flex align-items-center gap-2">
                 <img :src="getFaviconUrl(getNavigableUrl(slotProps.data))" class="favicon-img" alt="" />
                 <a :href="getNavigableUrl(slotProps.data)" target="_blank" rel="noopener noreferrer" class="url-link">
                   <span class="url-text">{{ slotProps.data.url }}</span>
@@ -121,7 +139,7 @@
           />
         </div>
       </div>
-      <div v-if="editBookmarkData.url.includes('%s')" class="default-value-field">
+      <div v-if="isDynamicUrl(editBookmarkData.url)" class="default-value-field">
         <label for="edit-default-value">{{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}</label>
         <InputText
           id="edit-default-value"
@@ -154,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
 
 import JsonEditor from 'vue3-ts-jsoneditor';
@@ -166,8 +184,17 @@ import Card from 'primevue/card';
 import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
+import Message from 'primevue/message';
 
-import { BookmarkEntry, loadBookmarksData, saveBookmarksData, isDynamicUrl, resolveFallbackUrl } from './background';
+import {
+  BookmarkEntry,
+  loadBookmarksData,
+  saveBookmarksData,
+  isDynamicUrl,
+  resolveFallbackUrl,
+  isBookmarkletUrl,
+  isUserScriptsAvailable
+} from './background';
 import { initI18n, t } from './i18n';
 
 const toast = useToast();
@@ -175,6 +202,7 @@ const toast = useToast();
 const title = ref('');
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
 const isLoaded = ref(false);
+const userScriptsAllowed = ref(true);
 
 const newBookmark = ref({
   nickname: '',
@@ -225,6 +253,33 @@ const flatBookmarks = computed(() => {
   return result;
 });
 
+/**
+ * 登録済みまたは入力中のデータにブックマークレット（`javascript:`）が含まれているかを判定します。
+ */
+const hasAnyBookmarklet = computed((): boolean => {
+  if (isBookmarkletUrl(newBookmark.value.url)) return true;
+  if (showEditDialog.value && isBookmarkletUrl(editBookmarkData.value.url)) return true;
+  return flatBookmarks.value.some((item) => isBookmarkletUrl(item.url));
+});
+
+/**
+ * `chrome.userScripts` API の許可状態（「ユーザー スクリプトを許可する」トグル状態）を再確認します。
+ * @returns なし
+ */
+const refreshUserScriptsStatus = (): void => {
+  userScriptsAllowed.value = isUserScriptsAvailable();
+};
+
+/**
+ * Chrome の拡張機能詳細設定画面（`chrome://extensions/?id=...`）を新しいタブで開きます。
+ * @returns なし
+ */
+const openExtensionDetails = (): void => {
+  if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime?.id) {
+    chrome.tabs.create({ url: `chrome://extensions/?id=${chrome.runtime.id}` });
+  }
+};
+
 const loadBookmarks = async () => {
   bookmarksData.value = await loadBookmarksData();
 };
@@ -250,7 +305,12 @@ const getFaviconUrl = (pageUrl: string) => {
   }
 };
 
-const showCustomToast = (message: string) => {
+/**
+ * 管理画面上にカスタムトースト通知を表示します。
+ * @param message - 表示する通知メッセージ
+ * @returns なし
+ */
+const showCustomToast = (message: string): void => {
   const id = 'nickmark-custom-toast';
   const existing = document.getElementById(id);
   if (existing) existing.remove();
@@ -264,12 +324,14 @@ const showCustomToast = (message: string) => {
     left: '50%',
     transform: 'translateX(-50%)',
     zIndex: '9999',
+    maxWidth: '80vw',
     padding: '12px 24px',
     backgroundColor: '#323232',
     color: '#ffffff',
     borderRadius: '8px',
     fontSize: '14px',
     fontWeight: '500',
+    lineHeight: '1.5',
     boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
     transition: 'opacity 0.3s, transform 0.3s',
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -286,13 +348,18 @@ const showCustomToast = (message: string) => {
     div.style.opacity = '0';
     div.style.transform = 'translateX(-50%)';
     setTimeout(() => div.remove(), 300);
-  }, 3000);
+  }, 4000);
 };
 
 onMounted(async () => {
   await initI18n();
   title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
+  refreshUserScriptsStatus();
   await loadBookmarks();
+
+  // 拡張機能設定タブから戻ってきた際にユーザースクリプト許可状態を即時反映する
+  window.addEventListener('focus', refreshUserScriptsStatus);
+  document.addEventListener('visibilitychange', refreshUserScriptsStatus);
 
   // バックグラウンドからのメッセージ待受
   chrome.runtime.onMessage.addListener((request) => {
@@ -305,7 +372,7 @@ onMounted(async () => {
     }
   });
 
-  // Check for message in URL
+  // URL パラメータ経由のメッセージおよび初期入力値の確認
   const urlParams = new URLSearchParams(window.location.search);
   const msg = urlParams.get('msg');
   const prefilledUrl = urlParams.get('url');
@@ -323,11 +390,16 @@ onMounted(async () => {
   }
 
   if (msg || prefilledUrl || prefilledTitle) {
-    // Clean up URL without refreshing
+    // 画面リロードなしで URL クエリパラメータをクリーンアップする
     const newUrl = window.location.origin + window.location.pathname;
     window.history.replaceState({}, document.title, newUrl);
   }
   isLoaded.value = true;
+});
+
+onUnmounted(() => {
+  window.removeEventListener('focus', refreshUserScriptsStatus);
+  document.removeEventListener('visibilitychange', refreshUserScriptsStatus);
 });
 
 const openPreferences = () => {
@@ -627,6 +699,16 @@ body {
   margin-top: 1rem;
 }
 
+/* ユーザースクリプト未許可時の案内バナーレイアウト */
+.user-scripts-banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  width: 100%;
+}
+
 .favicon-img {
   width: 16px;
   height: 16px;
@@ -635,9 +717,32 @@ body {
   flex-shrink: 0;
 }
 
+/* ブックマークレット用のコードアイコン（16x16 の Favicon と幅・高さを揃える） */
+.bookmarklet-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--p-text-muted-color);
+  flex-shrink: 0;
+}
+
 .url-text {
   word-break: break-all;
   font-size: 0.9rem;
+}
+
+/* ブックマークレットのコード文字列表示（リンクにせず、長大なコードは3行で省略表示する） */
+.bookmarklet-text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--p-text-color);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .url-link {
@@ -656,6 +761,10 @@ body {
 
 .flex {
   display: flex;
+}
+
+.align-items-center {
+  align-items: center;
 }
 
 .gap-2 {
