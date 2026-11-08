@@ -90,7 +90,7 @@ Google アカウントに紐づけて、複数の PC 間でブックマークデ
 マウス移動なしに閲覧中ページを素早く Nickmark へ登録するためのダイアログ（`popup.html`）。
 
 - **起動方法**:
-  - **ショートカットキー**: Mac は `Command + Option + D`、Windows / Linux は `Alt + Shift + D`（ブラウザ標準設定 `chrome://extensions/shortcuts` で自由に変更可能）。
+  - **ショートカットキー**: Mac は `Command + Shift + D`、Windows / Linux は `Alt + Shift + D`（ブラウザ標準設定 `chrome://extensions/shortcuts` で自由に変更可能）。
   - **ツールバーアイコン**: ブラウザツールバーの Nickmark アイコンをクリックした際にも同様に開く。
 - **挙動**:
   - ダイアログ起動時、現在開いているアクティブタブの URL およびタイトルを自動取得して入力欄にセットし、ニックネーム入力欄に自動フォーカスする。

@@ -31,7 +31,7 @@
   "_execute_action": {
     "suggested_key": {
       "default": "Alt+Shift+D",
-      "mac": "Alt+Command+D"
+      "mac": "Command+Shift+D"
     },
     "description": "__MSG_commandRegisterBookmark__"
   }

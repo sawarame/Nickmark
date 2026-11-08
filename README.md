@@ -16,7 +16,7 @@ Nickmark is a lightning-fast, keyboard-centric Chrome extension designed for eng
 
 ### 🚀 Core Features
 
-- **Shortcut Quick Add**: Press `Command + Option + D` (Mac) or `Alt + Shift + D` (Win/Linux) anywhere to open the quick registration popup. Type a nickname and press Enter to save instantly!
+- **Shortcut Quick Add**: Press `Command + Shift + D` (Mac) or `Alt + Shift + D` (Win/Linux) anywhere to open the quick registration popup. Type a nickname and press Enter to save instantly!
 - **Omnibox Integration**: Simply type `nm` followed by a space and your nickname in the address bar. Press Enter to instantly navigate.
 - **Smart Auto-Sorting**: Uses an exponential decay algorithm. The URLs you use most frequently and recently will automatically bubble up to the top of your suggestions.
 - **Built-in Command Line**: Manage your bookmarks without ever leaving the keyboard.
@@ -60,7 +60,7 @@ Nickmark は、キーボード操作を愛するエンジニアやパワーユ�
 
 ### 🚀 主な機能
 
-- **ショートカットで瞬時に登録**: `Command + Option + D`（Mac）または `Alt + Shift + D`（Win/Linux）を押すだけで登録ポップアップが開き、ニックネームを入力して Enter を押すだけで即座にブックマーク登録完了！
+- **ショートカットで瞬時に登録**: `Command + Shift + D`（Mac）または `Alt + Shift + D`（Win/Linux）を押すだけで登録ポップアップが開き、ニックネームを入力して Enter を押すだけで即座にブックマーク登録完了！
 - **アドレスバー（オムニボックス）連携**: アドレスバーに `nm` + `スペース` + `ニックネーム` を入力してEnterを押すだけ。
 - **賢い自動ソート**: 指数減衰アルゴリズムを採用。「最近よく使っているURL」が自動的に学習され、常にサジェストの最上位に表示されます。
 - **コマンドモード搭載**: キーボードから手を離さずにブックマークを管理できます。

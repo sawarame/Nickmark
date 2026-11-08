@@ -30,7 +30,7 @@
 
 - [x] T004 `src/background.ts` 内の `showToast` 関数を `export` 化し、他モジュール（ポップアップ UI）から直接呼び出せるようにリファクタリングする（`src/background.ts`）
 - [x] T005 [P] 日本語および英語のメッセージリソースに、ポップアップ関連の翻訳キー（`commandRegisterBookmark`, `popupTitle`, `saveBtn`, `closeBtn`, `openOptionsTooltip`, `openPreferencesTooltip`）を追加する（`package/_locales/ja/messages.json`, `package/_locales/en/messages.json`）
-- [x] T006 `package/manifest.json` の `action` に `default_popup: "popup.html"` を設定し、`commands` に `_execute_action`（Mac: `Alt+Command+D`, default: `Alt+Shift+D`）を追加する（`package/manifest.json`）
+- [x] T006 `package/manifest.json` の `action` に `default_popup: "popup.html"` を設定し、`commands` に `_execute_action`（Mac: `Command+Shift+D`, default: `Alt+Shift+D`）を追加する（`package/manifest.json`）
 
 **チェックポイント**: 基盤整備完了。各ユーザーストーリーの実装に進むことが可能。
 
@@ -38,7 +38,7 @@
 
 ## Phase 3: User Story 1 - ショートカットからの迅速なブックマーク登録 (Priority: P1) 🎯 MVP
 
-**ゴール**: ユーザーがショートカットキー（Mac: `Command + Option + D`, Win/Linux: `Alt + Shift + D`）を押すと登録ダイアログが開き、アクティブタブ情報が自動入力された状態でニックネームを入力して Enter を押すだけで即座にブックマークが登録され、トースト通知が表示されてダイアログが閉じる。
+**ゴール**: ユーザーがショートカットキー（Mac: `Command + Shift + D`, Win/Linux: `Alt + Shift + D`）を押すと登録ダイアログが開き、アクティブタブ情報が自動入力された状態でニックネームを入力して Enter を押すだけで即座にブックマークが登録され、トースト通知が表示されてダイアログが閉じる。
 
 **独立テスト検証**: 任意のWebページでショートカットキーを押し、ダイアログが開いてニックネームを入力して Enter を押すと、ダイアログが閉じてWebページ上に登録完了トーストが表示され、アドレスバーからそのニックネームでアクセスできることを確認。
 
