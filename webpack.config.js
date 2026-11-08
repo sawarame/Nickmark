@@ -6,7 +6,8 @@ module.exports = {
   entry: {
     background: './src/background.ts',
     list: './src/list.ts',
-    preferences: './src/preferences.ts'
+    preferences: './src/preferences.ts',
+    popup: './src/popup.ts'
   },
   output: {
     path: path.resolve(__dirname, 'package/js'),

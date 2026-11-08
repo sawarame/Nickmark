@@ -269,5 +269,39 @@
         "content": "$1"
       }
     }
+  },
+  "commandRegisterBookmark": {
+    "message": "ブックマーク登録ダイアログを開く"
+  },
+  "popupTitle": {
+    "message": "ブックマーク登録"
+  },
+  "saveBtn": {
+    "message": "登録"
+  },
+  "closeBtn": {
+    "message": "閉じる"
+  },
+  "openOptionsTooltip": {
+    "message": "ブックマーク一覧画面を開く"
+  },
+  "openPreferencesTooltip": {
+    "message": "設定画面を開く"
+  },
+  "bookmarkUpdatedMessage": {
+    "message": "'$1' のタイトルを更新しました！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "'$1' は既に登録されています。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
