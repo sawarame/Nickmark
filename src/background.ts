@@ -324,7 +324,7 @@ function formatUrlForOmniboxDisplay(url: string, maxLength: number = 100): strin
  * @param {string} u2 URL 2
  * @returns {boolean} 同一の URL であれば true
  */
-function isSameUrl(u1: string, u2: string): boolean {
+export function isSameUrl(u1: string, u2: string): boolean {
   if (u1 === u2) return true;
   try {
     if (decodeURI(u1) === decodeURI(u2)) return true;
@@ -1143,7 +1143,7 @@ async function openOrReuseListTab(params?: { msg?: string; url?: string; title?:
  * @param durationMs - トーストの表示時間（ミリ秒、デフォルト: 3000）
  * @returns 処理完了を示す Promise
  */
-async function showToast(tabId: number, message: string, durationMs: number = 3000): Promise<void> {
+export async function showToast(tabId: number, message: string, durationMs: number = 3000): Promise<void> {
   // 事前にスクリプト実行不可ページと判明している場合は直接一覧画面で通知を表示する
   try {
     await chrome.scripting.executeScript({

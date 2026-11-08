@@ -269,5 +269,39 @@
         "content": "$1"
       }
     }
+  },
+  "commandRegisterBookmark": {
+    "message": "Open bookmark registration dialog"
+  },
+  "popupTitle": {
+    "message": "Add Nickmark"
+  },
+  "saveBtn": {
+    "message": "Save"
+  },
+  "closeBtn": {
+    "message": "Close"
+  },
+  "openOptionsTooltip": {
+    "message": "Open Nickmarks Manager"
+  },
+  "openPreferencesTooltip": {
+    "message": "Open Preferences"
+  },
+  "bookmarkUpdatedMessage": {
+    "message": "Updated title for '$1'!",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "'$1' already exists with this URL.",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
   }
 }
