@@ -973,21 +973,38 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex: 1;
-  min-width: 150px;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 .field:nth-child(1) {
-  flex: 0 0 120px;
+  flex: 1 1 180px;
 }
 
-.field:nth-child(2),
+.field:nth-child(2) {
+  flex: 1.5 1 200px;
+}
+
 .field:nth-child(3) {
-  flex: 2 1 200px;
+  flex: 2.5 1 250px;
 }
 
 .field-btn {
   flex: 0 0 auto;
+}
+
+.field :deep(.p-autocomplete) {
+  width: 100%;
+}
+
+.field :deep(.p-autocomplete-input) {
+  width: 100%;
+  min-width: 0;
+}
+
+.field :deep(.p-inputtext) {
+  width: 100%;
+  min-width: 0;
 }
 
 /* 動的URL (%s) 入力時に表示する引数省略時のデフォルト値入力欄 */
@@ -1077,7 +1094,17 @@ body {
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .form-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field {
+    width: 100%;
+  }
+  .field:nth-child(1),
+  .field:nth-child(2),
+  .field:nth-child(3) {
+    flex: 1 1 auto;
+    width: 100%;
   }
   .field-btn {
     align-items: stretch;
