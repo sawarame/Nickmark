@@ -8,7 +8,7 @@
 
 ## 概要 (Summary)
 
-ユーザーが閲覧中のWebページからマウスに持ち替えることなく、キーボードショートカット（Mac: `Command + Shift + D`、Windows/Linux: `Alt + Shift + D`）またはツールバーアイコンクリックによって即座にブックマーク登録ダイアログ（Chrome Action Popup）を呼び出し、ニックネームを入力して Enter を押すだけでブックマーク登録を完了できる機能を実装します。
+ユーザーが閲覧中のWebページからマウスに持ち替えることなく、キーボードショートカット（Mac: `Option + Shift + D`、Windows/Linux: `Alt + Shift + D`）またはツールバーアイコンクリックによって即座にブックマーク登録ダイアログ（Chrome Action Popup）を呼び出し、ニックネームを入力して Enter を押すだけでブックマーク登録を完了できる機能を実装します。
 
 ### 技術アプローチ
 1. **Manifest V3 統合**: `manifest.json` の `commands` に `_execute_action`（ショートカット定義）を追加し、`action.default_popup` に `popup.html` を指定。

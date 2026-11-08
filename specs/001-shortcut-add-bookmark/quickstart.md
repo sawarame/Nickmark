@@ -29,7 +29,7 @@ npm run build
 2. 画面右上の「デベロッパー モード」を有効化する。
 3. 「パッケージ化されていない拡張機能を読み込む」をクリックし、本プロジェクトの `package/` フォルダを選択する。
 4. 既に読み込み済みの場合は、Nickmark の「更新（リロード）」アイコンをクリックする。
-5. （任意）`chrome://extensions/shortcuts` を開き、「Nickmark」に `Command + Shift + D`（Mac）または `Alt + Shift + D`（Win/Linux）が割り当てられていることを確認する。
+5. （任意）`chrome://extensions/shortcuts` を開き、「Nickmark」に `Option + Shift + D`（Mac）または `Alt + Shift + D`（Win/Linux）が割り当てられていることを確認する。
 
 ---
 
@@ -37,7 +37,7 @@ npm run build
 
 ### シナリオ 1: ショートカットによる基本登録 (P1)
 1. 任意のWebサイト（例: `https://github.com`）を開く。
-2. キーボードショートカット（Mac: `Command + Shift + D`, Win: `Alt + Shift + D`）を押す。
+2. キーボードショートカット（Mac: `Option + Shift + D`, Win: `Alt + Shift + D`）を押す。
    - **確認**: ブラウザ右上に登録ダイアログ（ポップアップ）が即座に開く。
    - **確認**: URL欄に `https://github.com`、タイトル欄に対象ページのタイトルが入力されている。
    - **確認**: ニックネーム入力欄に自動でフォーカスが当たっている。
