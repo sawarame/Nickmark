@@ -296,12 +296,91 @@
       }
     }
   },
-  "bookmarkAlreadyExistsMessage": {
-    "message": "'$1' は既に登録されています。",
+  "openAllInFolder": {
+    "message": "📁 フォルダ「$1」の全ブックマークを一括オープン ($2タブ)",
     "placeholders": {
-      "1": {
-        "content": "$1"
-      }
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "openFolderSummary": {
+    "message": "📁 $1 ($2タブを一括オープン)",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "folderFilterLabel": {
+    "message": "フォルダ"
+  },
+  "allFoldersOption": {
+    "message": "すべてのフォルダ"
+  },
+  "rootFolderOption": {
+    "message": "未分類（ルート）"
+  },
+  "openFolderBtn": {
+    "message": "一括オープン"
+  },
+  "renameFolderBtn": {
+    "message": "フォルダ名変更"
+  },
+  "deleteFolderBtn": {
+    "message": "フォルダ削除"
+  },
+  "renameFolderDialogTitle": {
+    "message": "フォルダ名の変更"
+  },
+  "newFolderNameLabel": {
+    "message": "新しいフォルダ名"
+  },
+  "renameFolderSuccessMessage": {
+    "message": "フォルダ名を「$1」に変更しました（$2件のブックマークを更新）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "confirmDeleteFolderTitle": {
+    "message": "フォルダの削除確認"
+  },
+  "confirmDeleteFolderMessage": {
+    "message": "フォルダ「$1」配下のすべてのブックマーク（$2件）を削除しますか？この操作は元に戻せません。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "deleteFolderSuccessMessage": {
+    "message": "フォルダ「$1」と配下のブックマークを削除しました。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "maxBatchOpenTabsLabel": {
+    "message": "一括オープンの安全上限件数"
+  },
+  "maxBatchOpenTabsDescription": {
+    "message": "フォルダ一括オープン時に自動で開く最大タブ数です（1〜100件、デフォルト: 20件）。この件数を超える場合は確認プロンプトが表示されます。"
+  },
+  "confirmBatchOpenTitle": {
+    "message": "大量タブオープンの確認"
+  },
+  "confirmBatchOpenMessage": {
+    "message": "フォルダ「$1」には $2 件のタブが含まれています。安全上限（$3件）を超えていますが、すべて開きますか？",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" },
+      "3": { "content": "$3" }
+    }
+  },
+  "confirmBatchOpenBtn": {
+    "message": "すべて開く"
+  },
+  "errorBatchOpenZeroUrls": {
+    "message": "フォルダ「$1」には開く対象のURLがありません（ブックマークレットのみ、または空）。",
+    "placeholders": {
+      "1": { "content": "$1" }
     }
   }
 }
