@@ -1,6 +1,7 @@
 <template>
   <div class="container" v-if="isLoaded">
     <Toast />
+    <ConfirmDialog />
     
     <div class="header">
       <h1>{{ title }}</h1>
@@ -37,7 +38,15 @@
         <div class="form-grid">
           <div class="field">
             <label for="nickname">{{ t('nicknameLabel') || 'Nickname' }}</label>
-            <InputText id="nickname" v-model="newBookmark.nickname" placeholder="e.g. gh" />
+            <AutoComplete
+              id="nickname"
+              v-model="newBookmark.nickname"
+              :suggestions="newBookmarkNicknameSuggestions"
+              class="w-full"
+              inputClass="w-full"
+              placeholder="e.g. work/gh"
+              @complete="searchNewBookmarkNicknames"
+            />
           </div>
           <div class="field">
             <label for="titleInput">{{ t('titleLabel') || 'Title (Optional)' }}</label>
@@ -74,7 +83,50 @@
         </div>
       </template>
       <template #content>
-        <DataTable :value="flatBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
+        <!-- フォルダ絞り込み・一括操作バー -->
+        <div class="folder-toolbar mb-3">
+          <div class="folder-select-group">
+            <label for="folder-filter" class="folder-filter-label">
+              <i class="pi pi-folder" style="margin-right: 0.25rem;"></i>
+              {{ t('folderFilterLabel') || 'Folder' }}:
+            </label>
+            <Select
+              id="folder-filter"
+              v-model="selectedFolder"
+              :options="folderOptions"
+              optionLabel="label"
+              optionValue="value"
+              class="folder-select"
+            />
+          </div>
+          <div v-if="isSpecificFolderSelected" class="folder-actions-group">
+            <Button
+              icon="pi pi-external-link"
+              :label="t('openFolderBtn') || 'Open All'"
+              severity="secondary"
+              size="small"
+              @click="batchOpenSelectedFolder"
+            />
+            <Button
+              icon="pi pi-pencil"
+              :label="t('renameFolderBtn') || 'Rename'"
+              severity="secondary"
+              size="small"
+              text
+              @click="openRenameFolderDialog"
+            />
+            <Button
+              icon="pi pi-trash"
+              :label="t('deleteFolderBtn') || 'Delete'"
+              severity="danger"
+              size="small"
+              text
+              @click="confirmDeleteSelectedFolder"
+            />
+          </div>
+        </div>
+
+        <DataTable :value="filteredBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
           <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable></Column>
           <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
           <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
@@ -112,6 +164,31 @@
         </DataTable>
       </template>
     </Card>
+
+    <!-- フォルダリネームダイアログ -->
+    <Dialog
+      v-model:visible="showRenameDialog"
+      modal
+      :header="t('renameFolderDialogTitle') || 'Rename Folder'"
+      :style="{ width: '450px', maxWidth: '90vw' }"
+    >
+      <div class="form-grid">
+        <div class="field w-full">
+          <label for="new-folder-name">{{ t('newFolderNameLabel') || 'New Folder Name' }}</label>
+          <InputText
+            id="new-folder-name"
+            v-model="newFolderName"
+            class="w-full"
+            placeholder="e.g. office"
+            @keydown.enter.prevent="executeRenameFolder"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="showRenameDialog = false" />
+        <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="executeRenameFolder" autofocus />
+      </template>
+    </Dialog>
 
     <Dialog v-model:visible="showEditDialog" modal :header="t('editBookmarkTitle') || 'Edit Nickmark'" :style="{ width: '1100px', maxWidth: '95vw' }">
       <div class="form-grid">
@@ -174,9 +251,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useToast } from 'primevue/usetoast';
+import { useConfirm } from 'primevue/useconfirm';
 
 import JsonEditor from 'vue3-ts-jsoneditor';
 import InputText from 'primevue/inputtext';
+import AutoComplete, { AutoCompleteCompleteEvent } from 'primevue/autocomplete';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
 import Column from 'primevue/column';
@@ -185,6 +264,8 @@ import Textarea from 'primevue/textarea';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 import Message from 'primevue/message';
+import Select from 'primevue/select';
+import ConfirmDialog from 'primevue/confirmdialog';
 
 import {
   BookmarkEntry,
@@ -193,11 +274,17 @@ import {
   isDynamicUrl,
   resolveFallbackUrl,
   isBookmarkletUrl,
-  isUserScriptsAvailable
+  isUserScriptsAvailable,
+  extractFolders,
+  openFolderUrls,
+  renameFolder,
+  deleteFolder,
+  getMaxBatchOpenTabs
 } from './background';
 import { initI18n, t } from './i18n';
 
 const toast = useToast();
+const confirm = useConfirm();
 
 const title = ref('');
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
@@ -210,6 +297,46 @@ const newBookmark = ref({
   title: '',
   default_value: ''
 });
+
+const newBookmarkNicknameSuggestions = ref<string[]>([]);
+
+/**
+ * 新規登録フォーム用のニックネームおよびフォルダプレフィックス補完候補を検索します。
+ * @param {AutoCompleteCompleteEvent} event - AutoComplete 入力イベント
+ */
+const searchNewBookmarkNicknames = (event: AutoCompleteCompleteEvent): void => {
+  const query = (event.query || '').trim().toLowerCase();
+  const allNicknames = Object.keys(bookmarksData.value).sort((a, b) => a.localeCompare(b));
+  const folders = extractFolders(bookmarksData.value);
+  const folderPrefixes = Array.from(folders.values())
+    .map(f => `${f.path}/`)
+    .sort((a, b) => a.localeCompare(b));
+
+  if (!query) {
+    newBookmarkNicknameSuggestions.value = [...folderPrefixes, ...allNicknames];
+    return;
+  }
+
+  const folderMatches: string[] = [];
+  for (const f of folderPrefixes) {
+    if (f.toLowerCase().startsWith(query)) {
+      folderMatches.push(f);
+    }
+  }
+
+  const prefixMatches: string[] = [];
+  const partialMatches: string[] = [];
+  for (const name of allNicknames) {
+    const lower = name.toLowerCase();
+    if (lower.startsWith(query)) {
+      prefixMatches.push(name);
+    } else if (lower.includes(query)) {
+      partialMatches.push(name);
+    }
+  }
+
+  newBookmarkNicknameSuggestions.value = [...folderMatches, ...prefixMatches, ...partialMatches];
+};
 
 // 編集ダイアログの状態
 const showEditDialog = ref(false);
@@ -240,6 +367,15 @@ const isJsonValid = computed(() => {
   }
 });
 
+// フォルダ絞り込み・管理状態
+const selectedFolder = ref<string>('__ALL__');
+const showRenameDialog = ref(false);
+const newFolderName = ref('');
+
+const isSpecificFolderSelected = computed((): boolean => {
+  return selectedFolder.value !== '__ALL__' && selectedFolder.value !== '__ROOT__';
+});
+
 const flatBookmarks = computed(() => {
   const result: any[] = [];
   for (const [nickname, entries] of Object.entries(bookmarksData.value)) {
@@ -252,6 +388,169 @@ const flatBookmarks = computed(() => {
   }
   return result;
 });
+
+const folderOptions = computed(() => {
+  const folders = extractFolders(bookmarksData.value);
+  const options = [
+    { label: t('allFoldersOption') || 'すべてのフォルダ', value: '__ALL__' },
+    { label: t('rootFolderOption') || '未分類（ルート）', value: '__ROOT__' },
+  ];
+
+  const sortedFolders = Array.from(folders.values()).sort((a, b) => a.path.localeCompare(b.path));
+  for (const f of sortedFolders) {
+    options.push({
+      label: `📁 ${f.path} (${f.openableUrlCount})`,
+      value: f.path,
+    });
+  }
+
+  return options;
+});
+
+const filteredBookmarks = computed(() => {
+  if (selectedFolder.value === '__ALL__') {
+    return flatBookmarks.value;
+  }
+  if (selectedFolder.value === '__ROOT__') {
+    return flatBookmarks.value.filter(item => !item.nickname.includes('/'));
+  }
+  const folderPath = selectedFolder.value;
+  const prefix = folderPath + '/';
+  return flatBookmarks.value.filter(
+    item => item.nickname === folderPath || item.nickname.startsWith(prefix)
+  );
+});
+
+/**
+ * 選択中フォルダの全ブックマークを一括で開きます。
+ */
+const batchOpenSelectedFolder = async (): Promise<void> => {
+  if (!isSpecificFolderSelected.value) return;
+  const folderPath = selectedFolder.value;
+  const result = await openFolderUrls(folderPath, false);
+
+  if (result.requiresConfirmation && result.folderPath && result.urls) {
+    const maxLimit = await getMaxBatchOpenTabs();
+    confirm.require({
+      header: t('confirmBatchOpenTitle') || '大量タブオープンの確認',
+      message:
+        t('confirmBatchOpenMessage', [folderPath, String(result.urls.length), String(maxLimit)]) ||
+        `フォルダ「${folderPath}」には ${result.urls.length} 件のタブが含まれています。安全上限（${maxLimit}件）を超えていますが、すべて開きますか？`,
+      icon: 'pi pi-exclamation-triangle',
+      rejectProps: {
+        severity: 'secondary',
+        outlined: true,
+        label: t('cancelBtn') || 'キャンセル'
+      },
+      acceptProps: {
+        severity: 'primary',
+        label: t('confirmBatchOpenBtn') || 'すべて開く'
+      },
+      accept: async () => {
+        const confirmedResult = await openFolderUrls(folderPath, true);
+        if (confirmedResult.success) {
+          toast.add({
+            severity: 'success',
+            summary: 'Success',
+            detail: `${confirmedResult.openedCount} tabs opened.`,
+            life: 3000
+          });
+        }
+      }
+    });
+  } else if (result.success) {
+    toast.add({
+      severity: 'success',
+      summary: 'Success',
+      detail: `${result.openedCount} tabs opened.`,
+      life: 3000
+    });
+  }
+};
+
+/**
+ * フォルダ名変更ダイアログを開きます。
+ */
+const openRenameFolderDialog = (): void => {
+  if (!isSpecificFolderSelected.value) return;
+  newFolderName.value = selectedFolder.value;
+  showRenameDialog.value = true;
+};
+
+/**
+ * フォルダ名の一括変更を実行します。
+ */
+const executeRenameFolder = async (): Promise<void> => {
+  const oldPath = selectedFolder.value;
+  const newPath = newFolderName.value.trim().replace(/^\/+|\/+$/g, '');
+  if (!newPath || oldPath === newPath) {
+    showRenameDialog.value = false;
+    return;
+  }
+
+  const res = await renameFolder(oldPath, newPath);
+  if (res.success) {
+    await loadBookmarks();
+    selectedFolder.value = newPath;
+    showRenameDialog.value = false;
+    toast.add({
+      severity: 'success',
+      summary: 'Renamed',
+      detail:
+        t('renameFolderSuccessMessage', [newPath, String(res.affectedCount)]) ||
+        `フォルダ名を「${newPath}」に変更しました。`,
+      life: 3000
+    });
+  } else {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: res.error || 'Failed to rename folder.',
+      life: 4000
+    });
+  }
+};
+
+/**
+ * 選択中フォルダの全ブックマーク一括削除を確認・実行します。
+ */
+const confirmDeleteSelectedFolder = (): void => {
+  if (!isSpecificFolderSelected.value) return;
+  const folderPath = selectedFolder.value;
+  const count = filteredBookmarks.value.length;
+
+  confirm.require({
+    header: t('confirmDeleteFolderTitle') || 'フォルダの削除確認',
+    message:
+      t('confirmDeleteFolderMessage', [folderPath, String(count)]) ||
+      `フォルダ「${folderPath}」配下のすべてのブックマーク（${count}件）を削除しますか？この操作は元に戻せません。`,
+    icon: 'pi pi-exclamation-triangle',
+    rejectProps: {
+      severity: 'secondary',
+      outlined: true,
+      label: t('cancelBtn') || 'キャンセル'
+    },
+    acceptProps: {
+      severity: 'danger',
+      label: t('deleteFolderBtn') || '削除'
+    },
+    accept: async () => {
+      const res = await deleteFolder(folderPath);
+      if (res.success) {
+        await loadBookmarks();
+        selectedFolder.value = '__ALL__';
+        toast.add({
+          severity: 'info',
+          summary: 'Deleted',
+          detail:
+            t('deleteFolderSuccessMessage', [folderPath]) ||
+            `フォルダ「${folderPath}」と配下のブックマークを削除しました。`,
+          life: 3000
+        });
+      }
+    }
+  });
+};
 
 /**
  * 登録済みまたは入力中のデータにブックマークレット（`javascript:`）が含まれているかを判定します。
@@ -674,21 +973,38 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  flex: 1;
-  min-width: 150px;
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 .field:nth-child(1) {
-  flex: 0 0 120px;
+  flex: 1 1 180px;
 }
 
-.field:nth-child(2),
+.field:nth-child(2) {
+  flex: 1.5 1 200px;
+}
+
 .field:nth-child(3) {
-  flex: 2 1 200px;
+  flex: 2.5 1 250px;
 }
 
 .field-btn {
   flex: 0 0 auto;
+}
+
+.field :deep(.p-autocomplete) {
+  width: 100%;
+}
+
+.field :deep(.p-autocomplete-input) {
+  width: 100%;
+  min-width: 0;
+}
+
+.field :deep(.p-inputtext) {
+  width: 100%;
+  min-width: 0;
 }
 
 /* 動的URL (%s) 入力時に表示する引数省略時のデフォルト値入力欄 */
@@ -778,7 +1094,17 @@ body {
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .form-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .field {
+    width: 100%;
+  }
+  .field:nth-child(1),
+  .field:nth-child(2),
+  .field:nth-child(3) {
+    flex: 1 1 auto;
+    width: 100%;
   }
   .field-btn {
     align-items: stretch;
@@ -791,5 +1117,36 @@ body {
 /* Hide the problematic full-width button inside vue3-ts-jsoneditor */
 :deep(.jse-full-width) {
   display: none !important;
+}
+
+.folder-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.folder-select-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.folder-filter-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+.folder-select {
+  min-width: 220px;
+}
+
+.folder-actions-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 }
 </style>

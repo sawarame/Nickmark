@@ -133,7 +133,8 @@ import {
   saveBookmarksData,
   showToast,
   isDynamicUrl,
-  isSameUrl
+  isSameUrl,
+  extractFolders
 } from './background';
 
 /**
@@ -162,6 +163,7 @@ const nicknameInputRef = ref<any>(null);
 
 // ニックネーム補完候補
 const allNicknames = ref<string[]>([]);
+const allFolderPrefixes = ref<string[]>([]);
 const filteredNicknames = ref<string[]>([]);
 
 /**
@@ -200,16 +202,25 @@ const openPreferences = (): void => {
 
 /**
  * 入力されたニックネームから前方一致・部分一致で補完候補を検索します。
+ * 既存フォルダ名プレフィックス（folder/）も先頭にサジェストします。
  * @param event AutoComplete の入力完了イベント
  */
 const searchNicknames = (event: AutoCompleteCompleteEvent): void => {
   const query = (event.query || '').trim().toLowerCase();
   if (!query) {
-    filteredNicknames.value = [...allNicknames.value];
+    filteredNicknames.value = [...allFolderPrefixes.value, ...allNicknames.value];
     return;
   }
 
-  // 完全一致または前方一致するものを優先し、部分一致も候補に含める
+  // フォルダプレフィックスの一致（最優先）
+  const folderMatches: string[] = [];
+  for (const folder of allFolderPrefixes.value) {
+    if (folder.toLowerCase().startsWith(query)) {
+      folderMatches.push(folder);
+    }
+  }
+
+  // 完全一致または前方一致するニックネームを優先し、部分一致も候補に含める
   const prefixMatches: string[] = [];
   const partialMatches: string[] = [];
 
@@ -222,19 +233,23 @@ const searchNicknames = (event: AutoCompleteCompleteEvent): void => {
     }
   }
 
-  filteredNicknames.value = [...prefixMatches, ...partialMatches];
+  filteredNicknames.value = [...folderMatches, ...prefixMatches, ...partialMatches];
 };
 
 /**
- * 初期化処理: 多言語設定、アクティブタブ情報、既存ニックネーム一覧を読み込みます。
+ * 初期化処理: 多言語設定、アクティブタブ情報、既存ニックネームおよびフォルダ一覧を読み込みます。
  */
 onMounted(async () => {
   await initI18n();
 
-  // 既存のニックネーム一覧を取得
+  // 既存のニックネーム一覧およびフォルダプレフィックスを取得
   try {
     const bookmarks = await loadBookmarksData();
     allNicknames.value = Object.keys(bookmarks).sort((a, b) => a.localeCompare(b));
+    const folders = extractFolders(bookmarks);
+    allFolderPrefixes.value = Array.from(folders.values())
+      .map(f => `${f.path}/`)
+      .sort((a, b) => a.localeCompare(b));
   } catch (error) {
     console.warn('ブックマークデータの読み込みに失敗しました:', error);
   }

@@ -20,6 +20,29 @@ export interface NickmarkData {
   bookmarks: Record<string, BookmarkEntry[]>;
 }
 
+/**
+ * 動的に導出されるフォルダ情報の型定義
+ */
+export interface FolderInfo {
+  /** フォルダの完全パスプレフィックス（例: "work", "infra/aws"） */
+  path: string;
+  /** フォルダの表示名（最後のセグメント。例: "aws"） */
+  name: string;
+  /** フォルダ階層の深さ（ルート直下は 0） */
+  depth: number;
+  /** 所属する全ニックネームのリスト（再帰的配下を含む） */
+  nicknames: string[];
+  /** 所属する一意な開く対象URL（重複除外後、ブックマークレット除外）の総件数 */
+  openableUrlCount: number;
+}
+
+/**
+ * 一括オープン時のデフォルト安全上限タブ数
+ */
+export const DEFAULT_MAX_BATCH_OPEN_TABS = 20;
+
+let maxBatchOpenTabsCache: number | null = null;
+
 // 入力中に何度もストレージを読み込むのを防ぐためのローカルキャッシュ
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
@@ -44,6 +67,384 @@ export async function getSyncEnabled(): Promise<boolean> {
 export async function setSyncEnabled(enabled: boolean) {
   isSyncEnabledCache = enabled;
   await chrome.storage.local.set({ isSyncEnabled: enabled });
+}
+
+/**
+ * フォルダ一括オープン時の安全上限タブ数を取得します。
+ * @returns {Promise<number>} 安全上限タブ数（デフォルト: 20）
+ */
+export async function getMaxBatchOpenTabs(): Promise<number> {
+  if (maxBatchOpenTabsCache !== null) return maxBatchOpenTabsCache;
+  const data = await chrome.storage.local.get('maxBatchOpenTabs');
+  const val = Number(data.maxBatchOpenTabs);
+  if (!Number.isInteger(val) || val < 1 || val > 100) {
+    maxBatchOpenTabsCache = DEFAULT_MAX_BATCH_OPEN_TABS;
+  } else {
+    maxBatchOpenTabsCache = val;
+  }
+  return maxBatchOpenTabsCache;
+}
+
+/**
+ * フォルダ一括オープン時の安全上限タブ数を設定します。
+ * @param {number} limit - 設定する安全上限タブ数（1〜100）
+ */
+export async function setMaxBatchOpenTabs(limit: number): Promise<void> {
+  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || DEFAULT_MAX_BATCH_OPEN_TABS));
+  maxBatchOpenTabsCache = safeLimit;
+  await chrome.storage.local.set({ maxBatchOpenTabs: safeLimit });
+}
+
+/**
+ * ブックマーク辞書からすべてのフォルダ階層情報を抽出・導出します。
+ * @param {Record<string, BookmarkEntry[]>} bookmarks - 登録されている全ブックマーク辞書
+ * @returns {Map<string, FolderInfo>} 抽出されたフォルダ情報のマップ（キー: フォルダパス）
+ */
+export function extractFolders(bookmarks: Record<string, BookmarkEntry[]>): Map<string, FolderInfo> {
+  const folderMap = new Map<string, FolderInfo>();
+
+  for (const nickname of Object.keys(bookmarks)) {
+    const parts = nickname.split('/');
+    if (parts.length <= 1) continue; // スラッシュを含まないものは未分類（ルート）
+
+    // 親階層を順次走査（例: a/b/c の場合、"a" と "a/b"）
+    let currentPath = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      currentPath = currentPath ? `${currentPath}/${parts[i]}` : parts[i];
+      if (!folderMap.has(currentPath)) {
+        folderMap.set(currentPath, {
+          path: currentPath,
+          name: parts[i],
+          depth: i,
+          nicknames: [],
+          openableUrlCount: 0,
+        });
+      }
+      folderMap.get(currentPath)!.nicknames.push(nickname);
+    }
+  }
+
+  // 各フォルダの開く対象URL総数（重複排除後、ブックマークレット除外）を集計
+  for (const folder of folderMap.values()) {
+    const uniqueUrls = new Set<string>();
+    for (const nick of folder.nicknames) {
+      const entries = bookmarks[nick] || [];
+      for (const entry of entries) {
+        if (!isBookmarkletUrl(entry.url)) {
+          uniqueUrls.add(entry.url);
+        }
+      }
+    }
+    folder.openableUrlCount = uniqueUrls.size;
+  }
+
+  return folderMap;
+}
+
+/**
+ * フォルダ一括オープンの実行結果型
+ */
+export interface BatchOpenResult {
+  /** 実行が成功したか（上限超過による中断の場合は false） */
+  success: boolean;
+  /** 実際に開いたタブの件数 */
+  openedCount: number;
+  /** 対象となった一意な URL の総件数 */
+  totalCount: number;
+  /** 上限超過により確認が必要な状態か */
+  requiresConfirmation?: boolean;
+  /** 確認が必要な場合のフォルダパス */
+  folderPath?: string;
+  /** 確認が必要な場合の URL リスト */
+  urls?: string[];
+  /** 確認が必要な場合のニックネームリスト */
+  nicknames?: string[];
+  /** エラーメッセージ（存在する場合） */
+  error?: string;
+}
+
+/**
+ * 指定したフォルダ配下の全ブックマークを一括で開きます。
+ * 重複URLは除外し、ブックマークレットはスキップ、動的URLはフォールバック展開します。
+ * 安全上限件数を超え、force が false の場合は自動オープンを中断して確認要求状態を返します。
+ * @param {string} folderPath - 対象のフォルダパス（例: "work" または "work/"）
+ * @param {boolean} [force=false] - 上限超過時でも強制的に開くかどうか（ユーザー承認後は true）
+ * @param {number} [currentTabId] - 現在のアクティブタブID（トースト通知用、任意）
+ * @returns {Promise<BatchOpenResult>} 一括オープンの実行結果
+ */
+export async function openFolderUrls(
+  folderPath: string,
+  force: boolean = false,
+  currentTabId?: number
+): Promise<BatchOpenResult> {
+  const normalizedPath = folderPath.replace(/^\/+|\/+$/g, '');
+  if (!normalizedPath) {
+    return { success: false, openedCount: 0, totalCount: 0, error: 'INVALID_FOLDER_PATH' };
+  }
+
+  const bookmarks = await loadBookmarksData();
+  const folderPrefix = normalizedPath + '/';
+
+  // 対象となるニックネームを収集（完全一致またはプレフィックス前方一致）
+  const matchingNicknames = Object.keys(bookmarks).filter(
+    nick => nick === normalizedPath || nick.startsWith(folderPrefix)
+  );
+
+  if (matchingNicknames.length === 0) {
+    if (currentTabId !== undefined) {
+      await showToast(currentTabId, t('errorNicknameNotFound', [normalizedPath]) || `フォルダ「${normalizedPath}」が見つかりませんでした。`);
+    }
+    return { success: false, openedCount: 0, totalCount: 0, error: 'FOLDER_NOT_FOUND' };
+  }
+
+  // 重複を除外した開く対象 URL と、各 URL に紐づくスコア更新用エントリを収集
+  const targetMap = new Map<string, { templateUrl: string; nickname: string }>();
+
+  for (const nick of matchingNicknames) {
+    const entries = bookmarks[nick] || [];
+    for (const entry of entries) {
+      if (isBookmarkletUrl(entry.url)) {
+        continue; // ブックマークレットはスキップ
+      }
+      const urlToOpen = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
+      if (!targetMap.has(urlToOpen)) {
+        targetMap.set(urlToOpen, { templateUrl: entry.url, nickname: nick });
+      }
+    }
+  }
+
+  const totalCount = targetMap.size;
+  if (totalCount === 0) {
+    if (currentTabId !== undefined) {
+      await showToast(currentTabId, t('errorBatchOpenZeroUrls', [normalizedPath]) || `フォルダ「${normalizedPath}」には開く対象のURLがありません。`);
+    }
+    return { success: false, openedCount: 0, totalCount: 0, error: 'NO_OPENABLE_URLS' };
+  }
+
+  // 安全上限の確認
+  const maxLimit = await getMaxBatchOpenTabs();
+  if (totalCount > maxLimit && !force) {
+    return {
+      success: false,
+      openedCount: 0,
+      totalCount,
+      requiresConfirmation: true,
+      folderPath: normalizedPath,
+      urls: Array.from(targetMap.keys()),
+      nicknames: matchingNicknames,
+    };
+  }
+
+  // タブを一括で開いてスコアを更新
+  let openedCount = 0;
+  for (const [urlToOpen, info] of targetMap.entries()) {
+    chrome.tabs.create({ url: urlToOpen, active: false });
+    await updateScore(urlToOpen, info.templateUrl, info.nickname);
+    openedCount++;
+  }
+
+  return { success: true, openedCount, totalCount };
+}
+
+/**
+ * 安全上限を超過したフォルダ一括オープンについて、アクティブタブ上に確認プロンプトを表示します。
+ * スクリプト実行が許可されていない特殊ページの場合は、管理画面（list.html）へフォールバックします。
+ * @param {number} tabId - 対象タブの ID
+ * @param {string} folderPath - 対象のフォルダパス
+ * @param {string[]} urls - 開く対象の URL リスト
+ * @param {string[]} nicknames - 所属するニックネームリスト
+ * @returns {Promise<void>} 処理完了を示す Promise
+ */
+export async function handleBatchOpenConfirmationRequest(
+  tabId: number,
+  folderPath: string,
+  urls: string[],
+  nicknames: string[]
+): Promise<void> {
+  const maxLimit = await getMaxBatchOpenTabs();
+  const title = t('confirmBatchOpenTitle') || '大量タブオープンの確認';
+  const msg =
+    t('confirmBatchOpenMessage', [folderPath, String(urls.length), String(maxLimit)]) ||
+    `フォルダ「${folderPath}」には ${urls.length} 件のタブが含まれています。安全上限（${maxLimit}件）を超えていますが、すべて開きますか？`;
+  const confirmBtnText = t('confirmBatchOpenBtn') || 'すべて開く';
+  const cancelBtnText = t('cancelBtn') || 'キャンセル';
+
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (
+        folder: string,
+        urlList: string[],
+        nickList: string[],
+        dialogTitle: string,
+        message: string,
+        okLabel: string,
+        cancelLabel: string
+      ) => {
+        const modalId = 'nickmark-batch-open-confirm';
+        const existing = document.getElementById(modalId);
+        if (existing) existing.remove();
+
+        const backdrop = document.createElement('div');
+        backdrop.id = modalId;
+        Object.assign(backdrop.style, {
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.6)',
+          zIndex: '2147483647',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        });
+
+        const dialog = document.createElement('div');
+        Object.assign(dialog.style, {
+          backgroundColor: '#1e293b',
+          color: '#f8fafc',
+          padding: '24px',
+          borderRadius: '12px',
+          maxWidth: '440px',
+          width: '90%',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+          border: '1px solid #334155'
+        });
+
+        const h3 = document.createElement('h3');
+        h3.textContent = dialogTitle;
+        Object.assign(h3.style, { margin: '0 0 12px 0', fontSize: '18px', fontWeight: '600', color: '#f59e0b' });
+
+        const p = document.createElement('p');
+        p.textContent = message;
+        Object.assign(p.style, { margin: '0 0 20px 0', fontSize: '14px', lineHeight: '1.5', color: '#cbd5e1' });
+
+        const btnContainer = document.createElement('div');
+        Object.assign(btnContainer.style, { display: 'flex', justifyContent: 'flex-end', gap: '12px' });
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = cancelLabel;
+        Object.assign(cancelBtn.style, {
+          padding: '8px 16px',
+          borderRadius: '6px',
+          border: '1px solid #475569',
+          backgroundColor: '#334155',
+          color: '#f8fafc',
+          cursor: 'pointer',
+          fontSize: '13px'
+        });
+        cancelBtn.onclick = () => backdrop.remove();
+
+        const okBtn = document.createElement('button');
+        okBtn.textContent = okLabel;
+        Object.assign(okBtn.style, {
+          padding: '8px 16px',
+          borderRadius: '6px',
+          border: 'none',
+          backgroundColor: '#2563eb',
+          color: '#ffffff',
+          cursor: 'pointer',
+          fontWeight: '500',
+          fontSize: '13px'
+        });
+        okBtn.onclick = () => {
+          backdrop.remove();
+          chrome.runtime.sendMessage({
+            action: 'EXECUTE_BATCH_OPEN',
+            payload: { folderPath: folder, urls: urlList, nicknames: nickList }
+          });
+        };
+
+        btnContainer.appendChild(cancelBtn);
+        btnContainer.appendChild(okBtn);
+        dialog.appendChild(h3);
+        dialog.appendChild(p);
+        dialog.appendChild(btnContainer);
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+      },
+      args: [folderPath, urls, nicknames, title, msg, confirmBtnText, cancelBtnText]
+    });
+  } catch (e) {
+    // 特殊ページ（スクリプト実行不可）では管理画面を開く
+    await openOrReuseListTab({ msg });
+  }
+}
+
+/**
+ * 指定したフォルダ名（プレフィックス）を新しいフォルダ名に一括置換します。
+ * @param {string} oldPath - 変更前のフォルダパス（例: "work"）
+ * @param {string} newPath - 変更後のフォルダパス（例: "office"）
+ * @returns {Promise<{ success: boolean; affectedCount: number; error?: string }>} 処理結果
+ */
+export async function renameFolder(
+  oldPath: string,
+  newPath: string
+): Promise<{ success: boolean; affectedCount: number; error?: string }> {
+  const normOld = oldPath.replace(/^\/+|\/+$/g, '');
+  const normNew = newPath.replace(/^\/+|\/+$/g, '');
+
+  if (!normOld || !normNew) {
+    return { success: false, affectedCount: 0, error: 'INVALID_PATH' };
+  }
+  if (normOld === normNew) {
+    return { success: true, affectedCount: 0 };
+  }
+
+  const bookmarks = await loadBookmarksData();
+  const oldPrefix = normOld + '/';
+  const newPrefix = normNew + '/';
+  const newBookmarks: Record<string, BookmarkEntry[]> = {};
+  let affectedCount = 0;
+
+  for (const [key, entries] of Object.entries(bookmarks)) {
+    if (key === normOld) {
+      newBookmarks[normNew] = entries;
+      affectedCount += entries.length;
+    } else if (key.startsWith(oldPrefix)) {
+      const rest = key.substring(oldPrefix.length);
+      const newKey = `${newPrefix}${rest}`;
+      newBookmarks[newKey] = entries;
+      affectedCount += entries.length;
+    } else {
+      newBookmarks[key] = entries;
+    }
+  }
+
+  await saveBookmarksData(newBookmarks);
+  return { success: true, affectedCount };
+}
+
+/**
+ * 指定したフォルダ配下のすべてのブックマークを一括削除します。
+ * @param {string} folderPath - 削除対象のフォルダパス
+ * @returns {Promise<{ success: boolean; deletedCount: number; error?: string }>} 処理結果
+ */
+export async function deleteFolder(
+  folderPath: string
+): Promise<{ success: boolean; deletedCount: number; error?: string }> {
+  const normPath = folderPath.replace(/^\/+|\/+$/g, '');
+  if (!normPath) {
+    return { success: false, deletedCount: 0, error: 'INVALID_PATH' };
+  }
+
+  const bookmarks = await loadBookmarksData();
+  const prefix = normPath + '/';
+  const newBookmarks: Record<string, BookmarkEntry[]> = {};
+  let deletedCount = 0;
+
+  for (const [key, entries] of Object.entries(bookmarks)) {
+    if (key === normPath || key.startsWith(prefix)) {
+      deletedCount += entries.length;
+    } else {
+      newBookmarks[key] = entries;
+    }
+  }
+
+  await saveBookmarksData(newBookmarks);
+  return { success: true, deletedCount };
 }
 
 /**
@@ -822,13 +1223,23 @@ export function resolveCommandMatches(
 
   // :open / :o コマンド
   if (isCmdMatch([':open', ':o'])) {
+    const folders = extractFolders(bookmarks);
     if (!restTrimmed) {
       commandMatches.push({
         content: ':open ',
-        description: `<match>:open</match> [nickname] - Open all URLs in new tabs`
+        description: `<match>:open</match> [nickname or folder/] - Open all URLs in new tabs`
       });
       if (cmd === ':open' || cmd === ':o') {
-        for (const n of sortedNicknames.slice(0, 8)) {
+        // フォルダ候補を優先提示
+        for (const f of Array.from(folders.values()).slice(0, 4)) {
+          if (f.openableUrlCount > 0) {
+            commandMatches.push({
+              content: `:open ${f.path}/`,
+              description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
+            });
+          }
+        }
+        for (const n of sortedNicknames.slice(0, 6)) {
           commandMatches.push({
             content: `:open ${n}`,
             description: `<match>:open</match> ${getNicknameSummary(n)}`
@@ -837,19 +1248,30 @@ export function resolveCommandMatches(
       }
     } else {
       const lowerInput = restTrimmed.toLowerCase();
-      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerInput));
-      if (matches.length === 0) {
-        commandMatches.push({
-          content: text,
-          description: `<match>:open</match> No nicknames match "${escapeXml(restTrimmed)}"`
-        });
-      } else {
-        for (const n of matches) {
+      // フォルダ候補の一致を検索
+      for (const f of folders.values()) {
+        if (
+          f.openableUrlCount > 0 &&
+          (f.path.toLowerCase().startsWith(lowerInput) || `${f.path}/`.toLowerCase().startsWith(lowerInput))
+        ) {
           commandMatches.push({
-            content: `:open ${n}`,
-            description: `<match>:open</match> ${getNicknameSummary(n)}`
+            content: `:open ${f.path}/`,
+            description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
           });
         }
+      }
+      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerInput));
+      for (const n of matches) {
+        commandMatches.push({
+          content: `:open ${n}`,
+          description: `<match>:open</match> ${getNicknameSummary(n)}`
+        });
+      }
+      if (commandMatches.length === 0) {
+        commandMatches.push({
+          content: text,
+          description: `<match>:open</match> No nicknames or folders match "${escapeXml(restTrimmed)}"`
+        });
       }
     }
   }
@@ -1077,8 +1499,21 @@ function handleRegularSearchSuggestions(
 ): void {
   const trimmed = stripZeroWidthChars(text).trim();
   const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
+  const folders = extractFolders(bookmarks);
 
-  if (allMatches.length === 1) {
+  // 末尾がスラッシュの場合はフォルダ一括オープンの指定とみなす
+  const isExplicitFolderInput = trimmed.endsWith('/');
+  const normalizedFolderQuery = trimmed.replace(/\/+$/, '');
+  const matchedFolder = folders.get(normalizedFolderQuery);
+
+  if (isExplicitFolderInput && matchedFolder && matchedFolder.openableUrlCount > 0) {
+    // フォルダ一括オープンを最上位（デフォルト候補）に設定
+    const desc = t('openAllInFolder', [matchedFolder.path, String(matchedFolder.openableUrlCount)]) ||
+      `📁 フォルダ「${matchedFolder.path}」の全ブックマークを一括オープン (${matchedFolder.openableUrlCount}タブ)`;
+    chrome.omnibox.setDefaultSuggestion({
+      description: `<match>${escapeXml(matchedFolder.path)}/</match> - ${escapeXml(desc)}`
+    });
+  } else if (allMatches.length === 1) {
     const actionLabel = isBookmarkletUrl(allMatches[0].resolvedUrl) ? 'Run' : 'Go to';
     chrome.omnibox.setDefaultSuggestion({
       description: `${actionLabel} ${formatSearchMatchDescription(allMatches[0])}`
@@ -1097,6 +1532,27 @@ function handleRegularSearchSuggestions(
   }
 
   const { suggestions, matchMap } = buildRegularSearchSuggestions(text, allMatches, bookmarks);
+
+  // 末尾スラッシュでない通常入力時でも、該当するフォルダが存在する場合はサジェスト内に一括オープン候補を提示
+  if (!isExplicitFolderInput && trimmed) {
+    const lowerTrimmed = trimmed.toLowerCase();
+    for (const folder of folders.values()) {
+      if (
+        folder.openableUrlCount > 0 &&
+        (folder.path.toLowerCase() === lowerTrimmed || folder.path.toLowerCase().startsWith(lowerTrimmed))
+      ) {
+        const folderContent = `${folder.path}/`;
+        const summaryDesc = t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
+          `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`;
+        suggestions.unshift({
+          content: folderContent,
+          description: `<match>${escapeXml(folder.path)}/</match> <dim>- ${escapeXml(summaryDesc)}</dim>`
+        });
+        break; // 候補が氾濫しないよう最上位の一致フォルダ1件を提示
+      }
+    }
+  }
+
   lastSuggestedMatchMap = matchMap;
 
   suggest(suggestions);
@@ -1479,43 +1935,56 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   } 
 
   if (cmd === ':open' || cmd === ':o') {
-    const nickname = parts[1];
-    if (!nickname) {
+    const rawTarget = parts[1];
+    if (!rawTarget) {
       await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
       return;
     }
 
     const bookmarks = await loadBookmarksData();
-    const entries = bookmarks[nickname];
-    if (entries && entries.length > 0) {
+    const isExplicitFolder = rawTarget.endsWith('/');
+    const cleanTarget = rawTarget.replace(/^\/+|\/+$/g, '');
+
+    // 1. 明示的なフォルダ指定でなく、単一ニックネームとして存在する場合は単一ニックネームを開く
+    if (!isExplicitFolder && bookmarks[rawTarget]) {
+      const entries = bookmarks[rawTarget];
       let openedCount = 0;
       let skippedBookmarkletCount = 0;
 
       for (const entry of entries) {
-        // ブックマークレットは新規タブで開く対象ではないためスキップする
         if (isBookmarkletUrl(entry.url)) {
           skippedBookmarkletCount++;
           continue;
         }
-        // 動的 URL が含まれる場合はフォールバック先 URL を開く
         const urlToOpen = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
         chrome.tabs.create({ url: urlToOpen, active: false });
-        await updateScore(urlToOpen, entry.url, nickname);
+        await updateScore(urlToOpen, entry.url, rawTarget);
         openedCount++;
       }
 
-      // 登録エントリがすべてブックマークレットで1件も開けなかった場合のみ通知する
       if (openedCount === 0 && skippedBookmarkletCount > 0) {
         await showToast(
           currentTab.id,
-          t("errorOpenSkippedAllBookmarklets", [nickname]) ||
-            `ニックネーム「${nickname}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
+          t("errorOpenSkippedAllBookmarklets", [rawTarget]) ||
+            `ニックネーム「${rawTarget}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
           4000
         );
       }
-    } else {
-      await showToast(currentTab.id, t("errorNicknameNotFound", [nickname]) || `ニックネームが見つかりませんでした。`);
+      return;
     }
+
+    // 2. フォルダとして存在するか（または明示的フォルダ指定の場合）を判定して一括オープン
+    const folders = extractFolders(bookmarks);
+    if (folders.has(cleanTarget) || isExplicitFolder) {
+      const result = await openFolderUrls(cleanTarget, false, currentTab.id);
+      if (result.requiresConfirmation && result.folderPath && result.urls) {
+        await handleBatchOpenConfirmationRequest(currentTab.id, result.folderPath, result.urls, result.nicknames || []);
+      }
+      return;
+    }
+
+    // 3. どちらも見つからない場合
+    await showToast(currentTab.id, t("errorNicknameNotFound", [rawTarget]) || `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`);
     return;
   }
 
@@ -1745,6 +2214,21 @@ if (typeof window === 'undefined') {
     }
 
     // 通常検索モードの処理
+    // フォルダ一括オープンの判定（末尾スラッシュで終わる場合、またはサジェストから folder/ が渡された場合）
+    if (cleanTrimmed.endsWith('/')) {
+      const folderPath = cleanTrimmed.replace(/\/+$/, '');
+      const bookmarks = await loadBookmarksData();
+      const folders = extractFolders(bookmarks);
+      if (folders.has(folderPath)) {
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        const result = await openFolderUrls(folderPath, false, currentTab?.id);
+        if (result.requiresConfirmation && result.folderPath && result.urls && currentTab?.id !== undefined) {
+          await handleBatchOpenConfirmationRequest(currentTab.id, result.folderPath, result.urls, result.nicknames || []);
+        }
+        return;
+      }
+    }
+
     let targetUrl = cleanTrimmed;
     let matchedTemplateUrl: string | undefined;
     let matchedNickname: string | undefined;
@@ -1799,5 +2283,40 @@ if (typeof window === 'undefined') {
   // 拡張機能アイコンがクリックされた時にブックマーク一覧画面を開きます
   chrome.action.onClicked.addListener(() => {
     chrome.runtime.openOptionsPage();
+  });
+
+  // ランタイムメッセージ（承認後の一括オープン、リネーム、削除）を処理します
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message || typeof message.action !== 'string') return;
+
+    if (message.action === 'EXECUTE_BATCH_OPEN') {
+      const payload = message.payload;
+      if (payload && payload.folderPath) {
+        openFolderUrls(payload.folderPath, true).then(result => {
+          sendResponse(result);
+        });
+        return true; // 非同期レスポンス
+      }
+    }
+
+    if (message.action === 'RENAME_FOLDER') {
+      const payload = message.payload;
+      if (payload && payload.oldPath && payload.newPath) {
+        renameFolder(payload.oldPath, payload.newPath).then(result => {
+          sendResponse(result);
+        });
+        return true;
+      }
+    }
+
+    if (message.action === 'DELETE_FOLDER') {
+      const payload = message.payload;
+      if (payload && payload.folderPath) {
+        deleteFolder(payload.folderPath).then(result => {
+          sendResponse(result);
+        });
+        return true;
+      }
+    }
   });
 }

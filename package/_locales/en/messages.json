@@ -296,12 +296,91 @@
       }
     }
   },
-  "bookmarkAlreadyExistsMessage": {
-    "message": "'$1' already exists with this URL.",
+  "openAllInFolder": {
+    "message": "📁 Open all bookmarks in folder '$1' ($2 tabs)",
     "placeholders": {
-      "1": {
-        "content": "$1"
-      }
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "openFolderSummary": {
+    "message": "📁 $1 (Open $2 tabs)",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "folderFilterLabel": {
+    "message": "Folder"
+  },
+  "allFoldersOption": {
+    "message": "All Folders"
+  },
+  "rootFolderOption": {
+    "message": "Uncategorized (Root)"
+  },
+  "openFolderBtn": {
+    "message": "Open All"
+  },
+  "renameFolderBtn": {
+    "message": "Rename Folder"
+  },
+  "deleteFolderBtn": {
+    "message": "Delete Folder"
+  },
+  "renameFolderDialogTitle": {
+    "message": "Rename Folder"
+  },
+  "newFolderNameLabel": {
+    "message": "New Folder Name"
+  },
+  "renameFolderSuccessMessage": {
+    "message": "Renamed folder to '$1' ($2 bookmarks updated).",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "confirmDeleteFolderTitle": {
+    "message": "Confirm Delete Folder"
+  },
+  "confirmDeleteFolderMessage": {
+    "message": "Are you sure you want to delete all bookmarks ($2 items) in folder '$1'? This action cannot be undone.",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "deleteFolderSuccessMessage": {
+    "message": "Deleted folder '$1' and all its bookmarks.",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "maxBatchOpenTabsLabel": {
+    "message": "Safety limit for batch open tabs"
+  },
+  "maxBatchOpenTabsDescription": {
+    "message": "The maximum number of tabs to open automatically when batch opening a folder (1-100, default: 20). If this limit is exceeded, a confirmation prompt will be displayed."
+  },
+  "confirmBatchOpenTitle": {
+    "message": "Confirm Batch Open"
+  },
+  "confirmBatchOpenMessage": {
+    "message": "Folder '$1' contains $2 tabs, which exceeds the safety limit ($3 tabs). Do you want to open all of them?",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" },
+      "3": { "content": "$3" }
+    }
+  },
+  "confirmBatchOpenBtn": {
+    "message": "Open All"
+  },
+  "errorBatchOpenZeroUrls": {
+    "message": "No openable URLs found in folder '$1' (bookmarklets only or empty).",
+    "placeholders": {
+      "1": { "content": "$1" }
     }
   }
 }

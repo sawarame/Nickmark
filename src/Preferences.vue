@@ -51,6 +51,31 @@
           </div>
         </template>
       </Card>
+
+      <Card class="mb-4">
+        <template #title>{{ t('maxBatchOpenTabsLabel') || 'Safety limit for batch open tabs' }}</template>
+        <template #content>
+          <div class="sync-row">
+            <div class="sync-info">
+              <div class="sync-desc">
+                {{ t('maxBatchOpenTabsDescription') || 'The maximum number of tabs to open automatically when batch opening a folder (1-100, default: 20).' }}
+              </div>
+            </div>
+            <div style="min-width: 140px;">
+              <InputNumber
+                v-model="maxBatchOpenTabs"
+                :min="1"
+                :max="100"
+                showButtons
+                buttonLayout="horizontal"
+                :step="1"
+                @change="saveMaxBatchOpenTabs"
+                class="w-full"
+              />
+            </div>
+          </div>
+        </template>
+      </Card>
     </div>
 
     <!-- Migration / Conflict Resolution Dialog -->
@@ -93,15 +118,27 @@ import Card from 'primevue/card';
 import Select from 'primevue/select';
 import Button from 'primevue/button';
 import ToggleSwitch from 'primevue/toggleswitch';
+import InputNumber from 'primevue/inputnumber';
 import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 
 import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
-import { getSyncEnabled, setSyncEnabled, getStorageDataWithTimestamp, saveBookmarksData, isOverQuota, BookmarkEntry } from './background';
+import {
+  getSyncEnabled,
+  setSyncEnabled,
+  getStorageDataWithTimestamp,
+  saveBookmarksData,
+  isOverQuota,
+  BookmarkEntry,
+  getMaxBatchOpenTabs,
+  setMaxBatchOpenTabs,
+  DEFAULT_MAX_BATCH_OPEN_TABS
+} from './background';
 
 const toast = useToast();
 const selectedLanguage = ref<Locale>('en');
 const syncEnabled = ref(false);
+const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
 const isLoaded = ref(false);
 const renderKey = ref(0);
 
@@ -121,7 +158,23 @@ const loadSettings = async () => {
   await initI18n();
   selectedLanguage.value = getCurrentLocale();
   syncEnabled.value = await getSyncEnabled();
+  maxBatchOpenTabs.value = await getMaxBatchOpenTabs();
   isLoaded.value = true;
+};
+
+/**
+ * 安全上限設定を保存します。
+ */
+const saveMaxBatchOpenTabs = async () => {
+  if (typeof maxBatchOpenTabs.value === 'number') {
+    await setMaxBatchOpenTabs(maxBatchOpenTabs.value);
+    toast.add({
+      severity: 'success',
+      summary: t('saveSuccess') || 'Saved',
+      detail: t('saveSuccess') || 'Saved',
+      life: 2000
+    });
+  }
 };
 
 const saveLanguage = async () => {
