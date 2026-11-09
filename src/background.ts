@@ -41,6 +41,70 @@ export interface FolderInfo {
  */
 export const DEFAULT_MAX_BATCH_OPEN_TABS = 20;
 
+/**
+ * ニックネームまたはフォルダパス文字列を正規化します。
+ * - 前後の空白を除去
+ * - 連続するスラッシュ（// など）を単一のスラッシュ（/）に統合
+ * - 先頭および末尾のスラッシュ（/）を除去
+ * - 各階層セグメントの前後の余分な空白も除去
+ * @param {string} rawPath - 入力された生のニックネームまたはフォルダパス
+ * @returns {string} 正規化されたパス文字列（スラッシュのみの場合は空文字 ""）
+ */
+export function normalizeNicknamePath(rawPath: string): string {
+  if (!rawPath || typeof rawPath !== 'string') return '';
+  return rawPath
+    .trim()
+    .split('/')
+    .map(segment => segment.trim())
+    .filter(segment => segment.length > 0)
+    .join('/');
+}
+
+/**
+ * ブックマーク辞書のすべてのキーを正規化し、同一キーに衝突するエントリを重複排除・統合します。
+ * 空文字キーのエントリは除外します。
+ * @param {Record<string, BookmarkEntry[]>} rawBookmarks - 未正規化のブックマーク辞書
+ * @returns {Record<string, BookmarkEntry[]>} 正規化済みのブックマーク辞書
+ */
+export function normalizeBookmarksDictionary(
+  rawBookmarks: Record<string, BookmarkEntry[]>
+): Record<string, BookmarkEntry[]> {
+  const normalized: Record<string, BookmarkEntry[]> = {};
+
+  for (const [rawKey, entries] of Object.entries(rawBookmarks || {})) {
+    const normKey = normalizeNicknamePath(rawKey);
+    if (!normKey) continue;
+
+    if (!normalized[normKey]) {
+      normalized[normKey] = [];
+    }
+
+    const safeEntries = Array.isArray(entries)
+      ? entries
+      : entries && typeof entries === 'object'
+        ? (Object.values(entries) as BookmarkEntry[])
+        : [];
+
+    for (const entry of safeEntries) {
+      if (!entry || !entry.url) continue;
+      const existing = normalized[normKey].find(e => isSameUrl(e.url, entry.url));
+      if (!existing) {
+        normalized[normKey].push({ ...entry });
+      } else {
+        // 同一URLが存在する場合はより高いスコアや最新の日時、ピン留め設定をマージ
+        existing.score = Math.max(existing.score || 1.0, entry.score || 1.0);
+        existing.last_used_at = Math.max(existing.last_used_at || 0, entry.last_used_at || 0);
+        existing.created_at = Math.min(existing.created_at || Date.now(), entry.created_at || Date.now());
+        if (entry.is_pinned) existing.is_pinned = true;
+        if (!existing.title && entry.title) existing.title = entry.title;
+        if (!existing.default_value && entry.default_value) existing.default_value = entry.default_value;
+      }
+    }
+  }
+
+  return normalized;
+}
+
 let maxBatchOpenTabsCache: number | null = null;
 
 // 入力中に何度もストレージを読み込むのを防ぐためのローカルキャッシュ
@@ -103,7 +167,10 @@ export async function setMaxBatchOpenTabs(limit: number): Promise<void> {
 export function extractFolders(bookmarks: Record<string, BookmarkEntry[]>): Map<string, FolderInfo> {
   const folderMap = new Map<string, FolderInfo>();
 
-  for (const nickname of Object.keys(bookmarks)) {
+  for (const rawNickname of Object.keys(bookmarks)) {
+    const nickname = normalizeNicknamePath(rawNickname);
+    if (!nickname) continue;
+
     const parts = nickname.split('/');
     if (parts.length <= 1) continue; // スラッシュを含まないものは未分類（ルート）
 
@@ -177,7 +244,7 @@ export async function openFolderUrls(
   force: boolean = false,
   currentTabId?: number
 ): Promise<BatchOpenResult> {
-  const normalizedPath = folderPath.replace(/^\/+|\/+$/g, '');
+  const normalizedPath = normalizeNicknamePath(folderPath);
   if (!normalizedPath) {
     return { success: false, openedCount: 0, totalCount: 0, error: 'INVALID_FOLDER_PATH' };
   }
@@ -187,7 +254,10 @@ export async function openFolderUrls(
 
   // 対象となるニックネームを収集（完全一致またはプレフィックス前方一致）
   const matchingNicknames = Object.keys(bookmarks).filter(
-    nick => nick === normalizedPath || nick.startsWith(folderPrefix)
+    nick => {
+      const normNick = normalizeNicknamePath(nick);
+      return normNick === normalizedPath || normNick.startsWith(folderPrefix);
+    }
   );
 
   if (matchingNicknames.length === 0) {
@@ -383,8 +453,8 @@ export async function renameFolder(
   oldPath: string,
   newPath: string
 ): Promise<{ success: boolean; affectedCount: number; error?: string }> {
-  const normOld = oldPath.replace(/^\/+|\/+$/g, '');
-  const normNew = newPath.replace(/^\/+|\/+$/g, '');
+  const normOld = normalizeNicknamePath(oldPath);
+  const normNew = normalizeNicknamePath(newPath);
 
   if (!normOld || !normNew) {
     return { success: false, affectedCount: 0, error: 'INVALID_PATH' };
@@ -400,16 +470,25 @@ export async function renameFolder(
   let affectedCount = 0;
 
   for (const [key, entries] of Object.entries(bookmarks)) {
-    if (key === normOld) {
-      newBookmarks[normNew] = entries;
+    const normKey = normalizeNicknamePath(key);
+    let targetKey = normKey;
+    if (normKey === normOld) {
+      targetKey = normNew;
       affectedCount += entries.length;
-    } else if (key.startsWith(oldPrefix)) {
-      const rest = key.substring(oldPrefix.length);
-      const newKey = `${newPrefix}${rest}`;
-      newBookmarks[newKey] = entries;
+    } else if (normKey.startsWith(oldPrefix)) {
+      const rest = normKey.substring(oldPrefix.length);
+      targetKey = `${newPrefix}${rest}`;
       affectedCount += entries.length;
-    } else {
-      newBookmarks[key] = entries;
+    }
+
+    if (!newBookmarks[targetKey]) {
+      newBookmarks[targetKey] = [];
+    }
+    // 既存エントリと衝突した場合は重複排除して追加
+    for (const entry of entries) {
+      if (!newBookmarks[targetKey].some(e => isSameUrl(e.url, entry.url))) {
+        newBookmarks[targetKey].push(entry);
+      }
     }
   }
 
@@ -425,7 +504,7 @@ export async function renameFolder(
 export async function deleteFolder(
   folderPath: string
 ): Promise<{ success: boolean; deletedCount: number; error?: string }> {
-  const normPath = folderPath.replace(/^\/+|\/+$/g, '');
+  const normPath = normalizeNicknamePath(folderPath);
   if (!normPath) {
     return { success: false, deletedCount: 0, error: 'INVALID_PATH' };
   }
@@ -436,10 +515,11 @@ export async function deleteFolder(
   let deletedCount = 0;
 
   for (const [key, entries] of Object.entries(bookmarks)) {
-    if (key === normPath || key.startsWith(prefix)) {
+    const normKey = normalizeNicknamePath(key);
+    if (normKey === normPath || normKey.startsWith(prefix)) {
       deletedCount += entries.length;
     } else {
-      newBookmarks[key] = entries;
+      newBookmarks[normKey] = entries;
     }
   }
 
@@ -526,17 +606,7 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
       const isSync = await getSyncEnabled();
       const rawBookmarks = await loadFromStorage(isSync ? 'sync' : 'local');
       
-      const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
-      
-      for (const [nickname, entries] of Object.entries(rawBookmarks)) {
-        if (Array.isArray(entries)) {
-          normalizedBookmarks[nickname] = entries;
-        } else if (entries && typeof entries === 'object') {
-          normalizedBookmarks[nickname] = Object.values(entries) as BookmarkEntry[];
-        } else {
-          normalizedBookmarks[nickname] = [];
-        }
-      }
+      const normalizedBookmarks = normalizeBookmarksDictionary(rawBookmarks);
       
       bookmarksCache = normalizedBookmarks;
       return normalizedBookmarks;
@@ -551,13 +621,15 @@ export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[
 /**
  * ブックマークデータを保存します。
  * 同期設定に応じて、適切なストレージ（local または sync）に保存します。
+ * キーの正規化と重複エントリのマージも同時に行われます。
  * @param {Record<string, BookmarkEntry[]>} bookmarks 保存するブックマークデータ
  * @returns {Promise<void>}
  */
 export async function saveBookmarksData(bookmarks: Record<string, BookmarkEntry[]>): Promise<void> {
   const isSync = await getSyncEnabled();
-  await saveToStorage(isSync ? 'sync' : 'local', bookmarks);
-  bookmarksCache = bookmarks;
+  const normalizedBookmarks = normalizeBookmarksDictionary(bookmarks);
+  await saveToStorage(isSync ? 'sync' : 'local', normalizedBookmarks);
+  bookmarksCache = normalizedBookmarks;
   loadBookmarksPromise = null;
 }
 
@@ -566,19 +638,11 @@ export async function saveBookmarksData(bookmarks: Record<string, BookmarkEntry[
  */
 export async function getStorageDataWithTimestamp(area: 'local' | 'sync'): Promise<{ bookmarks: Record<string, BookmarkEntry[]>, lastUpdated: number }> {
   const rawBookmarks = await loadFromStorage(area);
-  const normalizedBookmarks: Record<string, BookmarkEntry[]> = {};
+  const normalizedBookmarks = normalizeBookmarksDictionary(rawBookmarks);
   let latest = 0;
 
-  for (const [nickname, entries] of Object.entries(rawBookmarks)) {
-    let normalizedEntries: BookmarkEntry[] = [];
-    if (Array.isArray(entries)) {
-      normalizedEntries = entries;
-    } else if (entries && typeof entries === 'object') {
-      normalizedEntries = Object.values(entries) as BookmarkEntry[];
-    }
-
-    normalizedBookmarks[nickname] = normalizedEntries;
-    for (const entry of normalizedEntries) {
+  for (const entries of Object.values(normalizedBookmarks)) {
+    for (const entry of entries) {
       latest = Math.max(latest, entry.last_used_at || 0, entry.created_at || 0);
     }
   }
@@ -999,7 +1063,14 @@ export function resolveRegularSearchMatches(
     ? trimmed.slice((firstSpaceMatch.index ?? 0) + firstSpaceMatch[0].length).trim()
     : '';
 
+  const normFirstToken = normalizeNicknamePath(firstToken);
+  // スラッシュのみ（例: "/" や "///"）で正規化後が空文字の場合は全件誤ヒットを防ぐためマッチなしとする
+  if (!normFirstToken && firstToken.includes('/')) {
+    return [];
+  }
+
   const firstTokenLower = firstToken.toLowerCase();
+  const normFirstTokenLower = normFirstToken.toLowerCase();
   const restTokensLower = restQuery ? restQuery.toLowerCase().split(/\s+/).filter(Boolean) : [];
   const allTokensLower = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
 
@@ -1009,11 +1080,11 @@ export function resolveRegularSearchMatches(
     const nickLower = nickname.toLowerCase();
     let nickTier: number | null = null;
 
-    if (nickLower === firstTokenLower) {
+    if (nickLower === firstTokenLower || (normFirstTokenLower && nickLower === normFirstTokenLower)) {
       nickTier = 1; // ニックネーム完全一致
-    } else if (nickLower.startsWith(firstTokenLower)) {
+    } else if (nickLower.startsWith(firstTokenLower) || (normFirstTokenLower && nickLower.startsWith(normFirstTokenLower))) {
       nickTier = 2; // ニックネーム前方一致
-    } else if (nickLower.includes(firstTokenLower)) {
+    } else if (nickLower.includes(firstTokenLower) || (normFirstTokenLower && nickLower.includes(normFirstTokenLower))) {
       nickTier = 3; // ニックネーム部分一致
     }
 
@@ -1154,9 +1225,20 @@ export function resolveCommandMatches(
     // スペース入力後かつニックネーム入力段階（0〜1トークン）の場合は、2行目以降に既存ニックネーム候補を補完表示する
     if (hasSpace && restParts.length <= 1) {
       const nicknameInput = restParts[0] || '';
+      const normNickInput = normalizeNicknamePath(nicknameInput);
+      const lowerNickInput = nicknameInput.toLowerCase();
+      const lowerNormNickInput = normNickInput.toLowerCase();
+
       const nickCandidates = nicknameInput
         ? sortedNicknames.filter(
-            n => n.toLowerCase().startsWith(nicknameInput.toLowerCase()) && n !== nicknameInput
+            n => {
+              const nLower = n.toLowerCase();
+              return (
+                (nLower.startsWith(lowerNickInput) || (lowerNormNickInput && nLower.startsWith(lowerNormNickInput))) &&
+                n !== nicknameInput &&
+                (!normNickInput || n !== normNickInput)
+              );
+            }
           )
         : sortedNicknames;
 
@@ -1182,9 +1264,20 @@ export function resolveCommandMatches(
     // スペース入力後かつニックネーム入力段階では既存ニックネーム候補を2行目以降に補完表示する
     if (hasSpace && restParts.length <= 1) {
       const nicknameInput = restParts[0] || '';
+      const normNickInput = normalizeNicknamePath(nicknameInput);
+      const lowerNickInput = nicknameInput.toLowerCase();
+      const lowerNormNickInput = normNickInput.toLowerCase();
+
       const nickCandidates = nicknameInput
         ? sortedNicknames.filter(
-            n => n.toLowerCase().startsWith(nicknameInput.toLowerCase()) && n !== nicknameInput
+            n => {
+              const nLower = n.toLowerCase();
+              return (
+                (nLower.startsWith(lowerNickInput) || (lowerNormNickInput && nLower.startsWith(lowerNormNickInput))) &&
+                n !== nicknameInput &&
+                (!normNickInput || n !== normNickInput)
+              );
+            }
           )
         : sortedNicknames;
 
@@ -1248,19 +1341,29 @@ export function resolveCommandMatches(
       }
     } else {
       const lowerInput = restTrimmed.toLowerCase();
+      const normInput = normalizeNicknamePath(restTrimmed);
+      const lowerNormInput = normInput.toLowerCase();
+
       // フォルダ候補の一致を検索
       for (const f of folders.values()) {
-        if (
-          f.openableUrlCount > 0 &&
-          (f.path.toLowerCase().startsWith(lowerInput) || `${f.path}/`.toLowerCase().startsWith(lowerInput))
-        ) {
+        const fPathLower = f.path.toLowerCase();
+        const fPrefixLower = `${f.path}/`.toLowerCase();
+        const matchesFolder =
+          fPathLower.startsWith(lowerInput) ||
+          fPrefixLower.startsWith(lowerInput) ||
+          (lowerNormInput && (fPathLower.startsWith(lowerNormInput) || fPrefixLower.startsWith(lowerNormInput)));
+
+        if (f.openableUrlCount > 0 && matchesFolder) {
           commandMatches.push({
             content: `:open ${f.path}/`,
             description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
           });
         }
       }
-      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerInput));
+      const matches = sortedNicknames.filter(n => {
+        const nLower = n.toLowerCase();
+        return nLower.startsWith(lowerInput) || (lowerNormInput && nLower.startsWith(lowerNormInput));
+      });
       for (const n of matches) {
         commandMatches.push({
           content: `:open ${n}`,
@@ -1294,10 +1397,15 @@ export function resolveCommandMatches(
     } else {
       const nicknameParts = restTrimmed.split(/\s+/);
       const nicknameInput = nicknameParts[0];
+      const normNickInput = normalizeNicknamePath(nicknameInput);
       const urlInput = nicknameParts.slice(1).join(' ').trim();
       const lowerNickInput = nicknameInput.toLowerCase();
+      const lowerNormNickInput = normNickInput.toLowerCase();
 
-      const matches = sortedNicknames.filter(n => n.toLowerCase().startsWith(lowerNickInput));
+      const matches = sortedNicknames.filter(n => {
+        const nLower = n.toLowerCase();
+        return nLower.startsWith(lowerNickInput) || (lowerNormNickInput && nLower.startsWith(lowerNormNickInput));
+      });
       
       if (matches.length === 0) {
         commandMatches.push({
@@ -1307,7 +1415,11 @@ export function resolveCommandMatches(
       } else {
         for (const n of matches) {
           const entries = bookmarks[n];
-          if (n.toLowerCase() === lowerNickInput && entries.length > 1) {
+          const isExact =
+            n.toLowerCase() === lowerNickInput ||
+            (lowerNormNickInput && n.toLowerCase() === lowerNormNickInput);
+
+          if (isExact && entries.length > 1) {
             // 複数の URL がある場合は、誤削除防止のために警告/案内を先頭に表示する
             if (!urlInput) {
               const msg = t("errorMultipleUrlsFound") || "Multiple URLs found. Select one below or Enter to manage.";
@@ -1503,8 +1615,8 @@ function handleRegularSearchSuggestions(
 
   // 末尾がスラッシュの場合はフォルダ一括オープンの指定とみなす
   const isExplicitFolderInput = trimmed.endsWith('/');
-  const normalizedFolderQuery = trimmed.replace(/\/+$/, '');
-  const matchedFolder = folders.get(normalizedFolderQuery);
+  const normalizedFolderQuery = normalizeNicknamePath(trimmed);
+  const matchedFolder = normalizedFolderQuery ? folders.get(normalizedFolderQuery) : undefined;
 
   if (isExplicitFolderInput && matchedFolder && matchedFolder.openableUrlCount > 0) {
     // フォルダ一括オープンを最上位（デフォルト候補）に設定
@@ -1534,8 +1646,8 @@ function handleRegularSearchSuggestions(
   const { suggestions, matchMap } = buildRegularSearchSuggestions(text, allMatches, bookmarks);
 
   // 末尾スラッシュでない通常入力時でも、該当するフォルダが存在する場合はサジェスト内に一括オープン候補を提示
-  if (!isExplicitFolderInput && trimmed) {
-    const lowerTrimmed = trimmed.toLowerCase();
+  if (!isExplicitFolderInput && normalizedFolderQuery) {
+    const lowerTrimmed = normalizedFolderQuery.toLowerCase();
     for (const folder of folders.values()) {
       if (
         folder.openableUrlCount > 0 &&
@@ -1815,7 +1927,8 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   if (!currentTab || !currentTab.id) return;
 
   if (cmd === ':addall' || cmd === ':aa') {
-    const nickname = parts[1];
+    const rawNickname = parts[1];
+    const nickname = normalizeNicknamePath(rawNickname);
     if (!nickname) {
       await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
       return;
@@ -1860,7 +1973,8 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   }
 
   if (cmd === ':add' || cmd === ':a') {
-    const nickname = parts[1];
+    const rawNickname = parts[1];
+    const nickname = normalizeNicknamePath(rawNickname);
     if (!nickname) {
       const url = currentTab.url || '';
       const title = currentTab.title || '';
@@ -1943,11 +2057,17 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
 
     const bookmarks = await loadBookmarksData();
     const isExplicitFolder = rawTarget.endsWith('/');
-    const cleanTarget = rawTarget.replace(/^\/+|\/+$/g, '');
+    const cleanTarget = normalizeNicknamePath(rawTarget);
+
+    if (!cleanTarget) {
+      await showToast(currentTab.id, t("errorNicknameNotFound", [rawTarget]) || `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`);
+      return;
+    }
 
     // 1. 明示的なフォルダ指定でなく、単一ニックネームとして存在する場合は単一ニックネームを開く
-    if (!isExplicitFolder && bookmarks[rawTarget]) {
-      const entries = bookmarks[rawTarget];
+    if (!isExplicitFolder && (bookmarks[cleanTarget] || bookmarks[rawTarget])) {
+      const targetKey = bookmarks[cleanTarget] ? cleanTarget : rawTarget;
+      const entries = bookmarks[targetKey];
       let openedCount = 0;
       let skippedBookmarkletCount = 0;
 
@@ -1958,15 +2078,15 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
         }
         const urlToOpen = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
         chrome.tabs.create({ url: urlToOpen, active: false });
-        await updateScore(urlToOpen, entry.url, rawTarget);
+        await updateScore(urlToOpen, entry.url, targetKey);
         openedCount++;
       }
 
       if (openedCount === 0 && skippedBookmarkletCount > 0) {
         await showToast(
           currentTab.id,
-          t("errorOpenSkippedAllBookmarklets", [rawTarget]) ||
-            `ニックネーム「${rawTarget}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
+          t("errorOpenSkippedAllBookmarklets", [targetKey]) ||
+            `ニックネーム「${targetKey}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
           4000
         );
       }
@@ -1989,17 +2109,20 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   }
 
   if (cmd === ':rm') {
-    const nickname = parts[1];
+    const rawNickname = parts[1];
     // ブックマークレット内の連続スペース等を潰さないよう、元のコマンド文字列から削除対象 URL を抽出する
     const rawAfterRmMatch = resolvedContent.match(/^:rm\s+\S+\s+([\s\S]+)$/);
     const urlToDelete = rawAfterRmMatch ? rawAfterRmMatch[1].trim() : '';
 
-    if (!nickname) {
+    if (!rawNickname) {
       await showToast(currentTab.id, t("errorNicknameRequired") || 'ニックネームを指定してください。');
       return;
     }
 
     const bookmarks = await loadBookmarksData();
+    const normNickname = normalizeNicknamePath(rawNickname);
+    const nickname = bookmarks[normNickname] ? normNickname : rawNickname;
+
     if (bookmarks[nickname]) {
       if (urlToDelete) {
         const initialLength = bookmarks[nickname].length;
@@ -2216,16 +2339,18 @@ if (typeof window === 'undefined') {
     // 通常検索モードの処理
     // フォルダ一括オープンの判定（末尾スラッシュで終わる場合、またはサジェストから folder/ が渡された場合）
     if (cleanTrimmed.endsWith('/')) {
-      const folderPath = cleanTrimmed.replace(/\/+$/, '');
-      const bookmarks = await loadBookmarksData();
-      const folders = extractFolders(bookmarks);
-      if (folders.has(folderPath)) {
-        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        const result = await openFolderUrls(folderPath, false, currentTab?.id);
-        if (result.requiresConfirmation && result.folderPath && result.urls && currentTab?.id !== undefined) {
-          await handleBatchOpenConfirmationRequest(currentTab.id, result.folderPath, result.urls, result.nicknames || []);
+      const folderPath = normalizeNicknamePath(cleanTrimmed);
+      if (folderPath) {
+        const bookmarks = await loadBookmarksData();
+        const folders = extractFolders(bookmarks);
+        if (folders.has(folderPath)) {
+          const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          const result = await openFolderUrls(folderPath, false, currentTab?.id);
+          if (result.requiresConfirmation && result.folderPath && result.urls && currentTab?.id !== undefined) {
+            await handleBatchOpenConfirmationRequest(currentTab.id, result.folderPath, result.urls, result.nicknames || []);
+          }
+          return;
         }
-        return;
       }
     }
 
