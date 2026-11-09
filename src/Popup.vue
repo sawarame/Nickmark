@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, nextTick } from 'vue';
 import InputText from 'primevue/inputtext';
 import AutoComplete, { AutoCompleteCompleteEvent } from 'primevue/autocomplete';
 import Button from 'primevue/button';
@@ -149,7 +149,7 @@ interface PopupForm {
 }
 
 // フォーム入力データ
-const form = reactive<PopupForm>({
+const form = ref<PopupForm>({
   nickname: '',
   title: '',
   url: '',
@@ -171,7 +171,7 @@ const filteredNicknames = ref<string[]>([]);
  * URL に動的プレースホルダー（%s）が含まれているかを判定します。
  */
 const hasDynamicPlaceholder = computed(() => {
-  return isDynamicUrl(form.url.trim());
+  return isDynamicUrl(form.value.url.trim());
 });
 
 /**
@@ -272,8 +272,8 @@ onMounted(async () => {
     if (tabs && tabs.length > 0) {
       const currentTab = tabs[0];
       activeTabId.value = currentTab.id ?? null;
-      form.url = currentTab.url ?? '';
-      form.title = currentTab.title ?? '';
+      form.value.url = currentTab.url ?? '';
+      form.value.title = currentTab.title ?? '';
     }
   } catch (error) {
     console.warn('アクティブタブ情報の取得に失敗しました:', error);
@@ -295,10 +295,10 @@ onMounted(async () => {
 const saveBookmark = async (): Promise<void> => {
   errorMessage.value = null;
 
-  const trimmedNickname = normalizeNicknamePath(form.nickname);
-  const trimmedUrl = form.url.trim();
-  const trimmedTitle = form.title.trim();
-  const trimmedDefault = hasDynamicPlaceholder.value ? form.defaultValue.trim() : '';
+  const trimmedNickname = normalizeNicknamePath(form.value.nickname);
+  const trimmedUrl = form.value.url.trim();
+  const trimmedTitle = form.value.title.trim();
+  const trimmedDefault = hasDynamicPlaceholder.value ? form.value.defaultValue.trim() : '';
 
   // バリデーション: ニックネームとURLは必須
   if (!trimmedNickname) {
