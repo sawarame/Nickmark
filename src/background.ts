@@ -252,11 +252,11 @@ export async function openFolderUrls(
   const bookmarks = await loadBookmarksData();
   const folderPrefix = normalizedPath + '/';
 
-  // 対象となるニックネームを収集（完全一致またはプレフィックス前方一致）
+  // フォルダ配下のニックネームのみを収集（フォルダ名と同名の単体ニックネームは除外）
   const matchingNicknames = Object.keys(bookmarks).filter(
     nick => {
       const normNick = normalizeNicknamePath(nick);
-      return normNick === normalizedPath || normNick.startsWith(folderPrefix);
+      return normNick.startsWith(folderPrefix);
     }
   );
 
@@ -472,10 +472,7 @@ export async function renameFolder(
   for (const [key, entries] of Object.entries(bookmarks)) {
     const normKey = normalizeNicknamePath(key);
     let targetKey = normKey;
-    if (normKey === normOld) {
-      targetKey = normNew;
-      affectedCount += entries.length;
-    } else if (normKey.startsWith(oldPrefix)) {
+    if (normKey.startsWith(oldPrefix)) {
       const rest = normKey.substring(oldPrefix.length);
       targetKey = `${newPrefix}${rest}`;
       affectedCount += entries.length;
@@ -516,7 +513,7 @@ export async function deleteFolder(
 
   for (const [key, entries] of Object.entries(bookmarks)) {
     const normKey = normalizeNicknamePath(key);
-    if (normKey === normPath || normKey.startsWith(prefix)) {
+    if (normKey.startsWith(prefix)) {
       deletedCount += entries.length;
     } else {
       newBookmarks[normKey] = entries;

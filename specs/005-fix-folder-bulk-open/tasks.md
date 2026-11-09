@@ -24,7 +24,7 @@ description: "Task list for Exclude Standalone Bookmarks from Folder Bulk Open"
 
 **Purpose**: 既存ビルド環境および作業ブランチの事前確認
 
-- [ ] T001 変更前のベースラインとして `npm run build` がエラーなく成功することを `package/js/` 出力で確認する
+- [X] T001 変更前のベースラインとして `npm run build` がエラーなく成功することを `package/js/` 出力で確認する
 
 ---
 
@@ -34,7 +34,7 @@ description: "Task list for Exclude Standalone Bookmarks from Folder Bulk Open"
 
 **⚠️ CRITICAL**: ユーザーストーリー（Phase 3 以降）の実装に着手する前に本フェーズを完了する必要があります。
 
-- [ ] T002 `src/background.ts` において、フォルダ配下判定から完全一致（`normNick === normalizedPath`）を除外しフォルダプレフィックス前方一致（`normNick.startsWith(folderPrefix)`）のみを対象とする共通方針を確認・検証する
+- [X] T002 `src/background.ts` において、フォルダ配下判定から完全一致（`normNick === normalizedPath`）を除外しフォルダプレフィックス前方一致（`normNick.startsWith(folderPrefix)`）のみを対象とする共通方針を確認・検証する
 
 **Checkpoint**: 判定論理の共通方針が確立し、各ユーザーストーリーの実装を開始可能
 
@@ -48,8 +48,8 @@ description: "Task list for Exclude Standalone Bookmarks from Folder Bulk Open"
 
 ### Implementation for User Story 1
 
-- [ ] T003 [US1] `src/background.ts` の `openFolderUrls` 関数を修正し、`matchingNicknames` のフィルタリング条件から `normNick === normalizedPath` を除去して `normNick.startsWith(folderPrefix)` のみに限定することで、同名単体ブックマークを一括オープンの収集対象から完全に除外する
-- [ ] T004 [US1] `src/background.ts` のオムニボックスコマンド処理（`cmd === ':open' || cmd === ':o'`）および `onInputEntered` の一括オープン実行ロジックを検証し、末尾スラッシュ付き指定（`:open work/` やデフォルトサジェスト選択）時に単体 `work` が開かず、単体指定（`:open work`）時には単体 `work` が優先起動される既存の優先順位仕様が維持されていることを確認する
+- [X] T003 [US1] `src/background.ts` の `openFolderUrls` 関数を修正し、`matchingNicknames` のフィルタリング条件から `normNick === normalizedPath` を除去して `normNick.startsWith(folderPrefix)` のみに限定することで、同名単体ブックマークを一括オープンの収集対象から完全に除外する
+- [X] T004 [US1] `src/background.ts` のオムニボックスコマンド処理（`cmd === ':open' || cmd === ':o'`）および `onInputEntered` の一括オープン実行ロジックを検証し、末尾スラッシュ付き指定（`:open work/` やデフォルトサジェスト選択）時に単体 `work` が開かず、単体指定（`:open work`）時には単体 `work` が優先起動される既存の優先順位仕様が維持されていることを確認する
 
 **Checkpoint**: User Story 1 が完了し、フォルダ一括オープン時に同名単体ブックマークが確実に除外される
 
@@ -63,9 +63,9 @@ description: "Task list for Exclude Standalone Bookmarks from Folder Bulk Open"
 
 ### Implementation for User Story 2
 
-- [ ] T005 [P] [US2] `src/List.vue` の `filteredBookmarks` 算出プロパティを修正し、特定フォルダ選択時のフィルタ条件から `normNick === folderPath` を除去して `normNick.startsWith(prefix)` のみに限定することで、フォルダ名と同名の単体ブックマークがフォルダ一覧に混入せず「未分類（ルート）」にのみ表示されるようにする
-- [ ] T006 [P] [US2] `src/background.ts` の `renameFolder` 関数を修正し、`normKey === normOld` のキー（同名単体ブックマーク）を置換対象外としてそのまま維持し、`normKey.startsWith(oldPrefix)` を満たすフォルダ配下キーのみをリネームするようにする
-- [ ] T007 [US2] `src/background.ts` の `deleteFolder` 関数を修正し、`normKey === normPath` のキー（同名単体ブックマーク）を削除対象外としてそのまま維持し、`normKey.startsWith(prefix)` を満たすフォルダ配下キーのみを一括削除するようにする
+- [X] T005 [P] [US2] `src/List.vue` の `filteredBookmarks` 算出プロパティを修正し、特定フォルダ選択時のフィルタ条件から `normNick === folderPath` を除去して `normNick.startsWith(prefix)` のみに限定することで、フォルダ名と同名の単体ブックマークがフォルダ一覧に混入せず「未分類（ルート）」にのみ表示されるようにする
+- [X] T006 [P] [US2] `src/background.ts` の `renameFolder` 関数を修正し、`normKey === normOld` のキー（同名単体ブックマーク）を置換対象外としてそのまま維持し、`normKey.startsWith(oldPrefix)` を満たすフォルダ配下キーのみをリネームするようにする
+- [X] T007 [US2] `src/background.ts` の `deleteFolder` 関数を修正し、`normKey === normPath` のキー（同名単体ブックマーク）を削除対象外としてそのまま維持し、`normKey.startsWith(prefix)` を満たすフォルダ配下キーのみを一括削除するようにする
 
 **Checkpoint**: User Story 1 と User Story 2 の双方が完了し、一括オープン・表示絞り込み・リネーム・削除の全操作において単体ブックマークの安全性が保証される
 
@@ -75,9 +75,9 @@ description: "Task list for Exclude Standalone Bookmarks from Folder Bulk Open"
 
 **Purpose**: ドキュメント同期と最終ビルド・実機動作検証
 
-- [ ] T008 [P] `.context/spec.md` を更新し、フォルダ一括オープンおよびフォルダ管理における同名単体ブックマーク（未分類エントリ）の除外・保護仕様を同期・反映する
-- [ ] T009 `npm run build` を実行し、TypeScript のコンパイル、`package/js/` バンドル生成、および `package.zip` の作成がエラーなく完了することを検証する
-- [ ] T010 `specs/005-fix-folder-bulk-open/quickstart.md` の検証シナリオ（シナリオ 1〜6）に従って実機動作確認を実施する
+- [X] T008 [P] `.context/spec.md` を更新し、フォルダ一括オープンおよびフォルダ管理における同名単体ブックマーク（未分類エントリ）の除外・保護仕様を同期・反映する
+- [X] T009 `npm run build` を実行し、TypeScript のコンパイル、`package/js/` バンドル生成、および `package.zip` の作成がエラーなく完了することを検証する
+- [X] T010 `specs/005-fix-folder-bulk-open/quickstart.md` の検証シナリオ（シナリオ 1〜6）に従って実機動作確認を実施する
 
 ---
 

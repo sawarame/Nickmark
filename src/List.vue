@@ -434,7 +434,7 @@ const filteredBookmarks = computed(() => {
   const prefix = folderPath + '/';
   return flatBookmarks.value.filter(item => {
     const normNick = normalizeNicknamePath(item.nickname);
-    return normNick === folderPath || normNick.startsWith(prefix);
+    return normNick.startsWith(prefix);
   });
 });
 
