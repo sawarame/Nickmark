@@ -66,8 +66,8 @@ description: "Task list for Leading Slash Folder Normalization & Filtering Fix"
 
 ### Implementation for User Story 2
 
-- [ ] T008 [US2] `src/background.ts` の `resolveRegularSearchMatches` を修正し、1語目トークン（`firstToken`）および検索トークン群の比較時に先頭・末尾・連続スラッシュを正規化（`normalizeNicknamePath`）してニックネームの完全一致（Tier 1）・前方一致（Tier 2）・部分一致（Tier 3）・横断検索（Tier 4）を判定するようにする
-- [ ] T009 [US2] `src/background.ts` の `handleRegularSearchSuggestions` および `chrome.omnibox.onInputEntered` の通常検索モード処理を修正し、`/work/` のように先頭スラッシュと末尾スラッシュの両方を含む入力でも `normalizeNicknamePath` でフォルダパス `"work"` を解決してフォルダ一括オープン候補の表示・実行が行われるようにする
+- [ ] T008 [US2] `src/background.ts` の `resolveRegularSearchMatches` を修正し、1語目トークン（`firstToken`）および検索トークン群の比較時に先頭・末尾・連続スラッシュを正規化（`normalizeNicknamePath`）してニックネームの完全一致（Tier 1）・前方一致（Tier 2）・部分一致（Tier 3）・横断検索（Tier 4）を判定するようにする。また、`/` や `///` のみ入力され正規化後のトークンが空文字 `""` となる場合は、`startsWith("")` 等による全件誤ヒットを防ぐため即座に空配列 `[]` を返すガード処理を入れる
+- [ ] T009 [US2] `src/background.ts` の `handleRegularSearchSuggestions` および `chrome.omnibox.onInputEntered` の通常検索モード処理を修正し、`/work/` のように先頭スラッシュと末尾スラッシュの両方を含む入力でも `normalizeNicknamePath` でフォルダパス `"work"` を解決してフォルダ一括オープン候補の表示・実行が行われるようにする（`/` や `///` のみで正規化後が空文字 `""` の場合はフォルダ一括オープン対象外として安全にスキップする）
 - [ ] T010 [US2] `src/background.ts` の `resolveCommandMatches` および `executeCommand` における `:open`（`:o`）と `:rm` コマンド処理を修正し、引数に `/work` や `/work/gh` のように先頭スラッシュが含まれていても `normalizeNicknamePath` で正規化してサジェスト候補提示およびコマンド実行が行われるようにする
 
 **Checkpoint**: User Story 1 と User Story 2 の双方が完了し、管理画面とオムニボックスの両方で先頭スラッシュ付きフォルダ指定が完全に機能する
@@ -83,8 +83,8 @@ description: "Task list for Leading Slash Folder Normalization & Filtering Fix"
 ### Implementation for User Story 3
 
 - [ ] T011 [US3] `src/background.ts` の `resolveCommandMatches` および `executeCommand` における `:add`（`:a`）と `:addall`（`:aa`）コマンド処理を修正し、ニックネーム引数を `normalizeNicknamePath` で正規化して補完検索および保存を行う（スラッシュのみで正規化後に空文字となる場合は必須エラーまたは管理画面フォールバックとする）
-- [ ] T012 [P] [US3] `src/List.vue` の `searchNewBookmarkNicknames`（先頭スラッシュを除去したクエリでのフォルダ・ニックネーム補完）、`addBookmark`、`saveEditBookmark`、および `validateBookmarksJson` / `saveJsonEdit` に `normalizeNicknamePath` を適用し、スラッシュのみの入力（正規化後 `""`）は必須エラーとして弾くようにする
-- [ ] T013 [P] [US3] `src/Popup.vue` で `./background` から `normalizeNicknamePath` をインポートし、`searchNicknames`（先頭スラッシュを除去したクエリでのフォルダ・ニックネーム補完）および `saveBookmark`（保存時のニックネーム正規化と空文字バリデーション）に適用する
+- [ ] T012 [P] [US3] `src/List.vue` の `searchNewBookmarkNicknames` において、入力クエリの先頭スラッシュ除去・連続スラッシュ単一化を行いつつユーザーが末尾に `/` を入力している場合は末尾 `/` を維持して（例: `/work/` → `work/`、`work2/` 等との誤一致を防止）フォルダ・ニックネーム補完を行い、`addBookmark`、`saveEditBookmark`、および `validateBookmarksJson` / `saveJsonEdit` の保存時には `normalizeNicknamePath` を適用してスラッシュのみの入力（正規化後 `""`）を必須エラーとして弾くようにする
+- [ ] T013 [P] [US3] `src/Popup.vue` で `./background` から `normalizeNicknamePath` をインポートし、`searchNicknames` では入力クエリの先頭スラッシュ除去・連続スラッシュ単一化を行いつつ末尾 `/` の有無を維持して（例: `/work/` → `work/`）フォルダ・ニックネーム補完を行い、`saveBookmark` の保存時には `normalizeNicknamePath` を適用して空文字バリデーションを行うようにする
 
 **Checkpoint**: すべてのユーザーストーリー（US1, US2, US3）が完了し、登録・補完・検索・絞り込みの全経路でパス正規化が一貫して機能する
 
