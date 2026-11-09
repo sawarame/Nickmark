@@ -40,9 +40,18 @@ export interface UpdatePageRequest {
 1. **キャッシュ無効化と一覧再取得**:
    - `action === 'updatePage'` を検知した場合、受信側はメモリキャッシュをクリアした上で、直ちに非同期でブックマーク最新データを再取得（`loadBookmarks()`）し、一覧表示を更新しなければならない (MUST)。
 2. **通知メッセージの表示**:
-   - `request.msg` が指定されている場合、`showCustomToast(request.msg)` を呼び出してユーザーに完了通知を表示しなければならない (MUST)。
+   - `request.msg` が指定されている場合、`showCustomToast(request.msg)`（画面中央のカスタムダークトースト）を呼び出してユーザーに完了通知を表示しなければならない (MUST)。また、直近の重複表示防止ガードを適用し、ストレージの `pendingToast` をクリアしなければならない。
 3. **入力フィールドの補完**:
    - `request.url` または `request.title` が指定されている場合、新規登録用モデル（`newBookmark`）の該当フィールドを更新しなければならない (MUST)。
+
+---
+
+## 一時ストレージ通知連携仕様 (`pendingToast`)
+
+バックグラウンドタブのスリープ等によるメッセージ消失を防ぐため、ハイブリッド受け渡し機構を採用しています。
+
+1. **送信元**: `openOrReuseListTab` 呼び出し時、`chrome.storage.local.set({ pendingToast: msg })` に通知文言を保存。
+2. **受信元**: `List.vue` のマウント時およびタブ復帰時（`window.focus` / `visibilitychange`）に `chrome.storage.local.get('pendingToast')` を確認し、存在する場合はトーストを表示した上でキーを削除。
 
 ---
 

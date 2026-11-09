@@ -16,7 +16,7 @@
 
 **Purpose**: 開発環境の確認とビルド準備
 
-- [ ] T001 既存コードベースのビルド状態確認と TypeScript コンパイル検証 (`package.json`, `webpack.config.js`)
+- [X] T001 既存コードベースのビルド状態確認と TypeScript コンパイル検証 (`package.json`, `webpack.config.js`)
 
 ---
 
@@ -26,8 +26,8 @@
 
 **⚠️ CRITICAL**: 本フェーズのキャッシュクリア機能が完成するまで、一覧画面側の同期処理は開始できません
 
-- [ ] T002 メモリキャッシュ破棄関数 `clearBookmarksCache` の実装とエクスポート (`src/background.ts`)
-- [ ] T003 `loadBookmarksData` におけるキャッシュ参照ロジックと `clearBookmarksCache` の連携確認 (`src/background.ts`)
+- [X] T002 メモリキャッシュ破棄関数 `clearBookmarksCache` の実装とエクスポート (`src/background.ts`)
+- [X] T003 `loadBookmarksData` におけるキャッシュ参照ロジックと `clearBookmarksCache` の連携確認 (`src/background.ts`)
 
 **Checkpoint**: 基盤実装完了 — ユーザーストーリーの実装へ進みます
 
@@ -41,8 +41,8 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [US1] `src/List.vue` に `clearBookmarksCache` をインポートし、`updatePage` メッセージ受信時にキャッシュ破棄と `loadBookmarks()` の非同期呼び出しを実装 (`src/List.vue`)
-- [ ] T005 [US1] 一覧更新処理とトースト通知表示（`showCustomToast`）および URL 入力補完処理が競合しないよう非同期順序を整理 (`src/List.vue`)
+- [X] T004 [US1] `src/List.vue` に `clearBookmarksCache` をインポートし、`updatePage` メッセージ受信時にキャッシュ破棄と `loadBookmarks()` の非同期呼び出しを実装 (`src/List.vue`)
+- [X] T005 [US1] 一覧更新処理とトースト通知表示（`showCustomToast`）および URL 入力補完処理が競合しないよう非同期順序を整理 (`src/List.vue`)
 
 **Checkpoint**: User Story 1 が単体で動作し、特殊ページからの追加時に一覧が即時反映される（MVP 達成）
 
@@ -56,7 +56,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T006 [US2] 新規タブ生成時の URL クエリパラメータ（`?msg=...`）処理および初回 `loadBookmarks()` において最新データが欠落しないことを検証・ガード (`src/List.vue`)
+- [X] T006 [US2] 新規タブ生成時の URL クエリパラメータ（`?msg=...`）処理および初回 `loadBookmarks()` において最新データが欠落しないことを検証・ガード (`src/List.vue`)
 
 **Checkpoint**: 既存タブ再利用時（US1）と新規タブ生成時（US2）の双方が一貫して最新データを表示できる
 
@@ -70,7 +70,7 @@
 
 ### Implementation for User Story 3
 
-- [ ] T007 [US3] タブのフォーカス復帰時（`window.focus` / `visibilitychange`）に、編集ダイアログ表示中などの操作中状態を保護しつつ `clearBookmarksCache()` と `loadBookmarks()` を呼び出す安全な同期処理を実装 (`src/List.vue`)
+- [X] T007 [US3] タブのフォーカス復帰時（`window.focus` / `visibilitychange`）に、編集ダイアログ表示中などの操作中状態を保護しつつ `clearBookmarksCache()` と `loadBookmarks()` を呼び出す安全な同期処理を実装 (`src/List.vue`)
 
 **Checkpoint**: 自動誘導時・手動タブ復帰時の全経路において、常に最新のブックマーク一覧が表示される
 
@@ -80,9 +80,9 @@
 
 **Purpose**: プロジェクト全体のビルド確認、実機検証、およびドキュメント同期
 
-- [ ] T008 [P] `npm run build` を実行し、Webpack による拡張機能バンドル（`package/js/background.js`, `package/js/list.js`）の生成とエラーの有無を検証 (`webpack.config.js`)
-- [ ] T009 [P] `specs/004-refresh-list-on-add/quickstart.md` の全テストシナリオ（シナリオ 1〜3）を手動実機で検証
-- [ ] T010 変更内容に基づきプロジェクト仕様ドキュメントを同期・更新 (`.context/spec.md`)
+- [X] T008 [P] `npm run build` を実行し、Webpack による拡張機能バンドル（`package/js/background.js`, `package/js/list.js`）の生成とエラーの有無を検証 (`webpack.config.js`)
+- [X] T009 [P] `specs/004-refresh-list-on-add/quickstart.md` の全テストシナリオ（シナリオ 1〜3）を手動実機で検証
+- [X] T010 変更内容に基づきプロジェクト仕様ドキュメントを同期・更新 (`.context/spec.md`)
 
 ---
 
