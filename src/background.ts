@@ -592,12 +592,25 @@ async function saveToStorage(area: 'local' | 'sync', bookmarks: Record<string, B
 }
 
 /**
+ * メモリ上に保持されているブックマークキャッシュおよび読み込みプロミスを破棄します。
+ * 次回 loadBookmarksData() 呼び出し時にストレージから最新データが再取得されます。
+ */
+export function clearBookmarksCache(): void {
+  bookmarksCache = null;
+  loadBookmarksPromise = null;
+}
+
+/**
  * ストレージからブックマークデータを読み込みます。
  * キャッシュが存在する場合はキャッシュを返します。
  * 同時呼び出し時は同一の Promise を共有して重複読み込みを防ぎます。
+ * @param {boolean} [forceRefresh=false] true の場合、キャッシュを破棄して強制的にストレージから再読み込みします
  * @returns {Promise<Record<string, BookmarkEntry[]>>} 正規化されたブックマークデータのプロミス
  */
-export async function loadBookmarksData(): Promise<Record<string, BookmarkEntry[]>> {
+export async function loadBookmarksData(forceRefresh: boolean = false): Promise<Record<string, BookmarkEntry[]>> {
+  if (forceRefresh) {
+    clearBookmarksCache();
+  }
   if (bookmarksCache) return bookmarksCache;
   if (loadBookmarksPromise) return loadBookmarksPromise;
 
@@ -1681,13 +1694,24 @@ async function openOrReuseListTab(params?: { msg?: string; url?: string; title?:
   if (tabs.length > 0) {
     const tab = tabs[0];
     if (tab.id !== undefined) {
+      // メッセージの取りこぼしを防ぐため、一時ストレージにも通知メッセージを保存
+      if (params?.msg) {
+        await chrome.storage.local.set({ pendingToast: params.msg });
+      }
+
       // 既存のタブをアクティブにする
       await chrome.tabs.update(tab.id, { active: true });
       if (tab.windowId !== undefined) {
         await chrome.windows.update(tab.windowId, { focused: true });
       }
-      // ページの状態を更新するメッセージを送信
-      chrome.tabs.sendMessage(tab.id, { action: 'updatePage', ...params });
+      // ページの状態を更新するメッセージを送信（即時受け取れるタブ用）
+      chrome.tabs.sendMessage(tab.id, { action: 'updatePage', ...params }, () => {
+        // タブがバックグラウンドからの復帰中でメッセージが届かない場合でも、
+        // タブ側の focus イベント時に pendingToast から確実に通知が復元されるためエラーは無視してよい
+        if (chrome.runtime.lastError) {
+          // ignore error
+        }
+      });
     }
   } else {
     // 存在しない場合は新しく開く

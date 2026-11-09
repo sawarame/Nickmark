@@ -271,6 +271,7 @@ import {
   BookmarkEntry,
   loadBookmarksData,
   saveBookmarksData,
+  clearBookmarksCache,
   isDynamicUrl,
   resolveFallbackUrl,
   isBookmarkletUrl,
@@ -595,8 +596,30 @@ const openExtensionDetails = (): void => {
   }
 };
 
-const loadBookmarks = async () => {
-  bookmarksData.value = await loadBookmarksData();
+/**
+ * ブックマークデータを読み込みます。
+ * @param {boolean} [force=false] true の場合、メモリキャッシュを破棄してストレージから再取得します
+ */
+const loadBookmarks = async (force: boolean = false): Promise<void> => {
+  if (force) {
+    clearBookmarksCache();
+  }
+  bookmarksData.value = await loadBookmarksData(force);
+};
+
+/**
+ * タブへのフォーカス復帰時または表示状態変更時に、ユーザースクリプト状態、保留中の通知、ブックマーク一覧を同期します。
+ * 編集ダイアログ等が開かれている場合は、ユーザーの作業内容を保護するため一覧の再読み込みをスキップします。
+ */
+const onWindowFocusOrVisible = async (): Promise<void> => {
+  refreshUserScriptsStatus();
+  if (document.visibilityState === 'hidden') return;
+  // 保留中のトースト通知があれば確実に表示して消費する
+  await checkAndConsumePendingToast();
+  if (showEditDialog.value || showJsonDialog.value || showRenameDialog.value) {
+    return;
+  }
+  await loadBookmarks(true);
 };
 
 /**
@@ -620,12 +643,25 @@ const getFaviconUrl = (pageUrl: string) => {
   }
 };
 
+let lastToastMessage = '';
+let lastToastTime = 0;
+
 /**
- * 管理画面上にカスタムトースト通知を表示します。
+ * 管理画面上に中央トースト通知（黒い帯）を表示します。
+ * 直近に同じメッセージが表示された場合は重複表示を防止します。
  * @param message - 表示する通知メッセージ
  * @returns なし
  */
 const showCustomToast = (message: string): void => {
+  if (!message) return;
+  const now = Date.now();
+  // 2秒以内の同一メッセージは二重表示を防止
+  if (message === lastToastMessage && now - lastToastTime < 2000) {
+    return;
+  }
+  lastToastMessage = message;
+  lastToastTime = now;
+
   const id = 'nickmark-custom-toast';
   const existing = document.getElementById(id);
   if (existing) existing.remove();
@@ -666,24 +702,52 @@ const showCustomToast = (message: string): void => {
   }, 4000);
 };
 
+/**
+ * バックグラウンドから保存された保留中のトースト通知（pendingToast）を確認し、
+ * 存在する場合は通知を表示してストレージから削除します。
+ */
+const checkAndConsumePendingToast = async (): Promise<void> => {
+  try {
+    const data = await chrome.storage.local.get('pendingToast');
+    if (typeof data.pendingToast === 'string' && data.pendingToast) {
+      await chrome.storage.local.remove('pendingToast');
+      showCustomToast(data.pendingToast);
+    }
+  } catch (e) {
+    console.error('Failed to consume pending toast:', e);
+  }
+};
+
 onMounted(async () => {
   await initI18n();
   title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   refreshUserScriptsStatus();
   await loadBookmarks();
 
-  // 拡張機能設定タブから戻ってきた際にユーザースクリプト許可状態を即時反映する
-  window.addEventListener('focus', refreshUserScriptsStatus);
-  document.addEventListener('visibilitychange', refreshUserScriptsStatus);
+  // 保留中のトースト通知があれば初期表示
+  await checkAndConsumePendingToast();
+
+  // 拡張機能設定タブや他タブから戻ってきた際にユーザースクリプト状態とブックマーク一覧を即時反映する
+  window.addEventListener('focus', onWindowFocusOrVisible);
+  document.addEventListener('visibilitychange', onWindowFocusOrVisible);
 
   // バックグラウンドからのメッセージ待受
-  chrome.runtime.onMessage.addListener((request) => {
+  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     if (request.action === 'updatePage') {
-      if (request.msg) showCustomToast(request.msg);
       if (request.url) newBookmark.value.url = request.url;
       if (request.title) newBookmark.value.title = request.title;
+      // 保留通知の重複表示を防ぐためストレージの pendingToast をクリア
+      chrome.storage.local.remove('pendingToast').catch(() => {});
+      if (request.msg) showCustomToast(request.msg);
+      // メモリキャッシュを破棄して最新のブックマーク一覧を再読み込み
+      loadBookmarks(true).then(() => {
+        sendResponse({ success: true });
+      });
+      return true; // 非同期レスポンスを有効化
     } else if (request.action === 'showToast' && request.message) {
       showCustomToast(request.message);
+      sendResponse({ success: true });
+      return true;
     }
   });
 
@@ -713,8 +777,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  window.removeEventListener('focus', refreshUserScriptsStatus);
-  document.removeEventListener('visibilitychange', refreshUserScriptsStatus);
+  window.removeEventListener('focus', onWindowFocusOrVisible);
+  document.removeEventListener('visibilitychange', onWindowFocusOrVisible);
 });
 
 const openPreferences = () => {
