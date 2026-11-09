@@ -134,7 +134,8 @@ import {
   showToast,
   isDynamicUrl,
   isSameUrl,
-  extractFolders
+  extractFolders,
+  normalizeNicknamePath
 } from './background';
 
 /**
@@ -206,7 +207,16 @@ const openPreferences = (): void => {
  * @param event AutoComplete の入力完了イベント
  */
 const searchNicknames = (event: AutoCompleteCompleteEvent): void => {
-  const query = (event.query || '').trim().toLowerCase();
+  const rawQuery = (event.query || '').trim();
+  const hasTrailingSlash = rawQuery.endsWith('/');
+  const cleanSegments = rawQuery
+    .split('/')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  const query = cleanSegments.length > 0
+    ? (cleanSegments.join('/') + (hasTrailingSlash ? '/' : '')).toLowerCase()
+    : '';
+
   if (!query) {
     filteredNicknames.value = [...allFolderPrefixes.value, ...allNicknames.value];
     return;
@@ -245,7 +255,9 @@ onMounted(async () => {
   // 既存のニックネーム一覧およびフォルダプレフィックスを取得
   try {
     const bookmarks = await loadBookmarksData();
-    allNicknames.value = Object.keys(bookmarks).sort((a, b) => a.localeCompare(b));
+    allNicknames.value = Array.from(
+      new Set(Object.keys(bookmarks).map(n => normalizeNicknamePath(n)).filter(Boolean))
+    ).sort((a, b) => a.localeCompare(b));
     const folders = extractFolders(bookmarks);
     allFolderPrefixes.value = Array.from(folders.values())
       .map(f => `${f.path}/`)
@@ -283,7 +295,7 @@ onMounted(async () => {
 const saveBookmark = async (): Promise<void> => {
   errorMessage.value = null;
 
-  const trimmedNickname = form.nickname.trim();
+  const trimmedNickname = normalizeNicknamePath(form.nickname);
   const trimmedUrl = form.url.trim();
   const trimmedTitle = form.title.trim();
   const trimmedDefault = hasDynamicPlaceholder.value ? form.defaultValue.trim() : '';

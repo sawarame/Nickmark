@@ -279,7 +279,8 @@ import {
   openFolderUrls,
   renameFolder,
   deleteFolder,
-  getMaxBatchOpenTabs
+  getMaxBatchOpenTabs,
+  normalizeNicknamePath
 } from './background';
 import { initI18n, t } from './i18n';
 
@@ -302,18 +303,32 @@ const newBookmarkNicknameSuggestions = ref<string[]>([]);
 
 /**
  * 新規登録フォーム用のニックネームおよびフォルダプレフィックス補完候補を検索します。
+ * 入力クエリの先頭スラッシュや連続スラッシュを正規化しつつ、末尾のスラッシュ指定は維持して補完します。
  * @param {AutoCompleteCompleteEvent} event - AutoComplete 入力イベント
  */
 const searchNewBookmarkNicknames = (event: AutoCompleteCompleteEvent): void => {
-  const query = (event.query || '').trim().toLowerCase();
-  const allNicknames = Object.keys(bookmarksData.value).sort((a, b) => a.localeCompare(b));
+  const rawQuery = (event.query || '').trim();
+  const hasTrailingSlash = rawQuery.endsWith('/');
+  const cleanSegments = rawQuery
+    .split('/')
+    .map(s => s.trim())
+    .filter(s => s.length > 0);
+  const query = cleanSegments.length > 0
+    ? (cleanSegments.join('/') + (hasTrailingSlash ? '/' : '')).toLowerCase()
+    : '';
+
+  const allNicknames = Object.keys(bookmarksData.value)
+    .map(n => normalizeNicknamePath(n))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+  const uniqueNicknames = Array.from(new Set(allNicknames));
   const folders = extractFolders(bookmarksData.value);
   const folderPrefixes = Array.from(folders.values())
     .map(f => `${f.path}/`)
     .sort((a, b) => a.localeCompare(b));
 
   if (!query) {
-    newBookmarkNicknameSuggestions.value = [...folderPrefixes, ...allNicknames];
+    newBookmarkNicknameSuggestions.value = [...folderPrefixes, ...uniqueNicknames];
     return;
   }
 
@@ -326,7 +341,7 @@ const searchNewBookmarkNicknames = (event: AutoCompleteCompleteEvent): void => {
 
   const prefixMatches: string[] = [];
   const partialMatches: string[] = [];
-  for (const name of allNicknames) {
+  for (const name of uniqueNicknames) {
     const lower = name.toLowerCase();
     if (lower.startsWith(query)) {
       prefixMatches.push(name);
@@ -412,13 +427,14 @@ const filteredBookmarks = computed(() => {
     return flatBookmarks.value;
   }
   if (selectedFolder.value === '__ROOT__') {
-    return flatBookmarks.value.filter(item => !item.nickname.includes('/'));
+    return flatBookmarks.value.filter(item => !normalizeNicknamePath(item.nickname).includes('/'));
   }
-  const folderPath = selectedFolder.value;
+  const folderPath = normalizeNicknamePath(selectedFolder.value);
   const prefix = folderPath + '/';
-  return flatBookmarks.value.filter(
-    item => item.nickname === folderPath || item.nickname.startsWith(prefix)
-  );
+  return flatBookmarks.value.filter(item => {
+    const normNick = normalizeNicknamePath(item.nickname);
+    return normNick === folderPath || normNick.startsWith(prefix);
+  });
 });
 
 /**
@@ -482,8 +498,8 @@ const openRenameFolderDialog = (): void => {
  */
 const executeRenameFolder = async (): Promise<void> => {
   const oldPath = selectedFolder.value;
-  const newPath = newFolderName.value.trim().replace(/^\/+|\/+$/g, '');
-  if (!newPath || oldPath === newPath) {
+  const newPath = normalizeNicknamePath(newFolderName.value);
+  if (!newPath || normalizeNicknamePath(oldPath) === newPath) {
     showRenameDialog.value = false;
     return;
   }
@@ -712,7 +728,7 @@ const openPreferences = () => {
  */
 const addBookmark = async (): Promise<void> => {
   const { nickname, url, title, default_value } = newBookmark.value;
-  const trimmedNickname = nickname.trim();
+  const trimmedNickname = normalizeNicknamePath(nickname);
   const trimmedUrl = url.trim();
   const trimmedDefault = isDynamicUrl(trimmedUrl) ? (default_value || '').trim() : '';
 
@@ -795,7 +811,7 @@ const downloadJsonFile = () => {
 const validateBookmarksJson = (bookmarks: any): boolean => {
   if (!bookmarks || typeof bookmarks !== 'object') return false;
   for (const nickname in bookmarks) {
-    if (nickname.trim() === '') {
+    if (normalizeNicknamePath(nickname) === '') {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname cannot be empty.', life: 3000 });
       return false;
     }
@@ -845,7 +861,7 @@ const openEditDialog = (data: any): void => {
  */
 const saveEditBookmark = async (): Promise<void> => {
   const { originalNickname, originalUrl, nickname, url, title, default_value, is_pinned } = editBookmarkData.value;
-  const newNickname = nickname.trim();
+  const newNickname = normalizeNicknamePath(nickname);
   const newUrl = url.trim();
   const trimmedDefault = isDynamicUrl(newUrl) ? (default_value || '').trim() : '';
 
@@ -865,6 +881,13 @@ const saveEditBookmark = async (): Promise<void> => {
     bookmarksData.value[originalNickname] = bookmarksData.value[originalNickname].filter(b => b.url !== originalUrl);
     if (bookmarksData.value[originalNickname].length === 0) {
       delete bookmarksData.value[originalNickname];
+    }
+  }
+  const normOriginal = normalizeNicknamePath(originalNickname);
+  if (normOriginal && normOriginal !== originalNickname && bookmarksData.value[normOriginal]) {
+    bookmarksData.value[normOriginal] = bookmarksData.value[normOriginal].filter(b => b.url !== originalUrl);
+    if (bookmarksData.value[normOriginal].length === 0) {
+      delete bookmarksData.value[normOriginal];
     }
   }
 
