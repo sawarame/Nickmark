@@ -42,6 +42,38 @@ export function isSameUrl(u1: string, u2: string): boolean {
 }
 
 /**
+ * 候補の重複判定用に URL 文字列を正規化します。
+ * スキームとホストを小文字化し、`decodeURI` を適用した上で、ルートパス以外の末尾スラッシュ差異を吸収します。
+ * @param rawUrl - 正規化対象の URL 文字列
+ * @returns 重複比較用の正規化済み URL 文字列
+ */
+export function normalizeUrlForComparison(rawUrl: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return '';
+
+  let decoded = trimmed;
+  try {
+    decoded = decodeURI(trimmed);
+  } catch {
+    // 不正なパーセントエンコードを含む場合は元の文字列でパースを試みる
+  }
+
+  try {
+    const parsed = new URL(decoded);
+    const protocol = parsed.protocol.toLowerCase();
+    const host = parsed.host.toLowerCase();
+    let pathname = parsed.pathname || '/';
+    if (pathname.length > 1 && pathname.endsWith('/')) {
+      pathname = pathname.slice(0, -1);
+    }
+    return `${protocol}//${host}${pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    // URL としてパースできない場合は末尾スラッシュのみを取り除いて比較する
+    return decoded.length > 1 && decoded.endsWith('/') ? decoded.slice(0, -1) : decoded;
+  }
+}
+
+/**
  * 指定された URL 文字列がブックマークレット（`javascript:` スキーム）であるかを判定します。
  * @param url - 判定対象の URL 文字列
  * @returns `javascript:` で始まる場合は true、それ以外は false

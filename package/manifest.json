@@ -16,6 +16,9 @@
     "contextMenus",
     "favicon"
   ],
+  "optional_permissions": [
+    "history"
+  ],
   "background": {
     "service_worker": "js/background.js"
   },

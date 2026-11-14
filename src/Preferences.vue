@@ -76,6 +76,24 @@
           </div>
         </template>
       </Card>
+
+      <Card class="mb-4">
+        <template #title>{{ t('historySearchTitle') || 'Browser History Search' }}</template>
+        <template #content>
+          <div class="sync-row">
+            <div class="sync-info">
+              <div class="sync-label">{{ t('historySearchLabel') || 'Include Browser History in Popup Search' }}</div>
+              <div class="sync-desc">
+                {{ t('historySearchDescription') || 'When enabled, matching browser history entries are shown below bookmark suggestions in the popup (requires permission to access browsing history).' }}
+              </div>
+            </div>
+            <div class="toggle-container">
+              <ToggleSwitch :modelValue="historySearchEnabled" />
+              <div class="toggle-overlay" @click="handleHistorySearchToggleRequest"></div>
+            </div>
+          </div>
+        </template>
+      </Card>
     </div>
 
     <!-- データ移行・競合解決ダイアログ -->
@@ -140,14 +158,18 @@ import {
   getSyncEnabled,
   isOverQuota,
   saveBookmarksData,
+  setHistorySearchEnabled,
   setMaxBatchOpenTabs,
   setSyncEnabled
 } from './shared/storage';
+import { getEffectiveHistorySearchEnabled, requestHistoryPermission } from './shared/history';
 
 const toast = useToast();
 const selectedLanguage = ref<Locale>('en');
 const syncEnabled = ref(false);
 const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
+const historySearchEnabled = ref(false);
+const isRequestingHistoryPermission = ref(false);
 const isLoaded = ref(false);
 const renderKey = ref(0);
 
@@ -172,7 +194,61 @@ const loadSettings = async (): Promise<void> => {
   selectedLanguage.value = getCurrentLocale();
   syncEnabled.value = await getSyncEnabled();
   maxBatchOpenTabs.value = await getMaxBatchOpenTabs();
+  historySearchEnabled.value = await getEffectiveHistorySearchEnabled();
   isLoaded.value = true;
+};
+
+/**
+ * ブラウザ履歴検索トグルのクリックを捕捉し、任意権限の確認・要求と設定保存を行います。
+ * ON 切り替え時はユーザージェスチャーコンテキストを保持するため、先行する非同期処理を挟まず直接権限を要求します。
+ * @returns 処理完了を示す Promise
+ */
+const handleHistorySearchToggleRequest = async (): Promise<void> => {
+  if (isRequestingHistoryPermission.value) return;
+
+  if (!historySearchEnabled.value) {
+    isRequestingHistoryPermission.value = true;
+    try {
+      const granted = await requestHistoryPermission();
+      if (granted) {
+        await setHistorySearchEnabled(true);
+        historySearchEnabled.value = true;
+        toast.add({
+          severity: 'success',
+          summary: t('saveSuccess') || 'Saved',
+          detail:
+            t('historySearchEnabledMessage') ||
+            'Browser history search has been enabled.',
+          life: 3000
+        });
+      } else {
+        await setHistorySearchEnabled(false);
+        historySearchEnabled.value = false;
+        toast.add({
+          severity: 'warn',
+          summary: t('historySearchTitle') || 'Browser History Search',
+          detail:
+            t('historyPermissionDeniedMessage') ||
+            'Could not enable because permission to access browser history was denied.',
+          life: 4000
+        });
+      }
+    } finally {
+      isRequestingHistoryPermission.value = false;
+    }
+    return;
+  }
+
+  await setHistorySearchEnabled(false);
+  historySearchEnabled.value = false;
+  toast.add({
+    severity: 'info',
+    summary: t('saveSuccess') || 'Saved',
+    detail:
+      t('historySearchDisabledMessage') ||
+      'Browser history search has been disabled.',
+    life: 3000
+  });
 };
 
 /**

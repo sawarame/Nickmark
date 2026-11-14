@@ -28,6 +28,7 @@ const DECAY_RATE = 0.95;
 let maxBatchOpenTabsCache: number | null = null;
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
+let historySearchEnabledCache: boolean | null = null;
 let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
 
 /**
@@ -85,6 +86,36 @@ export async function setMaxBatchOpenTabs(limit: number): Promise<void> {
   const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || DEFAULT_MAX_BATCH_OPEN_TABS));
   maxBatchOpenTabsCache = safeLimit;
   await chrome.storage.local.set({ maxBatchOpenTabs: safeLimit });
+}
+
+/**
+ * ポップアップでのブラウザ履歴検索機能が有効かどうかを取得します（ローカル専用設定）。
+ * @returns 履歴検索が有効な場合は true、未設定または無効な場合は false
+ */
+export async function getHistorySearchEnabled(): Promise<boolean> {
+  if (historySearchEnabledCache !== null) return historySearchEnabledCache;
+  const data = await chrome.storage.local.get('historySearchEnabled');
+  historySearchEnabledCache = !!data.historySearchEnabled;
+  return historySearchEnabledCache;
+}
+
+/**
+ * ポップアップでのブラウザ履歴検索設定をローカルストレージに保存します。
+ * @param enabled - 履歴検索を有効にする場合は true、無効にする場合は false
+ * @returns 更新完了を示す Promise
+ */
+export async function setHistorySearchEnabled(enabled: boolean): Promise<void> {
+  historySearchEnabledCache = enabled;
+  await chrome.storage.local.set({ historySearchEnabled: enabled });
+}
+
+/**
+ * 履歴検索設定のメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param enabled - 更新後の履歴検索設定値
+ * @returns なし
+ */
+export function updateHistorySearchEnabledCache(enabled: boolean): void {
+  historySearchEnabledCache = enabled;
 }
 
 /**
