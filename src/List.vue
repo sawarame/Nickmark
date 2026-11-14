@@ -268,6 +268,7 @@ import ConfirmDialog from 'primevue/confirmdialog';
 
 import { BookmarkEntry } from './shared/types';
 import {
+  getFaviconUrl,
   isBookmarkletUrl,
   isDynamicUrl,
   isSameUrl,
@@ -628,22 +629,6 @@ const onWindowFocusOrVisible = async (): Promise<void> => {
     return;
   }
   await loadBookmarks(true);
-};
-
-/**
- * Chrome の Favicon API 用 URL を生成します。
- * @param pageUrl - 対象ページの URL
- * @returns Favicon 画像 URL 文字列（取得不可時は空文字）
- */
-const getFaviconUrl = (pageUrl: string): string => {
-  try {
-    const url = new URL(chrome.runtime.getURL('/_favicon/'));
-    url.searchParams.set('pageUrl', pageUrl);
-    url.searchParams.set('size', '32');
-    return url.toString();
-  } catch {
-    return '';
-  }
 };
 
 let lastToastMessage = '';

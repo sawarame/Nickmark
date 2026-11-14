@@ -264,3 +264,39 @@ export function getHelpUrl(locale: Locale): string {
     ? 'https://sawara.me/extensions/nickmark'
     : 'https://sawara.me/en/extensions/nickmark';
 }
+
+/**
+ * Chrome の Favicon API を用いて指定 URL 向けのアイコン画像 URL を生成します。
+ * ブックマークレットや不正 URL の場合は空文字を返します。
+ * @param pageUrl - 対象ページの URL
+ * @param size - アイコンサイズ（ピクセル、デフォルト: 32）
+ * @returns Favicon 画像 URL 文字列（取得不可時は空文字）
+ */
+export function getFaviconUrl(pageUrl: string, size: number = 32): string {
+  if (!pageUrl || isBookmarkletUrl(pageUrl)) return '';
+  try {
+    const url = new URL(chrome.runtime.getURL('/_favicon/'));
+    url.searchParams.set('pageUrl', pageUrl);
+    url.searchParams.set('size', String(size));
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 実行環境の OS に応じたポップアップ起動ショートカットキー表記を返します。
+ * macOS では `Option+Shift+D`、Windows / Linux 等では `Alt+Shift+D` を返します。
+ * @returns OS に合わせたショートカットキー表記文字列
+ */
+export function getShortcutLabel(): string {
+  try {
+    const nav = typeof navigator !== 'undefined'
+      ? (navigator as Navigator & { userAgentData?: { platform?: string } })
+      : undefined;
+    const platform = nav?.userAgentData?.platform || nav?.platform || nav?.userAgent || '';
+    return /mac/i.test(platform) ? 'Option+Shift+D' : 'Alt+Shift+D';
+  } catch {
+    return 'Alt+Shift+D';
+  }
+}

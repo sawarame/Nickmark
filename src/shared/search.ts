@@ -1,5 +1,7 @@
 import {
+  AddPreviewMeta,
   BookmarkEntry,
+  PaletteItem,
   ResolvedSearchMatch,
   SuggestedMatchTarget
 } from './types';
@@ -7,6 +9,7 @@ import {
   escapeXml,
   expandDynamicUrl,
   formatUrlForOmniboxDisplay,
+  getFaviconUrl,
   isBookmarkletUrl,
   isDynamicUrl,
   normalizeNicknamePath,
@@ -655,4 +658,545 @@ export function buildRegularSearchSuggestions(
   }
 
   return { suggestions, matchMap };
+}
+
+/**
+ * 通常検索モード入力からコマンドパレット表示用の候補リスト（`PaletteItem[]`）を構築します。
+ * フォルダ一括オープン候補、通常 URL、動的 URL、ブックマークレットを構造化して返します。
+ * @param rawQuery - 検索欄の入力文字列
+ * @param bookmarks - 現在のブックマークデータ
+ * @returns コマンドパレット候補アイテムの配列
+ */
+export function buildRegularPaletteItems(
+  rawQuery: string,
+  bookmarks: Record<string, BookmarkEntry[]>
+): PaletteItem[] {
+  const trimmed = stripZeroWidthChars(rawQuery).trim();
+  if (!trimmed) return [];
+
+  const normQuery = normalizeNicknamePath(trimmed);
+  // スラッシュのみ（例: "/" や "///"）の場合は全件誤ヒットを防ぐため空配列を返す
+  if (!normQuery && trimmed.includes('/')) {
+    return [];
+  }
+
+  const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
+  const folders = extractFolders(bookmarks);
+  const isExplicitFolderInput = trimmed.endsWith('/');
+  const matchedFolder = normQuery ? folders.get(normQuery) : undefined;
+
+  const items: PaletteItem[] = [];
+
+  // 末尾スラッシュ明示時は対象フォルダ一括オープン候補を最上位に配置する
+  if (isExplicitFolderInput && matchedFolder && matchedFolder.openableUrlCount > 0) {
+    items.push({
+      id: `folder:${matchedFolder.path}`,
+      kind: 'folder',
+      title:
+        t('openAllInFolder', [matchedFolder.path, String(matchedFolder.openableUrlCount)]) ||
+        `📁 フォルダ「${matchedFolder.path}」の全ブックマークを一括オープン (${matchedFolder.openableUrlCount}タブ)`,
+      subtitle: `${matchedFolder.path}/`,
+      badge: `${matchedFolder.path}/`,
+      typeTag: `📁 ${matchedFolder.openableUrlCount}`,
+      fillText: `${matchedFolder.path}/`,
+      executeValue: `${matchedFolder.path}/`,
+      folderPath: matchedFolder.path
+    });
+  }
+
+  // 一致したブックマーク・動的 URL・ブックマークレットを変換する
+  for (let i = 0; i < Math.min(allMatches.length, 30); i++) {
+    const match = allMatches[i];
+    const isBookmarklet = isBookmarkletUrl(match.resolvedUrl);
+    const fillText =
+      match.isDynamic && match.dynamicArg
+        ? `${match.nickname} ${match.dynamicArg}`
+        : match.nickname;
+    const typeTag = isBookmarklet
+      ? '[JS]'
+      : match.isDynamic
+        ? match.dynamicArg
+          ? `(${match.dynamicArg})`
+          : '[%s]'
+        : undefined;
+
+    items.push({
+      id: `match:${i}:${match.nickname}:${match.entry.url}`,
+      kind: isBookmarklet ? 'bookmarklet' : 'bookmark',
+      title: match.entry.title || match.nickname,
+      subtitle: formatUrlForOmniboxDisplay(match.resolvedUrl),
+      badge: match.nickname,
+      typeTag,
+      isPinned: !!match.entry.is_pinned,
+      faviconUrl: isBookmarklet ? '' : getFaviconUrl(match.resolvedUrl),
+      fillText,
+      executeValue: match.resolvedUrl,
+      matchTarget: {
+        nickname: match.nickname,
+        resolvedUrl: match.resolvedUrl,
+        templateUrl: match.entry.url
+      }
+    });
+  }
+
+  // 末尾スラッシュでない場合でも一致するフォルダがあればサジェスト内に一括オープン候補を追加する
+  if (!isExplicitFolderInput && normQuery) {
+    const lowerNorm = normQuery.toLowerCase();
+    const matchedFolders = Array.from(folders.values()).filter(
+      folder =>
+        folder.openableUrlCount > 0 &&
+        (folder.path.toLowerCase() === lowerNorm || folder.path.toLowerCase().startsWith(lowerNorm))
+    );
+
+    if (matchedFolders.length > 0) {
+      const topFolder = matchedFolders[0];
+      const folderItem: PaletteItem = {
+        id: `folder:${topFolder.path}`,
+        kind: 'folder',
+        title:
+          t('openFolderSummary', [topFolder.path, String(topFolder.openableUrlCount)]) ||
+          `📁 ${topFolder.path} (${topFolder.openableUrlCount}タブを一括オープン)`,
+        subtitle: `${topFolder.path}/`,
+        badge: `${topFolder.path}/`,
+        typeTag: `📁 ${topFolder.openableUrlCount}`,
+        fillText: `${topFolder.path}/`,
+        executeValue: `${topFolder.path}/`,
+        folderPath: topFolder.path
+      };
+
+      // 同名の単体ニックネーム完全一致がない場合は最上位、ある場合はその直下に配置する
+      const hasExactSingleMatch = allMatches.length > 0 && allMatches[0].tier === 1;
+      if (hasExactSingleMatch) {
+        items.splice(1, 0, folderItem);
+      } else {
+        items.unshift(folderItem);
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
+ * 既存ニックネームに紐づくブックマークの概要説明文字列と代表アイコン用 URL を生成します。
+ * @param nickname - 対象のニックネーム
+ * @param bookmarks - 現在のブックマーク辞書
+ * @returns 要約文字列と代表ファビコン URL
+ */
+function summarizeNicknameForPalette(
+  nickname: string,
+  bookmarks: Record<string, BookmarkEntry[]>
+): { summary: string; faviconUrl: string } {
+  const entries = bookmarks[nickname] || [];
+  if (entries.length === 1) {
+    const entry = entries[0];
+    const title = entry.title || 'No title';
+    const url = formatUrlForOmniboxDisplay(entry.url);
+    return {
+      summary: `${title} — ${url}`,
+      faviconUrl: isBookmarkletUrl(entry.url) ? '' : getFaviconUrl(entry.url)
+    };
+  }
+  if (entries.length > 1) {
+    const firstNormal = entries.find(e => !isBookmarkletUrl(e.url));
+    return {
+      summary: `Multiple URLs (${entries.length})`,
+      faviconUrl: firstNormal ? getFaviconUrl(firstNormal.url) : ''
+    };
+  }
+  return { summary: nickname, faviconUrl: '' };
+}
+
+/**
+ * コマンドモード（`:` プレフィックス）入力からコマンドパレット表示用の候補リストを構築します。
+ * `:add` / `:a` 入力時はフォルダプレフィックス補完と登録対象タブ/URL プレビューを付与します。
+ * @param rawQuery - 検索欄の入力文字列（先頭が `:`）
+ * @param bookmarks - 現在のブックマーク辞書
+ * @param currentTab - 登録プレビュー用の現在アクティブタブ情報（任意）
+ * @returns コマンドパレット候補アイテムの配列
+ */
+export function buildCommandPaletteItems(
+  rawQuery: string,
+  bookmarks: Record<string, BookmarkEntry[]>,
+  currentTab?: { url?: string; title?: string }
+): PaletteItem[] {
+  const trimmedStart = stripZeroWidthChars(rawQuery).trimStart();
+  if (!trimmedStart.startsWith(':')) return [];
+
+  const firstSpaceIndex = trimmedStart.indexOf(' ');
+  const hasSpace = firstSpaceIndex !== -1;
+  const cmd = !hasSpace ? trimmedStart : trimmedStart.substring(0, firstSpaceIndex);
+  const rawRest = !hasSpace ? '' : trimmedStart.substring(firstSpaceIndex + 1);
+  const restTrimmed = rawRest.trim();
+
+  const items: PaletteItem[] = [];
+  const sortedNicknames = getSortedNicknames(bookmarks);
+  const folders = extractFolders(bookmarks);
+
+  const isCmdMatch = (targetCmds: string[]): boolean =>
+    hasSpace ? targetCmds.includes(cmd) : targetCmds.some(target => target.startsWith(cmd));
+
+  /**
+   * 登録系コマンド（`:add` / `:addall`）向けにフォルダプレフィックスおよび既存ニックネーム補完候補を追加します。
+   * @param canonicalCmd - 展開先のコマンド名（`':add'` または `':addall'`）
+   * @param restParts - スペース分割済みの引数配列
+   */
+  const appendRegisterCompletions = (canonicalCmd: string, restParts: string[]): void => {
+    if (!hasSpace || restParts.length > 1 || (restParts.length === 1 && rawRest.endsWith(' '))) {
+      return;
+    }
+    const nicknameInput = restParts[0] || '';
+    const normNickInput = normalizeNicknamePath(nicknameInput);
+    const candidates = filterNicknameSuggestions(nicknameInput, bookmarks);
+
+    let added = 0;
+    for (const candidate of candidates) {
+      if (added >= 10) break;
+      const isFolderPrefix = candidate.endsWith('/');
+      const normCandidate = normalizeNicknamePath(candidate);
+      if (!isFolderPrefix && (candidate === nicknameInput || (!!normNickInput && normCandidate === normNickInput))) {
+        continue;
+      }
+
+      if (isFolderPrefix) {
+        items.push({
+          id: `cmd:${canonicalCmd}:folder:${candidate}`,
+          kind: 'completion',
+          title: `📁 ${candidate}`,
+          subtitle: t('popupFolderPrefixCompletionHint') || 'フォルダ補完',
+          badge: canonicalCmd,
+          typeTag: 'FOLDER',
+          fillText: `${canonicalCmd} ${candidate}`,
+          executeValue: `${canonicalCmd} ${candidate}`
+        });
+      } else {
+        const { summary, faviconUrl } = summarizeNicknameForPalette(candidate, bookmarks);
+        items.push({
+          id: `cmd:${canonicalCmd}:nick:${candidate}`,
+          kind: 'command',
+          title: candidate,
+          subtitle: `${t('popupExistingNicknameCompletionHint') || '既存ニックネーム'} — ${summary}`,
+          badge: canonicalCmd,
+          faviconUrl,
+          fillText: `${canonicalCmd} ${candidate}`,
+          executeValue: `${canonicalCmd} ${candidate}`
+        });
+      }
+      added++;
+    }
+  };
+
+  // :add / :a コマンド
+  if (isCmdMatch([':add', ':a'])) {
+    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
+    const nicknameInput = restParts[0] || '';
+    const secondArg = restParts[1] || '';
+    const isBookmarkletArg = restParts.length >= 2 && isBookmarkletUrl(secondArg);
+    const isDirectHttpUrl = restParts.length >= 2 && /^https?:\/\/\S+$/i.test(secondArg);
+
+    const rawAfterNicknameMatch = trimmedStart.match(/^:(?:add|a)\s+\S+\s+([\s\S]+)$/);
+    const targetUrl = isBookmarkletArg
+      ? (rawAfterNicknameMatch ? rawAfterNicknameMatch[1].trim() : secondArg)
+      : isDirectHttpUrl
+        ? secondArg
+        : (currentTab?.url || '');
+    const customTitle = isBookmarkletArg
+      ? ''
+      : isDirectHttpUrl
+        ? restParts.slice(3).join(' ').trim()
+        : restParts.slice(2).join(' ').trim();
+    const targetTitle = customTitle || (isBookmarkletArg || isDirectHttpUrl ? '' : (currentTab?.title || ''));
+    const mode: AddPreviewMeta['mode'] = isBookmarkletArg
+      ? 'bookmarklet'
+      : isDirectHttpUrl
+        ? 'directUrl'
+        : 'currentTab';
+
+    const actionHint = isBookmarkletArg
+      ? (t('popupCommandAddBookmarkletHint') || 'ブックマークレットを登録')
+      : isDirectHttpUrl
+        ? (t('popupCommandAddUrlHint') || '指定 URL を登録')
+        : (t('popupCommandAddHint') || '現在のタブを登録（または [ニックネーム] [URL] [タイトル]）');
+
+    const targetLabel = t('popupAddPreviewTargetLabel') || '登録対象';
+    const previewBody = targetUrl
+      ? targetTitle
+        ? `${targetTitle} — ${formatUrlForOmniboxDisplay(targetUrl)}`
+        : formatUrlForOmniboxDisplay(targetUrl)
+      : (t('popupNoOpenableTabUrl') || '現在のタブから登録可能な URL を取得できませんでした。');
+
+    items.push({
+      id: 'cmd:add:exec',
+      kind: 'command',
+      title: restTrimmed ? `:add ${restTrimmed}` : `:add [${t('nicknameLabel') || 'ニックネーム'}]`,
+      subtitle: `${actionHint} | ${targetLabel}: ${previewBody}`,
+      badge: ':add',
+      typeTag: isBookmarkletArg ? '[JS]' : undefined,
+      faviconUrl: !isBookmarkletArg && targetUrl ? getFaviconUrl(targetUrl) : '',
+      fillText: hasSpace ? trimmedStart : ':add ',
+      executeValue: restTrimmed ? `:add ${restTrimmed}` : ':add',
+      previewMeta: {
+        mode,
+        nickname: normalizeNicknamePath(nicknameInput),
+        targetUrl,
+        targetTitle
+      }
+    });
+
+    appendRegisterCompletions(':add', restParts);
+  }
+
+  // :addall / :aa コマンド
+  if (isCmdMatch([':addall', ':aa'])) {
+    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
+    items.push({
+      id: 'cmd:addall:exec',
+      kind: 'command',
+      title: restTrimmed ? `:addall ${restTrimmed}` : `:addall [${t('nicknameLabel') || 'ニックネーム'}]`,
+      subtitle: t('popupCommandAddallHint') || '現在のウィンドウの全タブを一括登録',
+      badge: ':addall',
+      fillText: hasSpace ? trimmedStart : ':addall ',
+      executeValue: restTrimmed ? `:addall ${restTrimmed}` : ':addall'
+    });
+    appendRegisterCompletions(':addall', restParts);
+  }
+
+  // 単体遷移系コマンド
+  if (isCmdMatch([':ls'])) {
+    items.push({
+      id: 'cmd:ls',
+      kind: 'command',
+      title: ':ls',
+      subtitle: t('popupCommandLsHint') || 'ブックマーク一覧・管理画面を開く',
+      badge: ':ls',
+      fillText: ':ls',
+      executeValue: ':ls'
+    });
+  }
+  if (isCmdMatch([':prefs'])) {
+    items.push({
+      id: 'cmd:prefs',
+      kind: 'command',
+      title: ':prefs',
+      subtitle: t('popupCommandPrefsHint') || '設定・言語画面を開く',
+      badge: ':prefs',
+      fillText: ':prefs',
+      executeValue: ':prefs'
+    });
+  }
+  if (isCmdMatch([':help'])) {
+    items.push({
+      id: 'cmd:help',
+      kind: 'command',
+      title: ':help',
+      subtitle: t('popupCommandHelpHint') || 'ヘルプ・ドキュメントを開く',
+      badge: ':help',
+      fillText: ':help',
+      executeValue: ':help'
+    });
+  }
+
+  // :open / :o コマンド
+  if (isCmdMatch([':open', ':o'])) {
+    if (!restTrimmed) {
+      items.push({
+        id: 'cmd:open:prompt',
+        kind: 'completion',
+        title: ':open [nickname or folder/]',
+        subtitle: t('popupCommandOpenHint') || 'ニックネームまたはフォルダを一括オープン',
+        badge: ':open',
+        fillText: ':open ',
+        executeValue: ':open'
+      });
+
+      if (cmd === ':open' || cmd === ':o') {
+        for (const f of Array.from(folders.values()).slice(0, 4)) {
+          if (f.openableUrlCount > 0) {
+            items.push({
+              id: `cmd:open:folder:${f.path}`,
+              kind: 'command',
+              title: `📁 ${f.path}/`,
+              subtitle:
+                t('openFolderSummary', [f.path, String(f.openableUrlCount)]) ||
+                `📁 ${f.path} (${f.openableUrlCount}タブを一括オープン)`,
+              badge: ':open',
+              typeTag: `📁 ${f.openableUrlCount}`,
+              fillText: `:open ${f.path}/`,
+              executeValue: `:open ${f.path}/`
+            });
+          }
+        }
+        for (const n of sortedNicknames.slice(0, 6)) {
+          const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
+          items.push({
+            id: `cmd:open:nick:${n}`,
+            kind: 'command',
+            title: n,
+            subtitle: summary,
+            badge: ':open',
+            faviconUrl,
+            fillText: `:open ${n}`,
+            executeValue: `:open ${n}`
+          });
+        }
+      }
+    } else {
+      const lowerInput = restTrimmed.toLowerCase();
+      const lowerNormInput = normalizeNicknamePath(restTrimmed).toLowerCase();
+
+      for (const f of folders.values()) {
+        const matchesFolder =
+          startsWithInputOrNormalized(f.path, lowerInput, lowerNormInput) ||
+          startsWithInputOrNormalized(`${f.path}/`, lowerInput, lowerNormInput);
+
+        if (f.openableUrlCount > 0 && matchesFolder) {
+          items.push({
+            id: `cmd:open:folder:${f.path}`,
+            kind: 'command',
+            title: `📁 ${f.path}/`,
+            subtitle:
+              t('openFolderSummary', [f.path, String(f.openableUrlCount)]) ||
+              `📁 ${f.path} (${f.openableUrlCount}タブを一括オープン)`,
+            badge: ':open',
+            typeTag: `📁 ${f.openableUrlCount}`,
+            fillText: `:open ${f.path}/`,
+            executeValue: `:open ${f.path}/`
+          });
+        }
+      }
+
+      const matches = sortedNicknames.filter(n =>
+        startsWithInputOrNormalized(n, lowerInput, lowerNormInput)
+      );
+      for (const n of matches.slice(0, 15)) {
+        const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
+        items.push({
+          id: `cmd:open:nick:${n}`,
+          kind: 'command',
+          title: n,
+          subtitle: summary,
+          badge: ':open',
+          faviconUrl,
+          fillText: `:open ${n}`,
+          executeValue: `:open ${n}`
+        });
+      }
+    }
+  }
+
+  // :rm コマンド
+  if (isCmdMatch([':rm'])) {
+    if (!restTrimmed) {
+      items.push({
+        id: 'cmd:rm:prompt',
+        kind: 'completion',
+        title: ':rm [nickname]',
+        subtitle: t('popupCommandRmHint') || 'ニックネームまたは特定の URL を削除',
+        badge: ':rm',
+        fillText: ':rm ',
+        executeValue: ':rm'
+      });
+
+      if (cmd === ':rm') {
+        for (const n of sortedNicknames.slice(0, 8)) {
+          const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
+          items.push({
+            id: `cmd:rm:nick:${n}`,
+            kind: 'command',
+            title: n,
+            subtitle: summary,
+            badge: ':rm',
+            faviconUrl,
+            fillText: `:rm ${n}`,
+            executeValue: `:rm ${n}`
+          });
+        }
+      }
+    } else {
+      const nicknameParts = restTrimmed.split(/\s+/);
+      const nicknameInput = nicknameParts[0];
+      const normNickInput = normalizeNicknamePath(nicknameInput);
+      const urlInput = nicknameParts.slice(1).join(' ').trim();
+      const lowerNickInput = nicknameInput.toLowerCase();
+      const lowerNormNickInput = normNickInput.toLowerCase();
+
+      const matches = sortedNicknames.filter(n =>
+        startsWithInputOrNormalized(n, lowerNickInput, lowerNormNickInput)
+      );
+
+      for (const n of matches.slice(0, 15)) {
+        const entries = bookmarks[n] || [];
+        const isExact =
+          n.toLowerCase() === lowerNickInput ||
+          (!!lowerNormNickInput && n.toLowerCase() === lowerNormNickInput);
+
+        if (isExact && entries.length > 1) {
+          if (!urlInput) {
+            items.push({
+              id: `cmd:rm:multi:${n}`,
+              kind: 'completion',
+              title: `${n} (${entries.length})`,
+              subtitle: t('errorMultipleUrlsFound') || '複数の URL が見つかりました。候補の中から選択してください。',
+              badge: ':rm',
+              typeTag: 'WARN',
+              fillText: `:rm ${n} `,
+              executeValue: `:rm ${n}`
+            });
+          }
+
+          entries.forEach((entry, idx) => {
+            if (!urlInput || entry.url.toLowerCase().includes(urlInput.toLowerCase())) {
+              const isBml = isBookmarkletUrl(entry.url);
+              items.push({
+                id: `cmd:rm:url:${n}:${idx}`,
+                kind: 'command',
+                title: entry.title || n,
+                subtitle: formatUrlForOmniboxDisplay(entry.url),
+                badge: `:rm ${n}`,
+                typeTag: isBml ? '[JS]' : undefined,
+                faviconUrl: isBml ? '' : getFaviconUrl(entry.url),
+                fillText: `:rm ${n} ${entry.url}`,
+                executeValue: `:rm ${n} ${entry.url}`
+              });
+            }
+          });
+        } else {
+          const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
+          items.push({
+            id: `cmd:rm:nick:${n}`,
+            kind: 'command',
+            title: n,
+            subtitle: summary,
+            badge: ':rm',
+            faviconUrl,
+            fillText: `:rm ${n}`,
+            executeValue: `:rm ${n}`
+          });
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
+ * コマンドパレットの入力文字列を解析し、表示する候補リストを構築します。
+ * 入力が空の場合は仕様に従い空配列を返します。
+ * @param rawQuery - 検索欄の入力文字列
+ * @param bookmarks - 現在のブックマークデータ
+ * @param currentTab - 登録プレビュー等に使用する現在アクティブタブ情報（任意）
+ * @returns パレットに表示する候補アイテムの配列
+ */
+export function buildPaletteSuggestions(
+  rawQuery: string,
+  bookmarks: Record<string, BookmarkEntry[]>,
+  currentTab?: { url?: string; title?: string }
+): PaletteItem[] {
+  const clean = stripZeroWidthChars(rawQuery);
+  if (!clean.trim()) return [];
+  if (clean.trimStart().startsWith(':')) {
+    return buildCommandPaletteItems(clean, bookmarks, currentTab);
+  }
+  return buildRegularPaletteItems(clean, bookmarks);
 }

@@ -248,7 +248,73 @@
     }
   },
   "popupTitle": {
-    "message": "Add Nickmark"
+    "message": "Nickmark Command Palette"
+  },
+  "popupPlaceholder": {
+    "message": "Search nickname or type :add / :open / :rm ..."
+  },
+  "popupNoMatches": {
+    "message": "No matching bookmarks or commands found."
+  },
+  "popupAddEnterPrompt": {
+    "message": "Enter a nickname and press Enter to register (e.g. :add gh)"
+  },
+  "popupCommandAddHint": {
+    "message": "Register current tab (or [nickname] [url] [title])"
+  },
+  "popupCommandAddUrlHint": {
+    "message": "Register custom URL"
+  },
+  "popupCommandAddBookmarkletHint": {
+    "message": "Register bookmarklet"
+  },
+  "popupAddPreviewTargetLabel": {
+    "message": "Target"
+  },
+  "popupFolderPrefixCompletionHint": {
+    "message": "Folder prefix"
+  },
+  "popupExistingNicknameCompletionHint": {
+    "message": "Existing nickname"
+  },
+  "popupCommandAddallHint": {
+    "message": "Register all tabs in current window"
+  },
+  "popupCommandOpenHint": {
+    "message": "Open bookmark or folder in new tabs"
+  },
+  "popupCommandRmHint": {
+    "message": "Remove nickname or specific URL"
+  },
+  "popupCommandLsHint": {
+    "message": "Open Nickmarks Manager"
+  },
+  "popupCommandPrefsHint": {
+    "message": "Open Preferences"
+  },
+  "popupCommandHelpHint": {
+    "message": "Open Help / Documentation"
+  },
+  "popupNoOpenableTabUrl": {
+    "message": "Could not retrieve a valid URL from the current tab."
+  },
+  "omniboxMigrationDefault": {
+    "message": "Nickmark — Try the popup launcher ($1) next time (Omnibox will be deprecated)",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "omniboxMigrationSuggestion": {
+    "message": "💡 Use shortcut $1 to open the popup launcher (Omnibox will be deprecated)",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "omniboxMigrationToast": {
+    "message": "Please use the popup launcher with $1 next time!",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   },
   "registerBtn": {
     "message": "Save"
