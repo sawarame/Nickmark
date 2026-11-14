@@ -85,7 +85,8 @@ export type PaletteItemKind =
   | 'bookmarklet'
   | 'folder'
   | 'command'
-  | 'completion';
+  | 'completion'
+  | 'history';
 
 /**
  * `:add` コマンド入力時に表示する登録対象プレビュー情報
@@ -228,3 +229,8 @@ export const SYNC_KEY_PREFIX = 'sync_data_';
  * オムニボックスで表示するポップアップ移行案内候補の識別 content 文字列
  */
 export const OMNIBOX_MIGRATION_HINT_CONTENT = '→ Nickmark Popup Launcher';
+
+/**
+ * ポップアップに同時表示するブラウザ履歴候補の最大件数
+ */
+export const MAX_HISTORY_SUGGESTIONS = 10;

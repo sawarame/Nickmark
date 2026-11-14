@@ -24,8 +24,8 @@ description: "Task list for popup browser history search with opt-in permission"
 
 **Purpose**: 任意権限の宣言と、設定画面・ポップアップで使用する日英メッセージリソースを準備する。
 
-- [ ] T001 Add `"optional_permissions": ["history"]` (without adding `"history"` to `"permissions"`) in package/manifest.json
-- [ ] T002 [P] Add Japanese and English i18n keys (`historySearchTitle`, `historySearchLabel`, `historySearchDescription`, `historySearchEnabledMessage`, `historySearchDisabledMessage`, `historyPermissionDeniedMessage`, `popupHistorySectionTitle`, `popupHistoryTag`) in package/_locales/ja/messages.json and package/_locales/en/messages.json
+- [X] T001 Add `"optional_permissions": ["history"]` (without adding `"history"` to `"permissions"`) in package/manifest.json
+- [X] T002 [P] Add Japanese and English i18n keys (`historySearchTitle`, `historySearchLabel`, `historySearchDescription`, `historySearchEnabledMessage`, `historySearchDisabledMessage`, `historyPermissionDeniedMessage`, `popupHistorySectionTitle`, `popupHistoryTag`) in package/_locales/ja/messages.json and package/_locales/en/messages.json
 
 ---
 
@@ -35,11 +35,11 @@ description: "Task list for popup browser history search with opt-in permission"
 
 **⚠️ CRITICAL**: Phase 3 以降のユーザーストーリー実装は本フェーズ完了後に開始すること。
 
-- [ ] T003 [P] Extend `PaletteItemKind` with `'history'` and export `MAX_HISTORY_SUGGESTIONS = 10` in src/shared/types.ts
-- [ ] T004 [P] Implement `normalizeUrlForComparison(rawUrl: string): string` (trimming, `decodeURI`, lowercasing scheme/host, stripping trailing single `/` except root path, with fallback for invalid URLs) and Japanese JSDoc in src/shared/url.ts
-- [ ] T005 [P] Add `historySearchEnabled` cache (`boolean | null`, default `false`, local-only in `chrome.storage.local`) and `getHistorySearchEnabled`, `setHistorySearchEnabled`, `updateHistorySearchEnabledCache` with Japanese JSDoc in src/shared/storage.ts
-- [ ] T006 [P] Extract score-free `openUrlWithDisposition(targetUrl, disposition, tabId)` from `navigateWithDisposition` (keeping `navigateWithDisposition` calling `updateScore` then `openUrlWithDisposition`) with Japanese JSDoc in src/shared/commands.ts
-- [ ] T007 Create `src/shared/history.ts` with `hasHistoryPermission()`, `requestHistoryPermission()`, and `getEffectiveHistorySearchEnabled()` (returning `getHistorySearchEnabled() && hasHistoryPermission()`, safely returning `false` on missing API or error) and Japanese JSDoc in src/shared/history.ts
+- [X] T003 [P] Extend `PaletteItemKind` with `'history'` and export `MAX_HISTORY_SUGGESTIONS = 10` in src/shared/types.ts
+- [X] T004 [P] Implement `normalizeUrlForComparison(rawUrl: string): string` (trimming, `decodeURI`, lowercasing scheme/host, stripping trailing single `/` except root path, with fallback for invalid URLs) and Japanese JSDoc in src/shared/url.ts
+- [X] T005 [P] Add `historySearchEnabled` cache (`boolean | null`, default `false`, local-only in `chrome.storage.local`) and `getHistorySearchEnabled`, `setHistorySearchEnabled`, `updateHistorySearchEnabledCache` with Japanese JSDoc in src/shared/storage.ts
+- [X] T006 [P] Extract score-free `openUrlWithDisposition(targetUrl, disposition, tabId)` from `navigateWithDisposition` (keeping `navigateWithDisposition` calling `updateScore` then `openUrlWithDisposition`) with Japanese JSDoc in src/shared/commands.ts
+- [X] T007 Create `src/shared/history.ts` with `hasHistoryPermission()`, `requestHistoryPermission()`, and `getEffectiveHistorySearchEnabled()` (returning `getHistorySearchEnabled() && hasHistoryPermission()`, safely returning `false` on missing API or error) and Japanese JSDoc in src/shared/history.ts
 
 **Checkpoint**: 任意権限確認・要求基盤、型定義、ローカル設定、重複正規化、スコア非更新遷移ヘルパーが揃い、各ユーザーストーリーを独立して実装可能な状態。
 
@@ -53,7 +53,7 @@ description: "Task list for popup browser history search with opt-in permission"
 
 ### Implementation for User Story 1
 
-- [ ] T008 [US1] Add the "Browser History Search" `Card` section using `ToggleSwitch` + `.toggle-overlay` click interception in src/Preferences.vue, loading effective state via `getHistorySearchEnabled() && hasHistoryPermission()` on mount, calling `requestHistoryPermission()` directly inside the click handler before any `await` when enabling, persisting `setHistorySearchEnabled(true|false)`, and showing localized `Toast` notifications for enabled, disabled, and permission-denied outcomes
+- [X] T008 [US1] Add the "Browser History Search" `Card` section using `ToggleSwitch` + `.toggle-overlay` click interception in src/Preferences.vue, loading effective state via `getHistorySearchEnabled() && hasHistoryPermission()` on mount, calling `requestHistoryPermission()` directly inside the click handler before any `await` when enabling, persisting `setHistorySearchEnabled(true|false)`, and showing localized `Toast` notifications for enabled, disabled, and permission-denied outcomes
 
 **Checkpoint**: User Story 1 が単独で動作し、オプトイン権限の取得・拒否ハンドリング・永続化・UI 反映が完結する状態。
 
@@ -67,8 +67,8 @@ description: "Task list for popup browser history search with opt-in permission"
 
 ### Implementation for User Story 2
 
-- [ ] T009 [P] [US2] Implement `shouldSearchHistoryForQuery(rawQuery)` (excluding empty, whitespace-only, slash-only, `:`-prefixed commands, and trailing `/` folder inputs) and `searchHistoryPaletteItems(rawQuery, excludeUrls, limit = MAX_HISTORY_SUGGESTIONS)` calling `chrome.history.search({ text, startTime: 0, maxResults: 30 })`, filtering valid navigable URLs, deduplicating against `excludeUrls` and prior history items via `normalizeUrlForComparison`, mapping to `PaletteItem` (`kind: 'history'`, `title: title || formatUrlForOmniboxDisplay(url)`, `subtitle: formatUrlForOmniboxDisplay(url)`, `typeTag: t('popupHistoryTag') || '履歴'`, `faviconUrl: getFaviconUrl(url)`, `fillText: ''`, `executeValue: url`, `matchTarget: undefined`), and returning `[]` safely on errors in src/shared/history.ts
-- [ ] T010 [US2] Integrate `getEffectiveHistorySearchEnabled()` on mount, split `bookmarkItems` (`computed`) and `historyItems` (`ref<PaletteItem[]>([])`) combined into `items`, pass `bookmarkItems` URLs as `excludeUrls` to `searchHistoryPaletteItems`, render a `role="presentation"` history section header (`pi-history` + `popupHistorySectionTitle`) above the first history item, keep list visible when only history items exist, and handle `item.kind === 'history'` in `executeItem` via `openUrlWithDisposition` (preserving popup & focus only on `newBackgroundTab`) in src/Popup.vue
+- [X] T009 [P] [US2] Implement `shouldSearchHistoryForQuery(rawQuery)` (excluding empty, whitespace-only, slash-only, `:`-prefixed commands, and trailing `/` folder inputs) and `searchHistoryPaletteItems(rawQuery, excludeUrls, limit = MAX_HISTORY_SUGGESTIONS)` calling `chrome.history.search({ text, startTime: 0, maxResults: 30 })`, filtering valid navigable URLs, deduplicating against `excludeUrls` and prior history items via `normalizeUrlForComparison`, mapping to `PaletteItem` (`kind: 'history'`, `title: title || formatUrlForOmniboxDisplay(url)`, `subtitle: formatUrlForOmniboxDisplay(url)`, `typeTag: t('popupHistoryTag') || '履歴'`, `faviconUrl: getFaviconUrl(url)`, `fillText: ''`, `executeValue: url`, `matchTarget: undefined`), and returning `[]` safely on errors in src/shared/history.ts
+- [X] T010 [US2] Integrate `getEffectiveHistorySearchEnabled()` on mount, split `bookmarkItems` (`computed`) and `historyItems` (`ref<PaletteItem[]>([])`) combined into `items`, pass `bookmarkItems` URLs as `excludeUrls` to `searchHistoryPaletteItems`, render a `role="presentation"` history section header (`pi-history` + `popupHistorySectionTitle`) above the first history item, keep list visible when only history items exist, and handle `item.kind === 'history'` in `executeItem` via `openUrlWithDisposition` (preserving popup & focus only on `newBackgroundTab`) in src/Popup.vue
 
 **Checkpoint**: User Story 1 と User Story 2 が連携し、オプトイン設定からポップアップ履歴検索・重複除外・タブ遷移・スコア非汚染までの一連のコア価値が動作する状態。
 
@@ -82,8 +82,8 @@ description: "Task list for popup browser history search with opt-in permission"
 
 ### Implementation for User Story 3
 
-- [ ] T011 [US3] Implement 80ms debounce timer and monotonic `historyRequestSeq` cancellation in `query` watcher (immediately clearing pending timer, bumping `historyRequestSeq`, and resetting `historyItems = []` on empty/command/folder/`pendingBatchConfirm` states), and preserve active `selectedIndex` by item ID when `historyItems` updates asynchronously (resetting only when `bookmarkItems` changes or selecting index `0` if `selectedIndex === -1` and history arrives) in src/Popup.vue
-- [ ] T012 [P] [US3] Add `.palette-section-header`, history icon fallback styling (`pi-history`), and PrimeVue CSS variable-compliant `<style scoped>` rules for the history section in src/Popup.vue, verifying `Tab` key leaves input unchanged when a `kind === 'history'` item (`fillText === ''`) is highlighted
+- [X] T011 [US3] Implement 80ms debounce timer and monotonic `historyRequestSeq` cancellation in `query` watcher (immediately clearing pending timer, bumping `historyRequestSeq`, and resetting `historyItems = []` on empty/command/folder/`pendingBatchConfirm` states), and preserve active `selectedIndex` by item ID when `historyItems` updates asynchronously (resetting only when `bookmarkItems` changes or selecting index `0` if `selectedIndex === -1` and history arrives) in src/Popup.vue
+- [X] T012 [P] [US3] Add `.palette-section-header`, history icon fallback styling (`pi-history`), and PrimeVue CSS variable-compliant `<style scoped>` rules for the history section in src/Popup.vue, verifying `Tab` key leaves input unchanged when a `kind === 'history'` item (`fillText === ''`) is highlighted
 
 **Checkpoint**: すべての User Story（US1〜US3）が仕様通りに競合なく安定動作する状態。
 
@@ -93,8 +93,8 @@ description: "Task list for popup browser history search with opt-in permission"
 
 **Purpose**: プロジェクト基盤ドキュメントの同期、本番ビルド確認、および実機 E2E 検証を完了する。
 
-- [ ] T013 [P] Update `.context/spec.md` (document browser history search opt-in setting in Section C, popup history display/dedupe/score rules in Section H, and `optional_permissions: ["history"]` in Section 4) and `.context/tech_stack.md` (add `src/shared/history.ts`)
-- [ ] T014 Run `npm run build` and verify clean TypeScript/Webpack compilation and updated `package/js/` and `package.zip` artifacts
+- [X] T013 [P] Update `.context/spec.md` (document browser history search opt-in setting in Section C, popup history display/dedupe/score rules in Section H, and `optional_permissions: ["history"]` in Section 4) and `.context/tech_stack.md` (add `src/shared/history.ts`)
+- [X] T014 Run `npm run build` and verify clean TypeScript/Webpack compilation and updated `package/js/` and `package.zip` artifacts
 - [ ] T015 Validate all end-to-end scenarios (including Japanese/English i18n switching and permission revocation recovery) against specs/007-popup-history-search/quickstart.md
 
 ---

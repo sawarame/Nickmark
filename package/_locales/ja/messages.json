@@ -422,5 +422,29 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "historySearchTitle": {
+    "message": "ブラウザ履歴検索"
+  },
+  "historySearchLabel": {
+    "message": "ポップアップ検索にブラウザ履歴を含める"
+  },
+  "historySearchDescription": {
+    "message": "有効にすると、ポップアップでの検索時に候補ブックマークの下へブラウザ履歴を表示します（有効化時に履歴へのアクセス許可が必要です）。"
+  },
+  "historySearchEnabledMessage": {
+    "message": "ブラウザ履歴検索を有効にしました。"
+  },
+  "historySearchDisabledMessage": {
+    "message": "ブラウザ履歴検索を無効にしました。"
+  },
+  "historyPermissionDeniedMessage": {
+    "message": "ブラウザ履歴へのアクセスが許可されなかったため、有効化できませんでした。"
+  },
+  "popupHistorySectionTitle": {
+    "message": "ブラウザ履歴"
+  },
+  "popupHistoryTag": {
+    "message": "履歴"
   }
 }

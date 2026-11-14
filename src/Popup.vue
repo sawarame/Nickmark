@@ -101,61 +101,76 @@
       class="palette-list"
       role="listbox"
     >
-      <div v-if="items.length === 0" class="palette-empty">
+      <div v-if="items.length === 0 && !isHistorySearchPending" class="palette-empty">
         <i class="pi pi-info-circle" aria-hidden="true" />
         <span>{{ t('popupNoMatches') || '一致する候補が見つかりませんでした。' }}</span>
       </div>
 
-      <div
-        v-for="(item, index) in items"
-        :id="`palette-option-${index}`"
-        :key="item.id"
-        :ref="el => setOptionRef(index, el)"
-        class="palette-item"
-        :class="{ 'is-selected': index === selectedIndex }"
-        role="option"
-        :aria-selected="index === selectedIndex"
-        @mouseenter="selectedIndex = index"
-        @click="handleItemClick($event, item)"
-      >
-        <!-- 左側種別アイコン / favicon -->
-        <div class="item-icon-wrap">
-          <span v-if="item.kind === 'folder'" class="item-emoji" aria-hidden="true">📁</span>
-          <i
-            v-else-if="item.kind === 'bookmarklet'"
-            class="pi pi-code item-icon item-icon-code"
-            aria-hidden="true"
-          />
-          <img
-            v-else-if="item.faviconUrl && !failedFavicons.has(item.faviconUrl)"
-            :src="item.faviconUrl"
-            class="item-favicon"
-            alt=""
-            @error="markFaviconFailed(item.faviconUrl)"
-          />
-          <i
-            v-else-if="item.kind === 'command' || item.kind === 'completion'"
-            class="pi pi-terminal item-icon item-icon-cmd"
-            aria-hidden="true"
-          />
-          <i v-else class="pi pi-globe item-icon" aria-hidden="true" />
+      <template v-for="(item, index) in items" :key="item.id">
+        <!-- ブラウザ履歴候補セクション見出し（ブックマーク候補との境界に表示） -->
+        <div
+          v-if="index === bookmarkItems.length && historyItems.length > 0"
+          class="palette-section-header"
+          role="presentation"
+        >
+          <i class="pi pi-history section-header-icon" aria-hidden="true" />
+          <span>{{ tr('popupHistorySectionTitle') || 'ブラウザ履歴' }}</span>
         </div>
 
-        <!-- 中央タイトル・バッジ・URL / 説明 -->
-        <div class="item-body">
-          <div class="item-top-row">
-            <span v-if="item.badge" class="item-badge">{{ item.badge }}</span>
-            <span class="item-title">{{ item.title }}</span>
+        <div
+          :id="`palette-option-${index}`"
+          :ref="el => setOptionRef(index, el)"
+          class="palette-item"
+          :class="{ 'is-selected': index === selectedIndex }"
+          role="option"
+          :aria-selected="index === selectedIndex"
+          @mouseenter="selectedIndex = index"
+          @click="handleItemClick($event, item)"
+        >
+          <!-- 左側種別アイコン / favicon -->
+          <div class="item-icon-wrap">
+            <span v-if="item.kind === 'folder'" class="item-emoji" aria-hidden="true">📁</span>
             <i
-              v-if="item.isPinned"
-              class="pi pi-thumbtack item-pin-icon"
+              v-else-if="item.kind === 'bookmarklet'"
+              class="pi pi-code item-icon item-icon-code"
               aria-hidden="true"
             />
-            <span v-if="item.typeTag" class="item-type-tag">{{ item.typeTag }}</span>
+            <img
+              v-else-if="item.faviconUrl && !failedFavicons.has(item.faviconUrl)"
+              :src="item.faviconUrl"
+              class="item-favicon"
+              alt=""
+              @error="markFaviconFailed(item.faviconUrl)"
+            />
+            <i
+              v-else-if="item.kind === 'command' || item.kind === 'completion'"
+              class="pi pi-terminal item-icon item-icon-cmd"
+              aria-hidden="true"
+            />
+            <i
+              v-else-if="item.kind === 'history'"
+              class="pi pi-history item-icon item-icon-history"
+              aria-hidden="true"
+            />
+            <i v-else class="pi pi-globe item-icon" aria-hidden="true" />
           </div>
-          <div class="item-subtitle">{{ item.subtitle }}</div>
+
+          <!-- 中央タイトル・バッジ・URL / 説明 -->
+          <div class="item-body">
+            <div class="item-top-row">
+              <span v-if="item.badge" class="item-badge">{{ item.badge }}</span>
+              <span class="item-title">{{ item.title }}</span>
+              <i
+                v-if="item.isPinned"
+                class="pi pi-thumbtack item-pin-icon"
+                aria-hidden="true"
+              />
+              <span v-if="item.typeTag" class="item-type-tag">{{ item.typeTag }}</span>
+            </div>
+            <div class="item-subtitle">{{ item.subtitle }}</div>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
@@ -174,9 +189,17 @@ import {
   RuntimeMessage,
   TabDisposition
 } from './shared/types';
-import { executeNickmarkCommand, navigateWithDisposition } from './shared/commands';
+import { executeNickmarkCommand, navigateWithDisposition, openUrlWithDisposition } from './shared/commands';
+import {
+  getEffectiveHistorySearchEnabled,
+  searchHistoryPaletteItems,
+  shouldSearchHistoryForQuery
+} from './shared/history';
 import { buildPaletteSuggestions } from './shared/search';
 import { loadBookmarksData, openFolderUrls } from './shared/storage';
+
+// 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
+const HISTORY_SEARCH_DEBOUNCE_MS = 80;
 
 /**
  * ポップアップ内フィードバック通知の状態インターフェース
@@ -191,6 +214,9 @@ const query = ref('');
 const selectedIndex = ref(0);
 const bookmarksSnapshot = ref<Record<string, BookmarkEntry[]>>({});
 const currentTab = ref<chrome.tabs.Tab | undefined>(undefined);
+const isHistorySearchActive = ref(false);
+const historyItems = ref<PaletteItem[]>([]);
+const isHistorySearchPending = ref(false);
 
 // UI 状態
 const i18nVersion = ref(0);
@@ -209,11 +235,13 @@ const tr = (key: string): string => {
   return t(key);
 };
 
-// DOM 参照
+// DOM 参照・非同期制御
 const searchInputRef = ref<any>(null);
 const listContainerRef = ref<HTMLElement | null>(null);
 const optionRefs = ref<Map<number, HTMLElement>>(new Map());
 let feedbackDismissTimer: ReturnType<typeof setTimeout> | null = null;
+let historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let historyRequestSeq = 0;
 
 /**
  * 現在の入力がコマンドモード（`:` 開始）かどうかを判定します。
@@ -224,15 +252,24 @@ const isCommandInput = computed((): boolean => {
 });
 
 /**
- * 検索入力文字列に基づいて表示すべき候補リストを算出します。
+ * 検索入力文字列に基づいて同期算出されるブックマーク・コマンド候補リストを返します。
  * 入力が空の場合は空配列を返します。
- * @returns パレット候補アイテム配列
+ * @returns ブックマーク・コマンド系パレット候補アイテム配列
  */
-const items = computed((): PaletteItem[] => {
+const bookmarkItems = computed((): PaletteItem[] => {
   return buildPaletteSuggestions(query.value, bookmarksSnapshot.value, {
     url: currentTab.value?.url,
     title: currentTab.value?.title
   });
+});
+
+/**
+ * 上部のブックマーク・コマンド候補と下部のブラウザ履歴候補を結合した全候補リストを算出します。
+ * @returns パレット表示用の結合候補アイテム配列
+ */
+const items = computed((): PaletteItem[] => {
+  if (historyItems.value.length === 0) return bookmarkItems.value;
+  return [...bookmarkItems.value, ...historyItems.value];
 });
 
 /**
@@ -253,11 +290,75 @@ const activeOptionId = computed((): string | undefined => {
   return `palette-option-${selectedIndex.value}`;
 });
 
-// 候補リストの変化時に選択インデックスを先頭へリセットする
-watch(items, newItems => {
+/**
+ * 待機中の履歴検索デバウンスタイマーをキャンセルします。
+ * @returns なし
+ */
+const clearHistoryDebounceTimer = (): void => {
+  if (historyDebounceTimer !== null) {
+    clearTimeout(historyDebounceTimer);
+    historyDebounceTimer = null;
+  }
+};
+
+// 同期候補（ブックマーク・コマンド）の変化時は選択インデックスを先頭へリセットする
+watch(bookmarkItems, newBookmarks => {
   optionRefs.value.clear();
-  selectedIndex.value = newItems.length > 0 ? 0 : -1;
+  selectedIndex.value = newBookmarks.length > 0 ? 0 : -1;
 });
+
+// 通常検索入力に応じて非同期でブラウザ履歴を検索し、レースコンディションを防ぎつつ候補下部に結合する
+watch(
+  [query, isHistorySearchActive, pendingBatchConfirm, bookmarkItems],
+  ([newQuery, historyActive, batchConfirm, currentBookmarks]) => {
+    clearHistoryDebounceTimer();
+
+    if (!historyActive || !!batchConfirm || !shouldSearchHistoryForQuery(newQuery)) {
+      historyRequestSeq += 1;
+      isHistorySearchPending.value = false;
+      if (historyItems.value.length > 0) {
+        historyItems.value = [];
+      }
+      return;
+    }
+
+    const seq = ++historyRequestSeq;
+    isHistorySearchPending.value = true;
+    const excludeUrls = currentBookmarks
+      .filter(item => item.kind === 'bookmark')
+      .map(item => item.executeValue);
+
+    historyDebounceTimer = setTimeout(async () => {
+      historyDebounceTimer = null;
+      const fetched = await searchHistoryPaletteItems(newQuery, excludeUrls);
+      if (seq !== historyRequestSeq) return;
+      if (
+        !isHistorySearchActive.value ||
+        pendingBatchConfirm.value ||
+        !shouldSearchHistoryForQuery(query.value)
+      ) {
+        isHistorySearchPending.value = false;
+        historyItems.value = [];
+        return;
+      }
+
+      // 履歴到着前にユーザーが移動したハイライト位置を可能な限り維持する
+      const prevSelectedId =
+        selectedIndex.value >= 0 ? items.value[selectedIndex.value]?.id : undefined;
+
+      optionRefs.value.clear();
+      isHistorySearchPending.value = false;
+      historyItems.value = fetched;
+
+      if (prevSelectedId) {
+        const nextIdx = items.value.findIndex(item => item.id === prevSelectedId);
+        selectedIndex.value = nextIdx !== -1 ? nextIdx : items.value.length > 0 ? 0 : -1;
+      } else {
+        selectedIndex.value = items.value.length > 0 ? 0 : -1;
+      }
+    }, HISTORY_SEARCH_DEBOUNCE_MS);
+  }
+);
 
 /**
  * 選択中オプション要素の参照を登録します。
@@ -495,6 +596,16 @@ const executeItem = async (item: PaletteItem, disposition: TabDisposition): Prom
       return;
     }
 
+    if (item.kind === 'history') {
+      await openUrlWithDisposition(item.executeValue, disposition, currentTab.value?.id);
+      if (disposition === 'newBackgroundTab') {
+        await focusSearchInput();
+      } else {
+        closePopup();
+      }
+      return;
+    }
+
     if (item.kind === 'bookmarklet') {
       const tabId = currentTab.value?.id;
       if (tabId === undefined) {
@@ -688,9 +799,10 @@ onMounted(async (): Promise<void> => {
   await initI18n();
   i18nVersion.value += 1;
 
-  const [bookmarksResult, tabsResult] = await Promise.allSettled([
+  const [bookmarksResult, tabsResult, historyEnabledResult] = await Promise.allSettled([
     loadBookmarksData(),
-    chrome.tabs.query({ active: true, currentWindow: true })
+    chrome.tabs.query({ active: true, currentWindow: true }),
+    getEffectiveHistorySearchEnabled()
   ]);
 
   if (bookmarksResult.status === 'fulfilled') {
@@ -705,11 +817,18 @@ onMounted(async (): Promise<void> => {
     console.warn('アクティブタブ情報の取得に失敗しました:', tabsResult.reason);
   }
 
+  if (historyEnabledResult.status === 'fulfilled') {
+    isHistorySearchActive.value = historyEnabledResult.value;
+  } else {
+    isHistorySearchActive.value = false;
+  }
+
   await focusSearchInput();
 });
 
 onUnmounted(() => {
   clearFeedbackDismissTimer();
+  clearHistoryDebounceTimer();
 });
 </script>
 
@@ -835,6 +954,29 @@ onUnmounted(() => {
   font-size: 0.85rem;
 }
 
+.palette-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.65rem 0.25rem;
+  margin-top: 0.25rem;
+  border-top: 1px solid var(--p-content-border-color);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color);
+  user-select: none;
+}
+
+.palette-section-header:first-child {
+  margin-top: 0;
+  border-top: none;
+}
+
+.section-header-icon {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+}
+
 .palette-item {
   display: flex;
   align-items: center;
@@ -885,6 +1027,10 @@ onUnmounted(() => {
 
 .item-icon-cmd {
   color: var(--p-primary-color, #10b981);
+}
+
+.item-icon-history {
+  color: var(--p-text-muted-color);
 }
 
 .item-body {

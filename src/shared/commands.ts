@@ -135,6 +135,36 @@ export async function executeBookmarklet(params: {
 }
 
 /**
+ * ブックマークの学習スコアを更新せずに、指定された URL をタブの開き方に応じて開きます。
+ * ブラウザ履歴候補などスコア更新対象外の遷移で使用します。
+ * @param targetUrl - 遷移先の解決済み URL
+ * @param disposition - タブの開き方（現在タブ / 新規フォアグラウンド / 新規バックグラウンド）
+ * @param tabId - 現在タブ更新時に使用するタブ ID（省略時は現在のアクティブタブ）
+ * @returns 処理完了を示す Promise
+ */
+export async function openUrlWithDisposition(
+  targetUrl: string,
+  disposition: TabDisposition,
+  tabId?: number
+): Promise<void> {
+  switch (disposition) {
+    case 'currentTab':
+      if (tabId !== undefined) {
+        await chrome.tabs.update(tabId, { url: targetUrl });
+      } else {
+        await chrome.tabs.update({ url: targetUrl });
+      }
+      break;
+    case 'newForegroundTab':
+      await chrome.tabs.create({ url: targetUrl, active: true });
+      break;
+    case 'newBackgroundTab':
+      await chrome.tabs.create({ url: targetUrl, active: false });
+      break;
+  }
+}
+
+/**
  * 指定された URL へ遷移し、あわせて使用スコアを更新します。
  * @param targetUrl - 遷移先の解決済み URL
  * @param disposition - タブの開き方（現在タブ / 新規フォアグラウンド / 新規バックグラウンド）
@@ -151,22 +181,7 @@ export async function navigateWithDisposition(
   matchedNickname?: string
 ): Promise<void> {
   await updateScore(targetUrl, matchedTemplateUrl, matchedNickname);
-
-  switch (disposition) {
-    case 'currentTab':
-      if (tabId !== undefined) {
-        await chrome.tabs.update(tabId, { url: targetUrl });
-      } else {
-        await chrome.tabs.update({ url: targetUrl });
-      }
-      break;
-    case 'newForegroundTab':
-      await chrome.tabs.create({ url: targetUrl, active: true });
-      break;
-    case 'newBackgroundTab':
-      await chrome.tabs.create({ url: targetUrl, active: false });
-      break;
-  }
+  await openUrlWithDisposition(targetUrl, disposition, tabId);
 }
 
 /**

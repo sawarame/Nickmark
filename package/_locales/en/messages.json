@@ -422,5 +422,29 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "historySearchTitle": {
+    "message": "Browser History Search"
+  },
+  "historySearchLabel": {
+    "message": "Include Browser History in Popup Search"
+  },
+  "historySearchDescription": {
+    "message": "When enabled, matching browser history entries are shown below bookmark suggestions in the popup (requires permission to access browsing history)."
+  },
+  "historySearchEnabledMessage": {
+    "message": "Browser history search has been enabled."
+  },
+  "historySearchDisabledMessage": {
+    "message": "Browser history search has been disabled."
+  },
+  "historyPermissionDeniedMessage": {
+    "message": "Could not enable because permission to access browser history was denied."
+  },
+  "popupHistorySectionTitle": {
+    "message": "Browser History"
+  },
+  "popupHistoryTag": {
+    "message": "History"
   }
 }
