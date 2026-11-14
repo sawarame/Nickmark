@@ -248,7 +248,73 @@
     }
   },
   "popupTitle": {
-    "message": "ブックマーク登録"
+    "message": "Nickmark コマンドパレット"
+  },
+  "popupPlaceholder": {
+    "message": "ニックネーム検索 または :add / :open / :rm ..."
+  },
+  "popupNoMatches": {
+    "message": "一致する候補が見つかりませんでした。"
+  },
+  "popupAddEnterPrompt": {
+    "message": "ニックネームを入力して Enter で登録してください（例: :add gh）"
+  },
+  "popupCommandAddHint": {
+    "message": "現在のタブを登録（または [ニックネーム] [URL] [タイトル]）"
+  },
+  "popupCommandAddUrlHint": {
+    "message": "指定 URL を登録"
+  },
+  "popupCommandAddBookmarkletHint": {
+    "message": "ブックマークレットを登録"
+  },
+  "popupAddPreviewTargetLabel": {
+    "message": "登録対象"
+  },
+  "popupFolderPrefixCompletionHint": {
+    "message": "フォルダ補完"
+  },
+  "popupExistingNicknameCompletionHint": {
+    "message": "既存ニックネーム"
+  },
+  "popupCommandAddallHint": {
+    "message": "現在のウィンドウの全タブを一括登録"
+  },
+  "popupCommandOpenHint": {
+    "message": "ニックネームまたはフォルダを一括オープン"
+  },
+  "popupCommandRmHint": {
+    "message": "ニックネームまたは特定の URL を削除"
+  },
+  "popupCommandLsHint": {
+    "message": "ブックマーク一覧・管理画面を開く"
+  },
+  "popupCommandPrefsHint": {
+    "message": "設定・言語画面を開く"
+  },
+  "popupCommandHelpHint": {
+    "message": "ヘルプ・ドキュメントを開く"
+  },
+  "popupNoOpenableTabUrl": {
+    "message": "現在のタブから登録可能な URL を取得できませんでした。"
+  },
+  "omniboxMigrationDefault": {
+    "message": "Nickmark — 次回からは $1 でポップアップ版をご利用ください（アドレスバー機能は将来廃止予定）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "omniboxMigrationSuggestion": {
+    "message": "💡 ショートカット $1 でポップアップ版をご利用ください（アドレスバーは将来廃止予定）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "omniboxMigrationToast": {
+    "message": "次回からはショートカット $1 でポップアップ版をご利用ください！",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   },
   "registerBtn": {
     "message": "登録"

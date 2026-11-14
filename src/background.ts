@@ -1,34 +1,28 @@
 import { getCurrentLocale, initI18n, t } from './i18n';
 import {
   BookmarkEntry,
+  OMNIBOX_MIGRATION_HINT_CONTENT,
+  RuntimeMessage,
   SuggestedMatchTarget,
   SYNC_KEY_PREFIX
 } from './shared/types';
 import {
   escapeXml,
-  extractBookmarkletCode,
   formatUrlForOmniboxDisplay,
   getHelpUrl,
+  getShortcutLabel,
   isBookmarkletUrl,
   isRestrictedTabUrl,
-  isSameUrl,
-  isUserScriptsAvailable,
-  normalizeNicknamePath,
-  resolveNavigableUrl
+  normalizeNicknamePath
 } from './shared/url';
-import { openOrReuseListTab, showToast } from './shared/toast';
+import { openOrReuseListTab, renderToastInDocument, showToast } from './shared/toast';
 import {
   clearBookmarksCache,
-  createBookmarkEntry,
   extractFolders,
   getMaxBatchOpenTabs,
-  getSaveErrorMessage,
   getSyncEnabled,
   loadBookmarksData,
   openFolderUrls,
-  openTargetsAndUpdateScores,
-  saveBookmarksData,
-  updateScore,
   updateSyncEnabledCache
 } from './shared/storage';
 import {
@@ -39,13 +33,19 @@ import {
   resolveRegularSearchMatches,
   stripZeroWidthChars
 } from './shared/search';
+import {
+  executeBookmarklet,
+  executeNickmarkCommand,
+  navigateWithDisposition
+} from './shared/commands';
 
-// 共有型・定数・ユーティリティ・ストレージ操作関数をバックグラウンドモジュールからも再エクスポート
+// 共有型・定数・ユーティリティ・ストレージ・コマンド操作関数をバックグラウンドモジュールからも再エクスポート
 export * from './shared/types';
 export * from './shared/url';
 export * from './shared/toast';
 export * from './shared/storage';
 export * from './shared/search';
+export * from './shared/commands';
 
 // 直近でオムニボックスに提示したサジェスト候補の content と遷移先情報の対応マップ
 let lastSuggestedMatchMap = new Map<string, SuggestedMatchTarget>();
@@ -71,28 +71,6 @@ function clearPendingSuggest(): void {
       // 既にコールバックが解決されている場合は無視する
     }
     lastPendingSuggest = null;
-  }
-}
-
-/**
- * ブックマークを保存し、成功時は指定メッセージ、失敗時は適切なエラートーストを表示します。
- * @param tabId - トースト表示対象のタブ ID
- * @param bookmarks - 保存するブックマーク辞書
- * @param successMessage - 保存成功時に表示するメッセージ
- * @returns 保存に成功した場合は true、失敗した場合は false
- */
-async function saveBookmarksWithToast(
-  tabId: number,
-  bookmarks: Record<string, BookmarkEntry[]>,
-  successMessage: string
-): Promise<boolean> {
-  try {
-    await saveBookmarksData(bookmarks);
-    await showToast(tabId, successMessage);
-    return true;
-  } catch (err: unknown) {
-    await showToast(tabId, getSaveErrorMessage(err));
-    return false;
   }
 }
 
@@ -224,48 +202,7 @@ export async function handleBatchOpenConfirmationRequest(
 }
 
 /**
- * ブックマークレット実行時のエラー種別に応じた通知メッセージを返します。
- * @param kind - エラー種別（'restricted' | 'not_allowed' | 'empty' | 'failed'）
- * @param detail - 実行エラー詳細文字列（'failed' 時のみ使用）
- * @returns メッセージ文字列と表示時間（ミリ秒）
- */
-function buildBookmarkletErrorNotice(
-  kind: 'restricted' | 'not_allowed' | 'empty' | 'failed',
-  detail?: string
-): { message: string; duration: number } {
-  switch (kind) {
-    case 'restricted':
-      return {
-        message:
-          t('errorBookmarkletRestrictedPage') ||
-          'このページ（ブラウザ内部ページやストア等）ではブックマークレットを実行できません。',
-        duration: 4500
-      };
-    case 'not_allowed':
-      return {
-        message:
-          t('errorUserScriptsNotAllowed') ||
-          'ブックマークレットを実行するには、拡張機能の詳細設定（chrome://extensions）で「ユーザー スクリプトを許可する」を有効にしてください。',
-        duration: 5000
-      };
-    case 'empty':
-      return {
-        message: t('errorBookmarkletEmpty') || 'ブックマークレットのコードが空です。',
-        duration: 4000
-      };
-    case 'failed':
-      return {
-        message:
-          t('errorBookmarkletExecutionFailed', [detail || '']) ||
-          `ブックマークレットの実行中にエラーが発生しました: ${detail || ''}`,
-        duration: 5000
-      };
-  }
-}
-
-/**
- * `chrome.userScripts` API を使用して、現在アクティブなタブのメインワールド（MAIN）でブックマークレットを実行します。
- * 特殊ページや権限未有効時はエラートーストを表示します。
+ * 現在アクティブなタブ上でブックマークレットを実行し、エラー発生時のみページ内トーストを表示します。
  * @param bookmarkletUrl - `javascript:` で始まるブックマークレット文字列
  * @param currentTab - 実行対象となる現在アクティブなタブ
  * @param matchedTemplateUrl - スコア更新用の元テンプレート URL
@@ -279,53 +216,44 @@ async function executeBookmarkletOnTab(
   matchedNickname?: string
 ): Promise<void> {
   if (!currentTab || currentTab.id === undefined) return;
-  const tabId = currentTab.id;
-
-  if (isRestrictedTabUrl(currentTab.url)) {
-    const notice = buildBookmarkletErrorNotice('restricted');
-    await showToast(tabId, notice.message, notice.duration);
-    return;
+  const result = await executeBookmarklet({
+    tabId: currentTab.id,
+    tabUrl: currentTab.url,
+    bookmarkletUrl,
+    matchedTemplateUrl,
+    matchedNickname
+  });
+  if (!result.success && result.errorMessage) {
+    const duration = result.errorKind === 'empty' ? 4000 : result.errorKind === 'restricted' ? 4500 : 5000;
+    await showToast(currentTab.id, result.errorMessage, duration);
   }
+}
 
-  if (!isUserScriptsAvailable()) {
-    const notice = buildBookmarkletErrorNotice('not_allowed');
-    await showToast(tabId, notice.message, notice.duration);
-    return;
-  }
+/**
+ * オムニボックスのデフォルト案内（空入力時）に表示するポップアップ移行促進メッセージを生成します。
+ * @returns XML エスケープ済みの説明文
+ */
+function getMigrationDefaultDescription(): string {
+  const shortcut = getShortcutLabel();
+  const msg =
+    t('omniboxMigrationDefault', [shortcut]) ||
+    `Nickmark — 次回からは ${shortcut} でポップアップ版をご利用ください（アドレスバー機能は将来廃止予定）`;
+  return escapeXml(msg);
+}
 
-  const code = extractBookmarkletCode(bookmarkletUrl).trim();
-  if (!code) {
-    const notice = buildBookmarkletErrorNotice('empty');
-    await showToast(tabId, notice.message, notice.duration);
-    return;
-  }
-
-  try {
-    const results = await chrome.userScripts.execute({
-      target: { tabId },
-      js: [{ code }],
-      world: 'MAIN',
-      injectImmediately: true
-    });
-
-    const failedResult = results?.find(res => 'error' in res && !!res.error);
-    if (failedResult && 'error' in failedResult && failedResult.error) {
-      const notice = buildBookmarkletErrorNotice('failed', failedResult.error);
-      await showToast(tabId, notice.message, notice.duration);
-      return;
-    }
-
-    await updateScore(bookmarkletUrl, matchedTemplateUrl, matchedNickname);
-  } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const kind = /Cannot access|extensions gallery cannot be scripted|scheme/i.test(errMsg)
-      ? 'restricted'
-      : /userScripts|User scripts/i.test(errMsg)
-        ? 'not_allowed'
-        : 'failed';
-    const notice = buildBookmarkletErrorNotice(kind, errMsg);
-    await showToast(tabId, notice.message, notice.duration);
-  }
+/**
+ * オムニボックスの候補リスト先頭に表示するポップアップ移行案内候補を生成します。
+ * @returns オムニボックス用のサジェスト候補オブジェクト
+ */
+function buildMigrationSuggestResult(): chrome.omnibox.SuggestResult {
+  const shortcut = getShortcutLabel();
+  const msg =
+    t('omniboxMigrationSuggestion', [shortcut]) ||
+    `💡 ショートカット ${shortcut} でポップアップ版をご利用ください（アドレスバーは将来廃止予定）`;
+  return {
+    content: OMNIBOX_MIGRATION_HINT_CONTENT,
+    description: `<dim>${escapeXml(msg)}</dim>`
+  };
 }
 
 /**
@@ -361,6 +289,8 @@ function handleCommandModeSuggestions(
     suggestions.push({ content: finalContent, description: match.description });
   }
 
+  // 移行期間中は先頭にポップアップ利用を促す候補を表示する
+  suggestions.unshift(buildMigrationSuggestResult());
   suggest(suggestions);
 }
 
@@ -432,255 +362,52 @@ function handleRegularSearchSuggestions(
     }
   }
 
+  // 移行期間中は先頭にポップアップ利用を促す候補を表示する
+  suggestions.unshift(buildMigrationSuggestResult());
   lastSuggestedMatchMap = matchMap;
   suggest(suggestions);
 }
 
 /**
- * 確定したコマンド（:add, :addall, :open, :ls, :prefs, :help, :rm）を実行します。
+ * 確定したコマンド（:add, :addall, :open, :ls, :prefs, :help, :rm）を共有エンジン経由で実行し、
+ * オムニボックス向けのトースト通知・確認プロンプト等のフィードバックを行います。
  * @param resolvedContent - 補完済みのコマンド文字列
  * @param currentTab - 現在アクティブなタブ
  * @returns 処理完了を示す Promise
  */
 async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.Tab): Promise<void> {
-  const parts = resolvedContent.split(/\s+/);
-  const cmd = parts[0];
+  const result = await executeNickmarkCommand(resolvedContent, currentTab, { source: 'omnibox' });
+  const tabId = currentTab?.id;
 
-  if (cmd === ':ls') {
-    chrome.runtime.openOptionsPage();
-    return;
-  }
+  if (result.outcome === 'executed_close' || result.outcome === 'executed_keep_open') return;
 
-  if (cmd === ':prefs') {
-    chrome.tabs.create({ url: chrome.runtime.getURL('preferences.html') });
-    return;
-  }
-
-  if (cmd === ':help') {
-    chrome.tabs.create({ url: getHelpUrl(getCurrentLocale()) });
-    return;
-  }
-
-  if (!currentTab || !currentTab.id) return;
-  const tabId = currentTab.id;
-
-  if (cmd === ':addall' || cmd === ':aa') {
-    const nickname = normalizeNicknamePath(parts[1]);
-    if (!nickname) {
-      await showToast(tabId, t('errorNicknameRequired') || 'ニックネームを指定してください。');
-      return;
-    }
-
-    const tabs = await chrome.tabs.query({ currentWindow: true });
-    const bookmarks = await loadBookmarksData();
-    if (!bookmarks[nickname]) bookmarks[nickname] = [];
-
-    let addedCount = 0;
-    for (const tab of tabs) {
-      if (tab.url && !tab.url.startsWith('chrome://') && !tab.url.startsWith('edge://')) {
-        if (!bookmarks[nickname].some(b => isSameUrl(b.url, tab.url!))) {
-          bookmarks[nickname].push(createBookmarkEntry(tab.url, tab.title || ''));
-          addedCount++;
-        }
-      }
-    }
-
-    if (addedCount > 0) {
-      await saveBookmarksWithToast(
-        tabId,
-        bookmarks,
-        t('bookmarkAllAddedMessage', [addedCount.toString(), nickname]) ||
-          `${addedCount} 件のタブを '${nickname}' として登録しました！`
-      );
-    } else {
-      await showToast(
-        tabId,
-        t('bookmarkAlreadyExistsMessage', [nickname]) ||
-          `このURLはすでにニックネーム「${nickname}」に登録されています。`
-      );
-    }
-    return;
-  }
-
-  if (cmd === ':add' || cmd === ':a') {
-    const nickname = normalizeNicknamePath(parts[1]);
-    if (!nickname) {
+  if (result.outcome === 'info_prompt') {
+    if (result.legacyFallbackAction === 'open_list_with_tab') {
       await openOrReuseListTab({
-        url: currentTab.url || '',
-        title: currentTab.title || ''
+        url: currentTab?.url || '',
+        title: currentTab?.title || ''
       });
       return;
     }
-
-    const secondArg = parts[2] || '';
-    const isBookmarkletArg = isBookmarkletUrl(secondArg);
-    const isDirectHttpUrl = /^https?:\/\/\S+$/i.test(secondArg);
-    const isDirectUrl = isBookmarkletArg || isDirectHttpUrl;
-
-    // ブックマークレットはコード内の空白を保持するためニックネーム以降の全文字列をコードとして取得する
-    const rawAfterNicknameMatch = resolvedContent.match(/^:(?:add|a)\s+\S+\s+([\s\S]+)$/);
-    const targetUrl = isBookmarkletArg
-      ? (rawAfterNicknameMatch ? rawAfterNicknameMatch[1].trim() : secondArg)
-      : isDirectHttpUrl
-        ? secondArg
-        : (currentTab.url || '');
-    const customTitle = isBookmarkletArg
-      ? ''
-      : isDirectHttpUrl
-        ? parts.slice(3).join(' ').trim()
-        : parts.slice(2).join(' ').trim();
-    const defaultTitle = isDirectUrl ? '' : (currentTab.title || '');
-
-    if (!targetUrl) return;
-
-    const bookmarks = await loadBookmarksData();
-    if (!bookmarks[nickname]) bookmarks[nickname] = [];
-    const existingEntry = bookmarks[nickname].find(b => isSameUrl(b.url, targetUrl));
-
-    if (!existingEntry) {
-      bookmarks[nickname].push(createBookmarkEntry(targetUrl, customTitle || defaultTitle));
-      await saveBookmarksWithToast(
-        tabId,
-        bookmarks,
-        t('bookmarkAddedMessage', [nickname]) || `'${nickname}' として登録しました！`
-      );
-    } else if (customTitle) {
-      existingEntry.title = customTitle;
-      await saveBookmarksWithToast(
-        tabId,
-        bookmarks,
-        t('bookmarkTitleUpdatedMessage', [nickname]) || `ニックネーム「${nickname}」のタイトルを更新しました！`
-      );
-    } else {
-      await showToast(
-        tabId,
-        t('bookmarkAlreadyExistsMessage', [nickname]) ||
-          `このURLはすでにニックネーム「${nickname}」に登録されています。`
-      );
+    if (result.legacyFallbackAction === 'open_list_with_msg' && result.message) {
+      await openOrReuseListTab({ msg: result.message });
+      return;
     }
-    return;
   }
 
-  if (cmd === ':open' || cmd === ':o') {
-    const rawTarget = parts[1];
-    if (!rawTarget) {
-      await showToast(tabId, t('errorNicknameRequired') || 'ニックネームを指定してください。');
-      return;
-    }
-
-    const bookmarks = await loadBookmarksData();
-    const isExplicitFolder = rawTarget.endsWith('/');
-    const cleanTarget = normalizeNicknamePath(rawTarget);
-
-    if (!cleanTarget) {
-      await showToast(
-        tabId,
-        t('errorNicknameNotFound', [rawTarget]) ||
-          `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`
-      );
-      return;
-    }
-
-    // 1. 明示的なフォルダ指定でなく単一ニックネームが存在する場合は単一ニックネームを開く
-    if (!isExplicitFolder && (bookmarks[cleanTarget] || bookmarks[rawTarget])) {
-      const targetKey = bookmarks[cleanTarget] ? cleanTarget : rawTarget;
-      const entries = bookmarks[targetKey];
-      const openableTargets = entries
-        .filter(entry => !isBookmarkletUrl(entry.url))
-        .map(entry => ({
-          urlToOpen: resolveNavigableUrl(entry),
-          templateUrl: entry.url,
-          nickname: targetKey
-        }));
-      const skippedBookmarkletCount = entries.length - openableTargets.length;
-      const openedCount = await openTargetsAndUpdateScores(openableTargets);
-
-      if (openedCount === 0 && skippedBookmarkletCount > 0) {
-        await showToast(
-          tabId,
-          t('errorOpenSkippedAllBookmarklets', [targetKey]) ||
-            `ニックネーム「${targetKey}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`,
-          4000
-        );
-      }
-      return;
-    }
-
-    // 2. フォルダとして一括オープン
-    const folders = extractFolders(bookmarks);
-    if (folders.has(cleanTarget) || isExplicitFolder) {
-      const result = await openFolderUrls(cleanTarget, false, tabId);
-      if (result.requiresConfirmation && result.folderPath && result.urls) {
-        await handleBatchOpenConfirmationRequest(
-          tabId,
-          result.folderPath,
-          result.urls,
-          result.nicknames || []
-        );
-      }
-      return;
-    }
-
-    // 3. いずれも見つからない場合
-    await showToast(
+  if (result.outcome === 'needs_confirmation' && result.confirmation && tabId !== undefined) {
+    await handleBatchOpenConfirmationRequest(
       tabId,
-      t('errorNicknameNotFound', [rawTarget]) ||
-        `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`
+      result.confirmation.folderPath,
+      result.confirmation.urls,
+      result.confirmation.nicknames
     );
     return;
   }
 
-  if (cmd === ':rm') {
-    const rawNickname = parts[1];
-    const rawAfterRmMatch = resolvedContent.match(/^:rm\s+\S+\s+([\s\S]+)$/);
-    const urlToDelete = rawAfterRmMatch ? rawAfterRmMatch[1].trim() : '';
-
-    if (!rawNickname) {
-      await showToast(tabId, t('errorNicknameRequired') || 'ニックネームを指定してください。');
-      return;
-    }
-
-    const bookmarks = await loadBookmarksData();
-    const normNickname = normalizeNicknamePath(rawNickname);
-    const nickname = bookmarks[normNickname] ? normNickname : rawNickname;
-
-    if (!bookmarks[nickname]) {
-      await showToast(
-        tabId,
-        t('errorNicknameNotFound', [nickname]) || 'ニックネームが見つかりませんでした。'
-      );
-      return;
-    }
-
-    if (urlToDelete) {
-      const initialLength = bookmarks[nickname].length;
-      bookmarks[nickname] = bookmarks[nickname].filter(b => !isSameUrl(b.url, urlToDelete));
-      if (bookmarks[nickname].length === 0) {
-        delete bookmarks[nickname];
-      }
-
-      if (!bookmarks[nickname] || bookmarks[nickname].length < initialLength) {
-        await saveBookmarksWithToast(
-          tabId,
-          bookmarks,
-          t('bookmarkUrlRemovedMessage', [nickname]) || `'${nickname}' の URL を削除しました。`
-        );
-      } else {
-        await showToast(tabId, t('errorUrlNotFound', [nickname]) || 'URL が見つかりませんでした。');
-      }
-    } else if (bookmarks[nickname].length > 1) {
-      const message =
-        t('errorMultipleUrlsFound') ||
-        '複数の URL が登録されています。候補から選択するか、管理画面から削除してください。';
-      await openOrReuseListTab({ msg: message });
-    } else {
-      delete bookmarks[nickname];
-      await saveBookmarksWithToast(
-        tabId,
-        bookmarks,
-        t('bookmarkRemovedMessage', [nickname]) || `'${nickname}' を削除しました。`
-      );
-    }
+  if ((result.outcome === 'success_toast' || result.outcome === 'error') && result.message && tabId !== undefined) {
+    const duration = resolvedContent.trim().startsWith(':open') || resolvedContent.trim().startsWith(':o') ? 4000 : 3000;
+    await showToast(tabId, result.message, duration);
   }
 }
 
@@ -735,7 +462,7 @@ if (typeof window === 'undefined') {
 
   // オムニボックス入力セッション開始時にキャッシュを先読みする
   chrome.omnibox.onInputStarted.addListener(() => {
-    chrome.omnibox.setDefaultSuggestion({ description: 'Search Nickmark' });
+    chrome.omnibox.setDefaultSuggestion({ description: getMigrationDefaultDescription() });
     loadBookmarksData().catch(err => {
       console.error('Failed to pre-warm bookmarks cache:', err);
     });
@@ -756,8 +483,8 @@ if (typeof window === 'undefined') {
     const trimmed = cleanText.trim();
 
     if (!trimmed) {
-      chrome.omnibox.setDefaultSuggestion({ description: 'Search Nickmark' });
-      suggest([]);
+      chrome.omnibox.setDefaultSuggestion({ description: getMigrationDefaultDescription() });
+      suggest([buildMigrationSuggestResult()]);
       return;
     }
 
@@ -791,6 +518,28 @@ if (typeof window === 'undefined') {
     async (text: string, disposition: 'currentTab' | 'newForegroundTab' | 'newBackgroundTab') => {
       clearPendingSuggest();
       const cleanTrimmed = stripZeroWidthChars(text).trim();
+
+      // ポップアップ移行案内候補が選択された場合は誤遷移させず安全に案内のみ行う
+      if (cleanTrimmed === OMNIBOX_MIGRATION_HINT_CONTENT) {
+        lastSuggestedMatchMap.clear();
+        const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (currentTab?.id !== undefined && !isRestrictedTabUrl(currentTab.url)) {
+          const shortcut = getShortcutLabel();
+          const toastMsg =
+            t('omniboxMigrationToast', [shortcut]) ||
+            `次回からはショートカット ${shortcut} でポップアップ版をご利用ください！`;
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: currentTab.id },
+              func: renderToastInDocument,
+              args: [toastMsg, 3500, 'nickmark-toast', '2147483647']
+            });
+          } catch {
+            // 注入不可ページでは強制遷移せず静かに終了する
+          }
+        }
+        return;
+      }
 
       // コマンドモード
       if (cleanTrimmed.startsWith(':')) {
@@ -875,27 +624,27 @@ if (typeof window === 'undefined') {
         return;
       }
 
-      await updateScore(targetUrl, matchedTemplateUrl, matchedNickname);
-      switch (disposition) {
-        case 'currentTab':
-          chrome.tabs.update({ url: targetUrl });
-          break;
-        case 'newForegroundTab':
-          chrome.tabs.create({ url: targetUrl, active: true });
-          break;
-        case 'newBackgroundTab':
-          chrome.tabs.create({ url: targetUrl, active: false });
-          break;
-      }
+      await navigateWithDisposition(targetUrl, disposition, undefined, matchedTemplateUrl, matchedNickname);
     }
   );
 
-  // ページ内に注入した確認プロンプトからの一括オープン実行メッセージを受信する
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!message || message.action !== 'EXECUTE_BATCH_OPEN') return;
-    const payload = message.payload;
-    if (payload && payload.folderPath) {
-      openFolderUrls(payload.folderPath, true).then(result => {
+  // ページ内に注入した確認プロンプトおよびポップアップからのランタイムメッセージを受信する
+  chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
+    if (!message) return;
+
+    if (message.action === 'EXECUTE_BATCH_OPEN') {
+      const payload = message.payload;
+      if (payload && payload.folderPath) {
+        openFolderUrls(payload.folderPath, true).then(result => {
+          sendResponse(result);
+        });
+        return true;
+      }
+      return;
+    }
+
+    if (message.action === 'EXECUTE_BOOKMARKLET') {
+      executeBookmarklet(message.payload).then(result => {
         sendResponse(result);
       });
       return true;
