@@ -1,26 +1,7 @@
-import { createApp } from 'vue';
-import PrimeVue from 'primevue/config';
-import Aura from '@primeuix/themes/aura';
-import ToastService from 'primevue/toastservice';
-import Tooltip from 'primevue/tooltip';
+/**
+ * 拡張機能設定画面（preferences.html）のエントリーポイント
+ */
 import Preferences from './Preferences.vue';
+import { mountNickmarkApp } from './shared/appBootstrap';
 
-import 'primeicons/primeicons.css';
-
-const app = createApp(Preferences);
-
-app.use(PrimeVue, {
-    theme: {
-        preset: Aura,
-        options: {
-          cssLayer: {
-            name: 'primevue',
-            order: 'tailwind-base, primevue, tailwind-utilities'
-          }
-        }
-    }
-});
-app.use(ToastService);
-app.directive('tooltip', Tooltip);
-
-app.mount('#app');
+mountNickmarkApp(Preferences);

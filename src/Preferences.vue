@@ -38,10 +38,10 @@
         <template #content>
           <div class="form-grid">
             <div class="field">
-              <Select 
-                v-model="selectedLanguage" 
-                :options="languageOptions" 
-                optionLabel="label" 
+              <Select
+                v-model="selectedLanguage"
+                :options="languageOptions"
+                optionLabel="label"
                 optionValue="value"
                 placeholder="Select Language"
                 @change="saveLanguage"
@@ -78,8 +78,14 @@
       </Card>
     </div>
 
-    <!-- Migration / Conflict Resolution Dialog -->
-    <Dialog v-model:visible="showMigrationDialog" modal :header="t('migrationTitle') || 'Data Migration'" :style="{ width: '750px', maxWidth: '90vw' }" :closable="false">
+    <!-- データ移行・競合解決ダイアログ -->
+    <Dialog
+      v-model:visible="showMigrationDialog"
+      modal
+      :header="t('migrationTitle') || 'Data Migration'"
+      :style="{ width: '750px', maxWidth: '90vw' }"
+      :closable="false"
+    >
       <div class="migration-content">
         <p>{{ migrationMessage }}</p>
 
@@ -103,16 +109,19 @@
         <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="cancelMigration" />
         <Button v-if="migrationType === 'enable'" :label="t('useCloudDataBtn') || 'Use Cloud Data'" icon="pi pi-cloud-download" severity="secondary" @click="useExistingSyncData" />
         <Button v-if="migrationType === 'disable'" :label="t('keepLocalDataBtn') || 'Keep Local Data'" icon="pi pi-folder" severity="secondary" @click="keepExistingLocalData" />
-        <Button :label="migrationType === 'enable' ? (t('overwriteCloudBtn') || 'Overwrite Cloud') : (t('overwriteLocalBtn') || 'Overwrite Local')" 
-                :icon="migrationType === 'enable' ? 'pi pi-cloud-upload' : 'pi pi-download'" 
-                @click="performMigration" autofocus />
+        <Button
+          :label="migrationType === 'enable' ? (t('overwriteCloudBtn') || 'Overwrite Cloud') : (t('overwriteLocalBtn') || 'Overwrite Local')"
+          :icon="migrationType === 'enable' ? 'pi pi-cloud-upload' : 'pi pi-download'"
+          @click="performMigration"
+          autofocus
+        />
       </template>
     </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import Card from 'primevue/card';
 import Select from 'primevue/select';
@@ -123,17 +132,17 @@ import Dialog from 'primevue/dialog';
 import Toast from 'primevue/toast';
 
 import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
+import { BookmarkEntry, DEFAULT_MAX_BATCH_OPEN_TABS } from './shared/types';
 import {
-  getSyncEnabled,
-  setSyncEnabled,
-  getStorageDataWithTimestamp,
-  saveBookmarksData,
-  isOverQuota,
-  BookmarkEntry,
   getMaxBatchOpenTabs,
+  getSaveErrorMessage,
+  getStorageDataWithTimestamp,
+  getSyncEnabled,
+  isOverQuota,
+  saveBookmarksData,
   setMaxBatchOpenTabs,
-  DEFAULT_MAX_BATCH_OPEN_TABS
-} from './background';
+  setSyncEnabled
+} from './shared/storage';
 
 const toast = useToast();
 const selectedLanguage = ref<Locale>('en');
@@ -142,19 +151,23 @@ const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
 const isLoaded = ref(false);
 const renderKey = ref(0);
 
-// Migration State
+// データ移行ダイアログ用の状態
 const showMigrationDialog = ref(false);
 const migrationType = ref<'enable' | 'disable'>('enable');
 const migrationMessage = ref('');
-const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>, lastUpdated: number } | null>(null);
-const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>, lastUpdated: number } | null>(null);
+const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number } | null>(null);
+const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number } | null>(null);
 
 const languageOptions = ref([
   { label: 'English', value: 'en' },
   { label: '日本語', value: 'ja' }
 ]);
 
-const loadSettings = async () => {
+/**
+ * 設定画面の初期値をストレージから読み込みます。
+ * @returns 読み込み完了を示す Promise
+ */
+const loadSettings = async (): Promise<void> => {
   await initI18n();
   selectedLanguage.value = getCurrentLocale();
   syncEnabled.value = await getSyncEnabled();
@@ -163,9 +176,10 @@ const loadSettings = async () => {
 };
 
 /**
- * 安全上限設定を保存します。
+ * 一括オープン時の安全上限タブ数設定を保存します。
+ * @returns 保存完了を示す Promise
  */
-const saveMaxBatchOpenTabs = async () => {
+const saveMaxBatchOpenTabs = async (): Promise<void> => {
   if (typeof maxBatchOpenTabs.value === 'number') {
     await setMaxBatchOpenTabs(maxBatchOpenTabs.value);
     toast.add({
@@ -177,139 +191,231 @@ const saveMaxBatchOpenTabs = async () => {
   }
 };
 
-const saveLanguage = async () => {
+/**
+ * 言語設定を保存し、画面内の表示文言を即座に再描画します。
+ * @returns 保存完了を示す Promise
+ */
+const saveLanguage = async (): Promise<void> => {
   await setLocale(selectedLanguage.value);
-  renderKey.value++; 
+  renderKey.value++;
 
-  toast.add({ 
-    severity: 'success', 
-    summary: t('saveSuccess'), 
-    detail: t('saveSuccess'), 
-    life: 3000 
+  toast.add({
+    severity: 'success',
+    summary: t('saveSuccess'),
+    detail: t('saveSuccess'),
+    life: 3000
   });
 };
 
-const handleToggleRequest = () => {
+/**
+ * 同期設定の更新および必要に応じてデータ保存を行い、失敗時は元の設定へロールバックします。
+ * @param targetEnabled - 切り替え後の同期設定（true: 有効、false: 無効）
+ * @param bookmarksToSave - 切り替え先にコピー保存するブックマークデータ（省略時は設定変更のみ）
+ * @param successNotice - 成功時のトースト通知設定
+ * @param errorSummary - 失敗時のトースト見出し
+ * @param fallbackError - 不明エラー時のフォールバック文言
+ * @returns 成功した場合は true、失敗した場合は false
+ */
+const applySyncTransition = async (
+  targetEnabled: boolean,
+  bookmarksToSave: Record<string, BookmarkEntry[]> | null,
+  successNotice: { severity: 'success' | 'info'; summary: string; detail: string },
+  errorSummary: string,
+  fallbackError: string
+): Promise<boolean> => {
+  try {
+    await setSyncEnabled(targetEnabled);
+    if (bookmarksToSave) {
+      await saveBookmarksData(bookmarksToSave);
+    }
+    syncEnabled.value = targetEnabled;
+    toast.add({ ...successNotice, life: 3000 });
+    return true;
+  } catch (err: unknown) {
+    await setSyncEnabled(!targetEnabled);
+    toast.add({
+      severity: 'error',
+      summary: errorSummary,
+      detail: getSaveErrorMessage(err, fallbackError),
+      life: 5000
+    });
+    return false;
+  }
+};
+
+/**
+ * 同期トグルのクリックを捕捉し、切り替え確認フローを開始します。
+ * @returns なし
+ */
+const handleToggleRequest = (): void => {
   if (showMigrationDialog.value) return;
   handleSyncToggle(!syncEnabled.value);
 };
 
-const handleSyncToggle = async (newValue: boolean) => {
-  const isEnabling = newValue;
+/**
+ * 同期の ON/OFF 切り替え時の容量チェックおよび競合データの検出を行います。
+ * 移行先に既存データが存在する場合はデータ移行ダイアログを表示します。
+ * @param newValue - 切り替え先の同期状態（true: ON、false: OFF）
+ * @returns 処理完了を示す Promise
+ */
+const handleSyncToggle = async (newValue: boolean): Promise<void> => {
+  const local = await getStorageDataWithTimestamp('local');
 
-  if (isEnabling) {
-    // ON にする場合
-    const local = await getStorageDataWithTimestamp('local');
+  if (newValue) {
     if (isOverQuota(local.bookmarks)) {
-      toast.add({ 
-        severity: 'error', 
-        summary: 'Error', 
-        detail: t('errorSyncQuotaExceeded') || 'Local data exceeds 100KB. Please reduce data before enabling sync.', 
-        life: 5000 
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail:
+          t('errorSyncQuotaExceeded') ||
+          'Local data exceeds 100KB. Please reduce data before enabling sync.',
+        life: 5000
       });
       return;
     }
 
     const sync = await getStorageDataWithTimestamp('sync');
-    const hasSyncData = Object.keys(sync.bookmarks).length > 0;
-
-    if (hasSyncData) {
+    if (Object.keys(sync.bookmarks).length > 0) {
       migrationType.value = 'enable';
-      migrationMessage.value = t('confirmEnableSyncWithData') || 'Existing cloud data found. Which data do you want to use?';
+      migrationMessage.value =
+        t('confirmEnableSyncWithData') ||
+        'Existing cloud data found. Which data do you want to use?';
       localInfo.value = local;
       syncInfo.value = sync;
       showMigrationDialog.value = true;
-    } else {
-      // 同期データがない場合は自動コピーして有効化
-      try {
-        await setSyncEnabled(true);
-        await saveBookmarksData(local.bookmarks);
-        syncEnabled.value = true;
-        toast.add({ severity: 'success', summary: 'Sync Enabled', detail: t('syncEnabledMessage') || 'Sync has been enabled.', life: 3000 });
-      } catch (e: any) {
-        await setSyncEnabled(false);
-        const detail = e.message === 'QUOTA_EXCEEDED' ? t('errorSyncQuotaExceeded') : e.message;
-        toast.add({ severity: 'error', summary: 'Error', detail: detail || 'Failed to enable sync.', life: 5000 });
-      }
+      return;
     }
-  } else {
-    // OFF にする場合
-    const local = await getStorageDataWithTimestamp('local');
-    const sync = await getStorageDataWithTimestamp('sync');
-    const hasLocalData = Object.keys(local.bookmarks).length > 0;
 
-    if (hasLocalData) {
-      migrationType.value = 'disable';
-      migrationMessage.value = t('confirmDisableSyncWithData') || 'Local data already exists. Which data do you want to keep?';
-      localInfo.value = local;
-      syncInfo.value = sync;
-      showMigrationDialog.value = true;
-    } else {
-      // ローカルデータがない場合は同期データをコピーして無効化
-      try {
-        await setSyncEnabled(false);
-        await saveBookmarksData(sync.bookmarks);
-        syncEnabled.value = false;
-        toast.add({ severity: 'info', summary: 'Sync Disabled', detail: t('syncDisabledMessage') || 'Sync has been disabled. Data copied to local.', life: 3000 });
-      } catch (e: any) {
-        await setSyncEnabled(true);
-        toast.add({ severity: 'error', summary: 'Error', detail: 'Failed to disable sync safely.', life: 5000 });
-      }
-    }
+    await applySyncTransition(
+      true,
+      local.bookmarks,
+      {
+        severity: 'success',
+        summary: 'Sync Enabled',
+        detail: t('syncEnabledMessage') || 'Sync has been enabled.'
+      },
+      'Error',
+      'Failed to enable sync.'
+    );
+    return;
   }
+
+  const sync = await getStorageDataWithTimestamp('sync');
+  if (Object.keys(local.bookmarks).length > 0) {
+    migrationType.value = 'disable';
+    migrationMessage.value =
+      t('confirmDisableSyncWithData') ||
+      'Local data already exists. Which data do you want to keep?';
+    localInfo.value = local;
+    syncInfo.value = sync;
+    showMigrationDialog.value = true;
+    return;
+  }
+
+  await applySyncTransition(
+    false,
+    sync.bookmarks,
+    {
+      severity: 'info',
+      summary: 'Sync Disabled',
+      detail: t('syncDisabledMessage') || 'Sync has been disabled. Data copied to local.'
+    },
+    'Error',
+    'Failed to disable sync safely.'
+  );
 };
 
-const performMigration = async () => {
-  try {
-    if (migrationType.value === 'enable') {
-      // Local -> Sync
-      await setSyncEnabled(true);
-      if (localInfo.value) await saveBookmarksData(localInfo.value.bookmarks);
-      syncEnabled.value = true;
-    } else {
-      // Sync -> Local
-      await setSyncEnabled(false);
-      if (syncInfo.value) await saveBookmarksData(syncInfo.value.bookmarks);
-      syncEnabled.value = false;
-    }
+/**
+ * 移行ダイアログで「上書き移行」が選択された際、選択元データで移行先を上書きします。
+ * @returns 移行処理完了を示す Promise
+ */
+const performMigration = async (): Promise<void> => {
+  const isEnabling = migrationType.value === 'enable';
+  const sourceBookmarks = isEnabling
+    ? localInfo.value?.bookmarks ?? null
+    : syncInfo.value?.bookmarks ?? null;
+
+  const ok = await applySyncTransition(
+    isEnabling,
+    sourceBookmarks,
+    {
+      severity: 'success',
+      summary: 'Success',
+      detail: t('migrationSuccess') || 'Data migration successful.'
+    },
+    'Migration Failed',
+    'Error occurred during migration.'
+  );
+
+  if (ok) {
     showMigrationDialog.value = false;
-    toast.add({ severity: 'success', summary: 'Success', detail: t('migrationSuccess') || 'Data migration successful.', life: 3000 });
-  } catch (e: any) {
-    // 失敗した場合は設定を元に戻す試みをする
-    await setSyncEnabled(migrationType.value !== 'enable');
-    const detail = e.message === 'QUOTA_EXCEEDED' ? t('errorSyncQuotaExceeded') : e.message;
-    toast.add({ severity: 'error', summary: 'Migration Failed', detail: detail || 'Error occurred during migration.', life: 5000 });
   }
 };
 
-const useExistingSyncData = async () => {
-  // Sync データをそのまま使う（有効化するだけ）
-  await setSyncEnabled(true);
-  syncEnabled.value = true;
+/**
+ * 既存のクラウドデータをそのまま利用して同期を有効化します。
+ * @returns 処理完了を示す Promise
+ */
+const useExistingSyncData = async (): Promise<void> => {
+  await applySyncTransition(
+    true,
+    null,
+    {
+      severity: 'success',
+      summary: 'Sync Enabled',
+      detail: t('syncEnabledMessage') || 'Sync enabled using cloud data.'
+    },
+    'Error',
+    'Failed to enable sync.'
+  );
   showMigrationDialog.value = false;
-  toast.add({ severity: 'success', summary: 'Sync Enabled', detail: t('syncEnabledMessage') || 'Sync enabled using cloud data.', life: 3000 });
 };
 
-const keepExistingLocalData = async () => {
-  // ローカルデータをそのまま使う（無効化するだけ）
-  await setSyncEnabled(false);
-  syncEnabled.value = false;
+/**
+ * 既存のローカルデータを保持したまま同期を無効化します。
+ * @returns 処理完了を示す Promise
+ */
+const keepExistingLocalData = async (): Promise<void> => {
+  await applySyncTransition(
+    false,
+    null,
+    {
+      severity: 'info',
+      summary: 'Sync Disabled',
+      detail: t('syncDisabledMessageOnly') || 'Sync disabled. Keeping local data.'
+    },
+    'Error',
+    'Failed to disable sync.'
+  );
   showMigrationDialog.value = false;
-  toast.add({ severity: 'info', summary: 'Sync Disabled', detail: t('syncDisabledMessageOnly') || 'Sync disabled. Keeping local data.', life: 3000 });
 };
 
-const cancelMigration = () => {
+/**
+ * データ移行ダイアログをキャンセルして閉じます。
+ * @returns なし
+ */
+const cancelMigration = (): void => {
   showMigrationDialog.value = false;
   localInfo.value = null;
   syncInfo.value = null;
 };
 
-const formatTime = (ts: number) => {
+/**
+ * タイムスタンプをローカライズされた日時文字列へ変換します。
+ * @param ts - Unix タイムスタンプ（ミリ秒）
+ * @returns フォーマットされた日時文字列（未設定時は 'N/A'）
+ */
+const formatTime = (ts: number): string => {
   if (!ts) return 'N/A';
   return new Date(ts).toLocaleString();
 };
 
-const getBookmarkCount = (bookmarks: Record<string, any>) => {
+/**
+ * ブックマーク辞書に含まれる総エントリ件数を集計します。
+ * @param bookmarks - 集計対象のブックマーク辞書
+ * @returns エントリ総数
+ */
+const getBookmarkCount = (bookmarks: Record<string, BookmarkEntry[]>): number => {
   let count = 0;
   for (const entries of Object.values(bookmarks)) {
     if (Array.isArray(entries)) count += entries.length;
@@ -319,8 +425,9 @@ const getBookmarkCount = (bookmarks: Record<string, any>) => {
 
 /**
  * ブックマーク一覧画面へ戻ります。
+ * @returns なし
  */
-const goBack = () => {
+const goBack = (): void => {
   window.location.href = 'list.html';
 };
 

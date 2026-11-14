@@ -34,7 +34,6 @@
   },
   "dependencies": {
     "@primeuix/themes": "^2.0.3",
-    "@primevue/themes": "^4.5.4",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.5",
     "vue": "^3.5.34",

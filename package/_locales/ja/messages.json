@@ -5,9 +5,6 @@
   "extensionDescription": {
     "message": "ニックネームを使ってアドレスバーからブックマークへ瞬時にアクセス。マウス移動を最小限にしたいパワーユーザー向けの拡張機能。"
   },
-  "bookmarkAddedTitle": {
-    "message": "登録完了"
-  },
   "bookmarkAddedMessage": {
     "message": "ニックネーム「$1」として登録しました！",
     "placeholders": {
@@ -27,9 +24,6 @@
       }
     }
   },
-  "bookmarkRemovedTitle": {
-    "message": "削除完了"
-  },
   "bookmarkRemovedMessage": {
     "message": "ニックネーム「$1」を削除しました。",
     "placeholders": {
@@ -43,17 +37,6 @@
     "placeholders": {
       "1": {
         "content": "$1"
-      }
-    }
-  },
-  "openedTabsMessage": {
-    "message": "ニックネーム「$2」のURLを $1 件開きました。",
-    "placeholders": {
-      "1": {
-        "content": "$1"
-      },
-      "2": {
-        "content": "$2"
       }
     }
   },
@@ -84,12 +67,6 @@
   },
   "languageSetting": {
     "message": "使用言語"
-  },
-  "languageJapanese": {
-    "message": "日本語"
-  },
-  "languageEnglish": {
-    "message": "英語"
   },
   "saveSuccess": {
     "message": "設定を保存しました。"
@@ -270,13 +247,10 @@
       }
     }
   },
-  "commandRegisterBookmark": {
-    "message": "ブックマーク登録ダイアログを開く"
-  },
   "popupTitle": {
     "message": "ブックマーク登録"
   },
-  "saveBtn": {
+  "registerBtn": {
     "message": "登録"
   },
   "closeBtn": {

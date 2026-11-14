@@ -111,7 +111,7 @@
         />
         <Button
           type="submit"
-          :label="t('saveBtn') || '登録'"
+          :label="t('registerBtn') || '登録'"
           icon="pi pi-check"
           size="small"
           :loading="isSubmitting"
@@ -127,16 +127,16 @@ import InputText from 'primevue/inputtext';
 import AutoComplete, { AutoCompleteCompleteEvent } from 'primevue/autocomplete';
 import Button from 'primevue/button';
 import { initI18n, t } from './i18n';
+import { BookmarkEntry } from './shared/types';
+import { isDynamicUrl, isSameUrl, normalizeNicknamePath } from './shared/url';
+import { showToast } from './shared/toast';
 import {
-  BookmarkEntry,
+  createBookmarkEntry,
+  getSaveErrorMessage,
   loadBookmarksData,
-  saveBookmarksData,
-  showToast,
-  isDynamicUrl,
-  isSameUrl,
-  extractFolders,
-  normalizeNicknamePath
-} from './background';
+  saveBookmarksData
+} from './shared/storage';
+import { filterNicknameSuggestions } from './shared/search';
 
 /**
  * フォーム入力値の状態インターフェース
@@ -162,20 +162,21 @@ const errorMessage = ref<string | null>(null);
 const activeTabId = ref<number | null>(null);
 const nicknameInputRef = ref<any>(null);
 
-// ニックネーム補完候補
-const allNicknames = ref<string[]>([]);
-const allFolderPrefixes = ref<string[]>([]);
+// ニックネーム補完用データ
+const bookmarksSnapshot = ref<Record<string, BookmarkEntry[]>>({});
 const filteredNicknames = ref<string[]>([]);
 
 /**
  * URL に動的プレースホルダー（%s）が含まれているかを判定します。
+ * @returns %s を含む通常 URL の場合は true
  */
-const hasDynamicPlaceholder = computed(() => {
+const hasDynamicPlaceholder = computed((): boolean => {
   return isDynamicUrl(form.value.url.trim());
 });
 
 /**
  * ポップアップを閉じます。
+ * @returns なし
  */
 const closePopup = (): void => {
   window.close();
@@ -183,6 +184,7 @@ const closePopup = (): void => {
 
 /**
  * ブックマーク一覧管理画面を開きます。
+ * @returns なし
  */
 const openOptions = (): void => {
   if (chrome.runtime.openOptionsPage) {
@@ -195,6 +197,7 @@ const openOptions = (): void => {
 
 /**
  * 設定画面を開きます。
+ * @returns なし
  */
 const openPreferences = (): void => {
   chrome.tabs.create({ url: chrome.runtime.getURL('preferences.html') });
@@ -202,71 +205,27 @@ const openPreferences = (): void => {
 };
 
 /**
- * 入力されたニックネームから前方一致・部分一致で補完候補を検索します。
- * 既存フォルダ名プレフィックス（folder/）も先頭にサジェストします。
- * @param event AutoComplete の入力完了イベント
+ * 入力されたニックネームからフォルダプレフィックスおよび既存ニックネームの補完候補を検索します。
+ * @param event - AutoComplete の入力完了イベント
+ * @returns なし
  */
 const searchNicknames = (event: AutoCompleteCompleteEvent): void => {
-  const rawQuery = (event.query || '').trim();
-  const hasTrailingSlash = rawQuery.endsWith('/');
-  const cleanSegments = rawQuery
-    .split('/')
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
-  const query = cleanSegments.length > 0
-    ? (cleanSegments.join('/') + (hasTrailingSlash ? '/' : '')).toLowerCase()
-    : '';
-
-  if (!query) {
-    filteredNicknames.value = [...allFolderPrefixes.value, ...allNicknames.value];
-    return;
-  }
-
-  // フォルダプレフィックスの一致（最優先）
-  const folderMatches: string[] = [];
-  for (const folder of allFolderPrefixes.value) {
-    if (folder.toLowerCase().startsWith(query)) {
-      folderMatches.push(folder);
-    }
-  }
-
-  // 完全一致または前方一致するニックネームを優先し、部分一致も候補に含める
-  const prefixMatches: string[] = [];
-  const partialMatches: string[] = [];
-
-  for (const name of allNicknames.value) {
-    const lowerName = name.toLowerCase();
-    if (lowerName.startsWith(query)) {
-      prefixMatches.push(name);
-    } else if (lowerName.includes(query)) {
-      partialMatches.push(name);
-    }
-  }
-
-  filteredNicknames.value = [...folderMatches, ...prefixMatches, ...partialMatches];
+  filteredNicknames.value = filterNicknameSuggestions(event.query || '', bookmarksSnapshot.value);
 };
 
 /**
  * 初期化処理: 多言語設定、アクティブタブ情報、既存ニックネームおよびフォルダ一覧を読み込みます。
+ * @returns 初期化完了を示す Promise
  */
-onMounted(async () => {
+onMounted(async (): Promise<void> => {
   await initI18n();
 
-  // 既存のニックネーム一覧およびフォルダプレフィックスを取得
   try {
-    const bookmarks = await loadBookmarksData();
-    allNicknames.value = Array.from(
-      new Set(Object.keys(bookmarks).map(n => normalizeNicknamePath(n)).filter(Boolean))
-    ).sort((a, b) => a.localeCompare(b));
-    const folders = extractFolders(bookmarks);
-    allFolderPrefixes.value = Array.from(folders.values())
-      .map(f => `${f.path}/`)
-      .sort((a, b) => a.localeCompare(b));
+    bookmarksSnapshot.value = await loadBookmarksData();
   } catch (error) {
     console.warn('ブックマークデータの読み込みに失敗しました:', error);
   }
 
-  // アクティブタブ情報を取得して初期入力
   try {
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs && tabs.length > 0) {
@@ -279,7 +238,7 @@ onMounted(async () => {
     console.warn('アクティブタブ情報の取得に失敗しました:', error);
   }
 
-  // ニックネーム入力欄に自動フォーカス
+  // ニックネーム入力欄に自動フォーカスする
   await nextTick();
   if (nicknameInputRef.value) {
     const inputElement = nicknameInputRef.value.$el?.querySelector('input') || nicknameInputRef.value;
@@ -291,6 +250,7 @@ onMounted(async () => {
 
 /**
  * ブックマークを保存し、トースト通知を表示してダイアログを閉じます。
+ * @returns 処理完了を示す Promise
  */
 const saveBookmark = async (): Promise<void> => {
   errorMessage.value = null;
@@ -300,13 +260,8 @@ const saveBookmark = async (): Promise<void> => {
   const trimmedTitle = form.value.title.trim();
   const trimmedDefault = hasDynamicPlaceholder.value ? form.value.defaultValue.trim() : '';
 
-  // バリデーション: ニックネームとURLは必須
-  if (!trimmedNickname) {
-    errorMessage.value = t('errorNicknameUrlRequired') || 'ニックネームを入力してください。';
-    return;
-  }
-  if (!trimmedUrl) {
-    errorMessage.value = t('errorNicknameUrlRequired') || 'URLを入力してください。';
+  if (!trimmedNickname || !trimmedUrl) {
+    errorMessage.value = t('errorNicknameUrlRequired') || 'ニックネームとURLを入力してください。';
     return;
   }
 
@@ -318,27 +273,19 @@ const saveBookmark = async (): Promise<void> => {
       bookmarks[trimmedNickname] = [];
     }
 
-    const existingEntry = bookmarks[trimmedNickname].find((b: BookmarkEntry) => isSameUrl(b.url, trimmedUrl));
+    const existingEntry = bookmarks[trimmedNickname].find((b: BookmarkEntry) =>
+      isSameUrl(b.url, trimmedUrl)
+    );
     let toastMessage = '';
 
-    const now = Date.now();
     if (!existingEntry) {
-      // 新規エントリの追加（既存ニックネームへの追加登録も含む）
-      const newEntry: BookmarkEntry = {
-        url: trimmedUrl,
-        title: trimmedTitle,
-        score: 1.0,
-        last_used_at: now,
-        created_at: now
-      };
-      if (trimmedDefault) {
-        newEntry.default_value = trimmedDefault;
-      }
-      bookmarks[trimmedNickname].push(newEntry);
-      toastMessage = t('bookmarkAddedMessage', [trimmedNickname]) || `'${trimmedNickname}' として登録しました！`;
+      bookmarks[trimmedNickname].push(
+        createBookmarkEntry(trimmedUrl, trimmedTitle, trimmedDefault)
+      );
+      toastMessage =
+        t('bookmarkAddedMessage', [trimmedNickname]) || `'${trimmedNickname}' として登録しました！`;
     } else {
-      // 同一ニックネームに同一URLが既に登録されている場合
-      const isTitleChanged = trimmedTitle && trimmedTitle !== existingEntry.title;
+      const isTitleChanged = !!trimmedTitle && trimmedTitle !== existingEntry.title;
       const isDefaultChanged = trimmedDefault !== (existingEntry.default_value || '');
 
       if (isTitleChanged || isDefaultChanged) {
@@ -350,15 +297,18 @@ const saveBookmark = async (): Promise<void> => {
         } else if (existingEntry.default_value && !hasDynamicPlaceholder.value) {
           delete existingEntry.default_value;
         }
-        toastMessage = t('bookmarkUpdatedMessage', [trimmedNickname]) || `'${trimmedNickname}' のタイトルを更新しました！`;
+        toastMessage =
+          t('bookmarkUpdatedMessage', [trimmedNickname]) ||
+          `'${trimmedNickname}' のタイトルを更新しました！`;
       } else {
-        toastMessage = t('bookmarkAlreadyExistsMessage', [trimmedNickname]) || `'${trimmedNickname}' は既に登録されています。`;
+        toastMessage =
+          t('bookmarkAlreadyExistsMessage', [trimmedNickname]) ||
+          `'${trimmedNickname}' は既に登録されています。`;
       }
     }
 
     await saveBookmarksData(bookmarks);
 
-    // アクティブタブが存在する場合はトースト通知を表示
     if (activeTabId.value !== null) {
       try {
         await showToast(activeTabId.value, toastMessage);
@@ -367,15 +317,10 @@ const saveBookmark = async (): Promise<void> => {
       }
     }
 
-    // ダイアログを自動クローズ
     closePopup();
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('ブックマーク登録中にエラーが発生しました:', err);
-    if (err.message === 'QUOTA_EXCEEDED') {
-      errorMessage.value = t('errorSyncQuotaExceeded') || 'データサイズ制限（100KB）を超えたため保存できませんでした。';
-    } else {
-      errorMessage.value = err.message || '登録に失敗しました。';
-    }
+    errorMessage.value = getSaveErrorMessage(err, '登録に失敗しました。');
   } finally {
     isSubmitting.value = false;
   }

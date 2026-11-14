@@ -20,12 +20,21 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
 ## 3. ディレクトリ構成
 
 - `src/`: 開発用のソースコードディレクトリ。
-  - `background.ts`: Service Worker として動くバックグラウンドスクリプト。
-  - `list.ts`: ブックマーク一覧画面のエントリーポイント。
-  - `List.vue`: ブックマーク一覧画面のメインコンポーネント。
+  - `background.ts`: Service Worker として動くバックグラウンドスクリプト（オムニボックス制御、コマンド実行、共有モジュールの再エクスポート）。
+  - `list.ts` / `List.vue`: ブックマーク一覧画面のエントリーポイントおよびメインコンポーネント。
+  - `preferences.ts` / `Preferences.vue`: 設定画面のエントリーポイントおよびメインコンポーネント。
+  - `popup.ts` / `Popup.vue`: クイック登録ポップアップのエントリーポイントおよびメインコンポーネント。
+  - `i18n.ts`: 多言語対応（`en` / `ja`）モジュール。
+  - `shared/`: モジュール間で共有するドメイン別内部モジュール群。
+    - `types.ts`: データ構造（`BookmarkEntry`, `NickmarkData`, `FolderInfo` 等）および定数定義。
+    - `url.ts`: パス正規化、URL 同一性判定、動的 URL 展開、ブックマークレット解析ユーティリティ。
+    - `toast.ts`: アクティブタブおよび管理画面向けのトースト通知生成・フォールバック遷移処理。
+    - `storage.ts`: Hybrid Storage（`local` / `sync` チャンク分割）、キャッシュ、スコア計算、フォルダ管理ロジック。
+    - `search.ts`: ゼロ幅文字マーカー制御、AutoComplete 補完、オムニボックス通常検索・コマンド候補解決ロジック。
+    - `appBootstrap.ts`: Vue 3 + PrimeVue アプリケーションの共通初期化ヘルパー。
 - `package/`: 拡張機能としてブラウザに読み込ませる（配布する）ディレクトリ。
   - `manifest.json`: 拡張機能の定義ファイル。
-  - `list.html`: ブックマーク一覧画面のベース HTML。
+  - `list.html` / `preferences.html` / `popup.html`: 各画面のベース HTML。
   - `js/`: Webpack によってビルドされた JavaScript ファイル群が出力される。
   - `icons/`: `generate_icons.js` によって生成されたアイコン画像。
   - `_locales/`: `en` と `ja` の国際化 (i18n) 用メッセージファイル。
