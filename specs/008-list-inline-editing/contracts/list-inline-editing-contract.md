@@ -10,9 +10,9 @@
 | -- | ---------- | ------ | ------------------------ | ------ |
 | 1. ニックネーム | `nickname` | `180px`（固定） | 通常表示はテキスト折り返し（`overflow-wrap: anywhere`）、セルクリックでインライン編集 | `sortable` |
 | 2. タイトル | `title` | `220px`（固定） | 通常表示はテキスト折り返し（`overflow-wrap: anywhere`）、空文字時もクリック可能な領域（最小高さ確保）を提供、セルクリックでインライン編集 | `sortable` |
-| 3. URL | `url` | 残余幅すべて（最小 `244px` 以上） | 左に Favicon（通常 URL）または `pi-code`（ブックマークレット）を固定サイズ（16px）で表示。URL テキストは **1 行固定＋末尾 `...` 省略**（`white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`）、ホバー時のツールチップ（`:title`）で全文表示。セルクリックでインライン編集（`<a>` タグによるクリック遷移は廃止） | `sortable` |
-| 4. ピン留め | `is_pinned` | `72px`（固定） | 中央揃えで既存のピン留めトグルボタン | なし |
-| 5. 操作 | - | `104px`（固定） | 左：通常 URL（`!isBookmarkletUrl(url)`）のみ「新しいタブで開く」ボタン（`pi-external-link`）。右：削除ボタン（`pi-trash`）。**従来の編集ボタン（`pi-pencil`）および編集モーダルは廃止** | なし |
+| 3. URL | `url` | 残余幅すべて（最小 `260px` 以上） | 左に Favicon（通常 URL）または `pi-code`（ブックマークレット）を固定サイズ（16px）で表示。URL テキストは **1 行固定＋末尾 `...` 省略**（`white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`）、ホバー時のツールチップ（`:title`）で全文表示。セルクリックでインライン編集（`<a>` タグによるクリック遷移は廃止） | `sortable` |
+| 4. ピン留め | `is_pinned` | `80px`（固定） | 中央揃えで既存のピン留めトグルボタン | なし |
+| 5. 操作 | - | `80px`（固定） | 中央揃えで削除ボタン（`pi-trash`）のみ配置。**従来の編集ボタン（`pi-pencil`）・編集モーダルおよび「新しいタブで開く」ボタンは設置しない** | なし |
 
 ---
 
@@ -39,22 +39,14 @@
 
 ---
 
-## 3. 「新しいタブで開く」アクション契約
-
-- 操作列の `pi-external-link` ボタンは `!isBookmarkletUrl(slotProps.data.url)` の行にのみレンダリングする。
-- クリック時は `window.open(resolveNavigableUrl(slotProps.data), '_blank', 'noopener,noreferrer')` を呼び出し、解決済み URL を新しいタブで開く（ブックマーク管理画面自身のスコア更新は行わない既存仕様と同一）。
-
----
-
-## 4. 多言語リソース契約（`package/_locales/{ja,en}/messages.json`）
+## 3. 多言語リソース契約（`package/_locales/{ja,en}/messages.json`）
 
 ### 追加キー
 
 | キー | 日本語 (`ja`) | 英語 (`en`) | 用途 |
 | ---- | ------------- | ----------- | ---- |
-| `openInNewTabTooltip` | `新しいタブで開く` | `Open in new tab` | 操作列の外部リンクボタンのツールチップ・`aria-label` |
-| `deleteBookmarkTooltip` | `削除` | `Delete` | 操作列の削除ボタンのツールチップ・`aria-label`（任意・統一性向上） |
+| `deleteBookmarkTooltip` | `削除` | `Delete` | 操作列の削除ボタンのツールチップ・`aria-label` |
 
 ### 廃止・不使用キーの扱い
 
-- 編集ダイアログ見出し用だった `editBookmarkTitle` は `List.vue` から参照されなくなる。他画面（`Popup.vue`, `Preferences.vue`, `background.ts`, `shared/`）での参照がないことを確認済みのため、ロケールファイル内の不要キー整理対象（または互換維持）として実装時に確認のうえ整理する。
+- 編集ダイアログ見出し用だった `editBookmarkTitle` は `List.vue` から参照されなくなるため、日英双方のロケールファイルから整理済み。

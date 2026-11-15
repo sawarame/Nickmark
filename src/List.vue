@@ -126,24 +126,113 @@
           </div>
         </div>
 
-        <DataTable :value="filteredBookmarks" stripedRows tableStyle="min-width: 50rem" :paginator="true" :rows="10">
-          <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable></Column>
-          <Column field="title" :header="t('titleLabel') || 'Title'" sortable></Column>
-          <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
+        <DataTable
+          :value="filteredBookmarks"
+          stripedRows
+          :paginator="true"
+          :rows="10"
+          :pt="{ table: { style: 'table-layout: fixed; width: 100%; min-width: 820px;' } }"
+        >
+          <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable style="width: 180px">
             <template #body="slotProps">
-              <div v-if="isBookmarkletUrl(slotProps.data.url)" class="flex align-items-center gap-2">
-                <i class="pi pi-code bookmarklet-icon" aria-hidden="true"></i>
-                <span class="url-text bookmarklet-text" :title="slotProps.data.url">{{ slotProps.data.url }}</span>
+              <div
+                v-if="isEditingCell(slotProps.data, 'nickname') && inlineEdit"
+                :ref="setInlineEditWrapperRef"
+                class="inline-edit-wrapper"
+                @focusout="handleInlineFocusOut"
+              >
+                <Textarea
+                  v-model="inlineEdit.draftValue"
+                  autoResize
+                  rows="1"
+                  class="inline-textarea"
+                  :aria-label="t('nicknameLabel') || 'Nickname'"
+                  @keydown="handleInlineKeydown"
+                />
               </div>
-              <div v-else class="flex align-items-center gap-2">
-                <img :src="getFaviconUrl(resolveNavigableUrl(slotProps.data))" class="favicon-img" alt="" />
-                <a :href="resolveNavigableUrl(slotProps.data)" target="_blank" rel="noopener noreferrer" class="url-link">
-                  <span class="url-text">{{ slotProps.data.url }}</span>
-                </a>
+              <div
+                v-else
+                class="inline-editable-cell cell-wrap-text"
+                @click="startInlineEdit(slotProps.data, 'nickname')"
+              >
+                <span>{{ slotProps.data.nickname }}</span>
               </div>
             </template>
           </Column>
-          <Column :header="t('isPinnedLabel') || 'Pinned'" class="text-center" style="width: 4rem">
+          <Column field="title" :header="t('titleLabel') || 'Title'" sortable style="width: 220px">
+            <template #body="slotProps">
+              <div
+                v-if="isEditingCell(slotProps.data, 'title') && inlineEdit"
+                :ref="setInlineEditWrapperRef"
+                class="inline-edit-wrapper"
+                @focusout="handleInlineFocusOut"
+              >
+                <Textarea
+                  v-model="inlineEdit.draftValue"
+                  autoResize
+                  rows="1"
+                  class="inline-textarea"
+                  :aria-label="t('titleLabel') || 'Title'"
+                  @keydown="handleInlineKeydown"
+                />
+              </div>
+              <div
+                v-else
+                class="inline-editable-cell cell-wrap-text"
+                @click="startInlineEdit(slotProps.data, 'title')"
+              >
+                <span>{{ slotProps.data.title }}</span>
+              </div>
+            </template>
+          </Column>
+          <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
+            <template #body="slotProps">
+              <div
+                v-if="isEditingCell(slotProps.data, 'url') && inlineEdit"
+                :ref="setInlineEditWrapperRef"
+                class="inline-edit-wrapper"
+                @focusout="handleInlineFocusOut"
+              >
+                <Textarea
+                  v-model="inlineEdit.draftValue"
+                  autoResize
+                  rows="2"
+                  class="inline-textarea"
+                  :class="{ 'bookmarklet-textarea': isBookmarkletUrl(inlineEdit.draftValue) }"
+                  :aria-label="t('urlLabel') || 'URL'"
+                  @keydown="handleInlineKeydown"
+                />
+                <div v-if="isDynamicUrl(inlineEdit.draftValue)" class="inline-default-value-field">
+                  <label class="inline-default-value-label">
+                    {{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}
+                  </label>
+                  <InputText
+                    v-model="inlineEdit.draftDefaultValue"
+                    :placeholder="t('defaultValuePlaceholder') || 'Default value for %s (navigates to site\'s top page if left blank)'"
+                    class="w-full"
+                    size="small"
+                    @keydown="handleInlineKeydown"
+                  />
+                </div>
+              </div>
+              <div
+                v-else
+                class="inline-editable-cell url-cell-display"
+                :title="slotProps.data.url"
+                @click="startInlineEdit(slotProps.data, 'url')"
+              >
+                <i v-if="isBookmarkletUrl(slotProps.data.url)" class="pi pi-code bookmarklet-icon" aria-hidden="true"></i>
+                <img v-else :src="getFaviconUrl(resolveNavigableUrl(slotProps.data))" class="favicon-img" alt="" />
+                <span
+                  class="url-text"
+                  :class="{ 'bookmarklet-text': isBookmarkletUrl(slotProps.data.url) }"
+                >
+                  {{ slotProps.data.url }}
+                </span>
+              </div>
+            </template>
+          </Column>
+          <Column :header="t('isPinnedLabel') || 'Pinned'" class="text-center" style="width: 80px">
             <template #body="slotProps">
               <Button
                 icon="pi pi-thumbtack"
@@ -155,10 +244,17 @@
               />
             </template>
           </Column>
-          <Column :header="t('actionsLabel') || 'Actions'">
+          <Column :header="t('actionsLabel') || 'Actions'" class="text-center" style="width: 80px">
             <template #body="slotProps">
-              <Button icon="pi pi-pencil" severity="secondary" text rounded aria-label="Edit" @click="openEditDialog(slotProps.data)" />
-              <Button icon="pi pi-trash" severity="danger" text rounded aria-label="Delete" @click="deleteBookmark(slotProps.data.nickname, slotProps.data.url)" />
+              <Button
+                icon="pi pi-trash"
+                severity="danger"
+                text
+                rounded
+                :aria-label="t('deleteBookmarkTooltip') || 'Delete'"
+                v-tooltip="t('deleteBookmarkTooltip') || 'Delete'"
+                @click="deleteBookmark(slotProps.data.nickname, slotProps.data.url)"
+              />
             </template>
           </Column>
         </DataTable>
@@ -190,48 +286,6 @@
       </template>
     </Dialog>
 
-    <!-- ブックマーク編集ダイアログ -->
-    <Dialog v-model:visible="showEditDialog" modal :header="t('editBookmarkTitle') || 'Edit Nickmark'" :style="{ width: '1100px', maxWidth: '95vw' }">
-      <div class="form-grid">
-        <div class="field">
-          <label for="edit-nickname">{{ t('nicknameLabel') || 'Nickname' }}</label>
-          <InputText id="edit-nickname" v-model="editBookmarkData.nickname" />
-        </div>
-        <div class="field">
-          <label for="edit-title">{{ t('titleLabel') || 'Title' }}</label>
-          <InputText id="edit-title" v-model="editBookmarkData.title" />
-        </div>
-        <div class="field">
-          <label for="edit-url">{{ t('urlLabel') || 'URL' }}</label>
-          <InputText id="edit-url" v-model="editBookmarkData.url" />
-        </div>
-        <div class="field-btn">
-          <Button
-            icon="pi pi-thumbtack"
-            :severity="editBookmarkData.is_pinned ? 'primary' : 'secondary'"
-            :text="!editBookmarkData.is_pinned"
-            rounded
-            :aria-label="t('isPinnedLabel') || 'Pinned'"
-            v-tooltip="editBookmarkData.is_pinned ? t('unpinTooltip') : t('pinTooltip')"
-            @click="editBookmarkData.is_pinned = !editBookmarkData.is_pinned"
-          />
-        </div>
-      </div>
-      <div v-if="isDynamicUrl(editBookmarkData.url)" class="default-value-field">
-        <label for="edit-default-value">{{ t('defaultValueLabel') || 'Default value when query is omitted (Optional)' }}</label>
-        <InputText
-          id="edit-default-value"
-          v-model="editBookmarkData.default_value"
-          :placeholder="t('defaultValuePlaceholder') || 'Default value for %s (navigates to site\'s top page if left blank)'"
-          class="w-full"
-        />
-      </div>
-      <template #footer>
-        <Button :label="t('cancelBtn') || 'Cancel'" icon="pi pi-times" text @click="showEditDialog = false" />
-        <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="saveEditBookmark" autofocus />
-      </template>
-    </Dialog>
-
     <!-- JSON 編集ダイアログ -->
     <Dialog v-model:visible="showJsonDialog" modal :header="t('editJsonBtn') || 'Edit in JSON'" maximizable :style="{ width: '90vw' }" :contentStyle="{ height: '70vh', display: 'flex', flexDirection: 'column' }">
       <JsonEditor
@@ -249,12 +303,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
 import JsonEditor from 'vue3-ts-jsoneditor';
 import InputText from 'primevue/inputtext';
+import Textarea from 'primevue/textarea';
 import AutoComplete, { AutoCompleteCompleteEvent } from 'primevue/autocomplete';
 import Button from 'primevue/button';
 import DataTable from 'primevue/datatable';
@@ -299,15 +354,21 @@ interface FlatBookmarkRow extends BookmarkEntry {
 }
 
 /**
- * 編集ダイアログで扱うフォームデータの型定義
+ * インライン編集可能なテーブル列フィールド種別の型定義
  */
-interface EditBookmarkForm {
+type InlineEditField = 'nickname' | 'title' | 'url';
+
+/**
+ * インライン編集中のセル状態および下書き入力値を保持する型定義
+ */
+interface InlineEditState {
   originalNickname: string;
   originalUrl: string;
-  nickname: string;
-  url: string;
-  title: string;
-  default_value: string;
+  originalTitle: string;
+  originalDefaultValue: string;
+  field: InlineEditField;
+  draftValue: string;
+  draftDefaultValue: string;
   score: number;
   last_used_at: number;
   created_at: number;
@@ -343,20 +404,10 @@ const searchNewBookmarkNicknames = (event: AutoCompleteCompleteEvent): void => {
   );
 };
 
-// 編集ダイアログの状態
-const showEditDialog = ref(false);
-const editBookmarkData = ref<EditBookmarkForm>({
-  originalNickname: '',
-  originalUrl: '',
-  nickname: '',
-  url: '',
-  title: '',
-  default_value: '',
-  score: 1.0,
-  last_used_at: 0,
-  created_at: 0,
-  is_pinned: false
-});
+// インライン編集状態（同時に1セルのみアクティブ）
+const inlineEdit = ref<InlineEditState | null>(null);
+const inlineEditWrapperRef = ref<HTMLElement | null>(null);
+const isClosingInlineEdit = ref(false);
 
 // JSON 編集ダイアログの状態
 const showJsonDialog = ref(false);
@@ -585,7 +636,7 @@ const confirmDeleteSelectedFolder = (): void => {
  */
 const hasAnyBookmarklet = computed((): boolean => {
   if (isBookmarkletUrl(newBookmark.value.url)) return true;
-  if (showEditDialog.value && isBookmarkletUrl(editBookmarkData.value.url)) return true;
+  if (inlineEdit.value?.field === 'url' && isBookmarkletUrl(inlineEdit.value.draftValue)) return true;
   return flatBookmarks.value.some(item => isBookmarkletUrl(item.url));
 });
 
@@ -618,14 +669,14 @@ const loadBookmarks = async (force: boolean = false): Promise<void> => {
 
 /**
  * タブへのフォーカス復帰時または表示状態変更時に、ユーザースクリプト状態、保留中の通知、ブックマーク一覧を同期します。
- * 編集ダイアログ等が開かれている場合は、ユーザーの作業内容を保護するため一覧の再読み込みをスキップします。
+ * インライン編集中や各種ダイアログが開かれている場合は、ユーザーの作業内容を保護するため一覧の再読み込みをスキップします。
  * @returns 同期完了を示す Promise
  */
 const onWindowFocusOrVisible = async (): Promise<void> => {
   refreshUserScriptsStatus();
   if (document.visibilityState === 'hidden') return;
   await checkAndConsumePendingToast();
-  if (showEditDialog.value || showJsonDialog.value || showRenameDialog.value) {
+  if (inlineEdit.value !== null || showJsonDialog.value || showRenameDialog.value) {
     return;
   }
   await loadBookmarks(true);
@@ -901,39 +952,139 @@ const validateBookmarksJson = (bookmarks: unknown): bookmarks is Record<string, 
 };
 
 /**
- * 指定されたブックマーク行のデータを編集ダイアログに読み込んで表示します。
- * @param data - テーブル行のブックマークデータ
+ * アクティブなインライン編集ラッパー DOM 要素の参照を保持します。
+ * @param el - Vue のテンプレート ref コールバックから渡される要素参照
  * @returns なし
  */
-const openEditDialog = (data: FlatBookmarkRow): void => {
-  editBookmarkData.value = {
-    originalNickname: data.nickname,
-    originalUrl: data.url,
-    nickname: data.nickname,
-    url: data.url,
-    title: data.title || '',
-    default_value: data.default_value || '',
-    score: data.score,
-    last_used_at: data.last_used_at,
-    created_at: data.created_at,
-    is_pinned: !!data.is_pinned
-  };
-  showEditDialog.value = true;
+const setInlineEditWrapperRef = (el: unknown): void => {
+  if (el instanceof HTMLElement) {
+    inlineEditWrapperRef.value = el;
+  }
 };
 
 /**
- * 編集ダイアログでの変更内容を保存します。
- * URL から `%s` が削除された場合は不要な `default_value` を除去して保存します。
- * @returns 処理完了を示す Promise
+ * 指定された行とフィールドが現在インライン編集中であるかを判定します。
+ * @param row - 判定対象のブックマーク行データ
+ * @param field - 判定対象の列フィールド名
+ * @returns 該当セルが編集中であれば true、それ以外は false
  */
-const saveEditBookmark = async (): Promise<void> => {
-  const { originalNickname, originalUrl, nickname, url, title: editTitle, default_value, is_pinned } =
-    editBookmarkData.value;
-  const newNickname = normalizeNicknamePath(nickname);
-  const newUrl = url.trim();
-  const trimmedDefault = isDynamicUrl(newUrl) ? (default_value || '').trim() : '';
+const isEditingCell = (row: FlatBookmarkRow, field: InlineEditField): boolean => {
+  if (!inlineEdit.value) return false;
+  return (
+    inlineEdit.value.field === field &&
+    inlineEdit.value.originalNickname === row.nickname &&
+    inlineEdit.value.originalUrl === row.url
+  );
+};
 
+/**
+ * 指定されたブックマーク行の対象項目をインライン編集状態（テキストエリア表示）に切り替えます。
+ * 既に別セルが編集中の場合は先に確定保存を試みた上で、対象テキストエリアへ自動フォーカスします。
+ * @param row - 編集対象のブックマーク行データ
+ * @param field - 編集を開始する列フィールド名
+ * @returns 編集開始およびフォーカス完了を示す Promise
+ */
+const startInlineEdit = async (row: FlatBookmarkRow, field: InlineEditField): Promise<void> => {
+  if (isEditingCell(row, field)) return;
+
+  if (inlineEdit.value && !isClosingInlineEdit.value) {
+    await commitInlineEdit();
+  }
+
+  let initialDraft = '';
+  if (field === 'nickname') {
+    initialDraft = row.nickname;
+  } else if (field === 'title') {
+    initialDraft = row.title || '';
+  } else {
+    initialDraft = row.url;
+  }
+
+  inlineEditWrapperRef.value = null;
+  inlineEdit.value = {
+    originalNickname: row.nickname,
+    originalUrl: row.url,
+    originalTitle: row.title || '',
+    originalDefaultValue: row.default_value || '',
+    field,
+    draftValue: initialDraft,
+    draftDefaultValue: row.default_value || '',
+    score: row.score,
+    last_used_at: row.last_used_at,
+    created_at: row.created_at,
+    is_pinned: !!row.is_pinned
+  };
+
+  await nextTick();
+  const textareaEl = inlineEditWrapperRef.value?.querySelector('textarea');
+  if (textareaEl instanceof HTMLTextAreaElement) {
+    textareaEl.focus();
+  }
+};
+
+/**
+ * インライン編集の変更内容を破棄し、保存を行わずに通常表示へ戻します。
+ * 直後に発生する focusout での誤保存を防ぐため排他フラグを制御します。
+ * @returns なし
+ */
+const cancelInlineEdit = (): void => {
+  if (!inlineEdit.value) return;
+  isClosingInlineEdit.value = true;
+  inlineEdit.value = null;
+  inlineEditWrapperRef.value = null;
+  nextTick(() => {
+    isClosingInlineEdit.value = false;
+  });
+};
+
+/**
+ * インライン編集中の入力内容を検証・保存し、通常表示へ戻します。
+ * 変更がない場合は保存および通知をスキップし、バリデーションエラーや保存失敗時は元の有効な値へ維持・復元します。
+ * @returns 保存処理完了を示す Promise
+ */
+const commitInlineEdit = async (): Promise<void> => {
+  if (!inlineEdit.value || isClosingInlineEdit.value) return;
+  isClosingInlineEdit.value = true;
+
+  const current = inlineEdit.value;
+  const normalizedOrigNickname = normalizeNicknamePath(current.originalNickname);
+  const newNickname =
+    current.field === 'nickname'
+      ? normalizeNicknamePath(current.draftValue)
+      : normalizedOrigNickname;
+  const newTitle =
+    current.field === 'title'
+      ? current.draftValue.trim()
+      : (current.originalTitle || '').trim();
+  const newUrl =
+    current.field === 'url'
+      ? current.draftValue.trim()
+      : current.originalUrl.trim();
+  const trimmedDefault = isDynamicUrl(newUrl)
+    ? (current.field === 'url' ? current.draftDefaultValue : current.originalDefaultValue).trim()
+    : '';
+  const origEffectiveDefault = isDynamicUrl(current.originalUrl)
+    ? (current.originalDefaultValue || '').trim()
+    : '';
+
+  // 実質的な変更がない場合はストレージ書き込みおよびトースト表示を行わずに編集を終了する
+  const hasNoChange =
+    (current.field === 'nickname' && newNickname === normalizedOrigNickname) ||
+    (current.field === 'title' && newTitle === (current.originalTitle || '').trim()) ||
+    (current.field === 'url' && newUrl === current.originalUrl.trim() && trimmedDefault === origEffectiveDefault);
+
+  if (hasNoChange) {
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
+    isClosingInlineEdit.value = false;
+    return;
+  }
+
+  // 必須項目（ニックネーム・URL）の空文字チェック
   if (!newNickname || !newUrl) {
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
+    isClosingInlineEdit.value = false;
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -943,8 +1094,12 @@ const saveEditBookmark = async (): Promise<void> => {
     return;
   }
 
-  const isMoved = normalizeNicknamePath(originalNickname) !== newNickname || !isSameUrl(originalUrl, newUrl);
+  // 移動先または変更先での URL 重複チェック
+  const isMoved = normalizedOrigNickname !== newNickname || !isSameUrl(current.originalUrl, newUrl);
   if (isMoved && bookmarksData.value[newNickname]?.some(b => isSameUrl(b.url, newUrl))) {
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
+    isClosingInlineEdit.value = false;
     toast.add({
       severity: 'error',
       summary: 'Error',
@@ -954,36 +1109,54 @@ const saveEditBookmark = async (): Promise<void> => {
     return;
   }
 
-  // 元の登録キー（および正規化キー）から旧エントリを除去する
-  const removeKeys = new Set([originalNickname, normalizeNicknamePath(originalNickname)].filter(Boolean));
-  for (const key of removeKeys) {
-    if (bookmarksData.value[key]) {
-      bookmarksData.value[key] = bookmarksData.value[key].filter(b => b.url !== originalUrl);
-      if (bookmarksData.value[key].length === 0) {
-        delete bookmarksData.value[key];
-      }
-    }
-  }
+  // 保存失敗時に安全に復元できるよう変更前のスナップショットを保持する
+  const snapshot = JSON.parse(JSON.stringify(bookmarksData.value)) as Record<string, BookmarkEntry[]>;
 
-  if (!bookmarksData.value[newNickname]) {
-    bookmarksData.value[newNickname] = [];
-  }
   const updatedEntry: BookmarkEntry = {
     url: newUrl,
-    title: editTitle.trim(),
-    score: editBookmarkData.value.score,
-    last_used_at: editBookmarkData.value.last_used_at,
-    created_at: editBookmarkData.value.created_at,
-    is_pinned
+    title: newTitle,
+    score: current.score,
+    last_used_at: current.last_used_at,
+    created_at: current.created_at,
+    is_pinned: current.is_pinned
   };
   if (trimmedDefault) {
     updatedEntry.default_value = trimmedDefault;
   }
-  bookmarksData.value[newNickname].push(updatedEntry);
+
+  // 同一ニックネームキー内での編集かつ非正規化キーの統合がない場合は元の表示順序を保つため同じ位置を更新する
+  const canUpdateInPlace =
+    current.originalNickname === newNickname &&
+    Array.isArray(bookmarksData.value[newNickname]);
+
+  if (canUpdateInPlace) {
+    const targetList = bookmarksData.value[newNickname];
+    const targetIndex = targetList.findIndex(b => b.url === current.originalUrl);
+    if (targetIndex !== -1) {
+      targetList.splice(targetIndex, 1, updatedEntry);
+    } else {
+      targetList.push(updatedEntry);
+    }
+  } else {
+    const removeKeys = new Set([current.originalNickname, normalizedOrigNickname].filter(Boolean));
+    for (const key of removeKeys) {
+      if (bookmarksData.value[key]) {
+        bookmarksData.value[key] = bookmarksData.value[key].filter(b => b.url !== current.originalUrl);
+        if (bookmarksData.value[key].length === 0) {
+          delete bookmarksData.value[key];
+        }
+      }
+    }
+    if (!bookmarksData.value[newNickname]) {
+      bookmarksData.value[newNickname] = [];
+    }
+    bookmarksData.value[newNickname].push(updatedEntry);
+  }
 
   try {
     await saveBookmarksData(bookmarksData.value);
-    showEditDialog.value = false;
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
     toast.add({
       severity: 'success',
       summary: t('successUpdated') || 'Success',
@@ -991,13 +1164,55 @@ const saveEditBookmark = async (): Promise<void> => {
       life: 3000
     });
   } catch (err: unknown) {
+    bookmarksData.value = snapshot;
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
     toast.add({
       severity: 'error',
       summary: 'Error',
       detail: getSaveErrorMessage(err),
       life: 4000
     });
+  } finally {
+    isClosingInlineEdit.value = false;
   }
+};
+
+/**
+ * インライン編集中のキーボードイベント（Enter による保存確定、Escape によるキャンセル）を処理します。
+ * 日本語 IME 変換確定中の Enter は誤確定を防ぐため無視し、Shift+Enter を含め改行入力は行いません。
+ * @param event - キーボードイベント
+ * @returns なし
+ */
+const handleInlineKeydown = (event: KeyboardEvent): void => {
+  if (event.key === 'Enter') {
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+    event.preventDefault();
+    void commitInlineEdit();
+    return;
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelInlineEdit();
+  }
+};
+
+/**
+ * インライン編集ラッパーのフォーカスアウトを検知し、ラッパー外部へフォーカスが移動した場合のみ保存を実行します。
+ * URL 欄とデフォルト値欄の間のフォーカス移動では編集を継続します。
+ * @param event - フォーカスイベント
+ * @returns なし
+ */
+const handleInlineFocusOut = (event: FocusEvent): void => {
+  if (!inlineEdit.value || isClosingInlineEdit.value) return;
+  const wrapperEl = event.currentTarget as HTMLElement | null;
+  const nextTarget = event.relatedTarget as Node | null;
+  if (wrapperEl && nextTarget && wrapperEl.contains(nextTarget)) {
+    return;
+  }
+  void commitInlineEdit();
 };
 
 /**
@@ -1183,30 +1398,86 @@ body {
   flex-shrink: 0;
 }
 
+/* URLセルの1行省略表示コンテナ */
+.url-cell-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .url-text {
-  word-break: break-all;
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 0.9rem;
 }
 
-/* ブックマークレットのコード文字列表示（リンクにせず、長大なコードは3行で省略表示する） */
+/* ブックマークレットの等幅コード文字列表示（通常URLと同じく1行で「...」省略表示する） */
 .bookmarklet-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.85rem;
   color: var(--p-text-color);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
-.url-link {
-  text-decoration: none;
-  color: var(--p-primary-color);
+/* インライン編集可能なセルのクリック領域（空タイトル時もクリック可能にする） */
+.inline-editable-cell {
+  min-height: 2rem;
+  width: 100%;
   display: flex;
+  align-items: center;
+  padding: 0.25rem 0.4rem;
+  border-radius: var(--p-border-radius-sm, 4px);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-.url-link:hover {
-  text-decoration: underline;
+.inline-editable-cell:hover {
+  background-color: var(--p-content-hover-background, rgba(0, 0, 0, 0.04));
+}
+
+/* ニックネーム・タイトル列でスペースなしの連続文字列も固定幅内に収める */
+.cell-wrap-text {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* インライン編集時のラッパーコンテナ */
+.inline-edit-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inline-textarea {
+  width: 100%;
+  max-height: 180px;
+  overflow-y: auto;
+  resize: vertical;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.bookmarklet-textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.inline-default-value-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inline-default-value-label {
+  font-size: 0.78rem;
+  color: var(--p-text-muted-color);
 }
 
 .w-full {

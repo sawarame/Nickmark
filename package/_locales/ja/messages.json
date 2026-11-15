@@ -74,9 +74,6 @@
   "addBookmarkTitle": {
     "message": "ニックネーム登録"
   },
-  "editBookmarkTitle": {
-    "message": "ニックネーム編集"
-  },
   "saveBtn": {
     "message": "保存"
   },
@@ -446,5 +443,8 @@
   },
   "popupHistoryTag": {
     "message": "履歴"
+  },
+  "deleteBookmarkTooltip": {
+    "message": "削除"
   }
 }

@@ -23,8 +23,8 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 **Purpose**: インライン編集および操作列の「新しいタブで開く」ボタンに必要な日英ロケール文言を準備する。
 
-- [ ] T001 [P] Add `openInNewTabTooltip` ("新しいタブで開く") and `deleteBookmarkTooltip` ("削除") keys in `package/_locales/ja/messages.json`
-- [ ] T002 [P] Add `openInNewTabTooltip` ("Open in new tab") and `deleteBookmarkTooltip` ("Delete") keys in `package/_locales/en/messages.json`
+- [X] T001 [P] Add `deleteBookmarkTooltip` ("削除") key in `package/_locales/ja/messages.json`
+- [X] T002 [P] Add `deleteBookmarkTooltip` ("Delete") key in `package/_locales/en/messages.json`
 
 ---
 
@@ -34,8 +34,8 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 **⚠️ CRITICAL**: 本フェーズ完了後に US1〜US3 の UI・操作実装を進める。
 
-- [ ] T003 Import PrimeVue `Textarea` (`primevue/textarea`) and Vue `nextTick`, and remove `EditBookmarkForm`, `showEditDialog`, `editBookmarkData`, `openEditDialog`, `saveEditBookmark`, and the edit `Dialog` markup in `src/List.vue`
-- [ ] T004 Define `InlineEditField` (`'nickname' | 'title' | 'url'`), `InlineEditState` (`originalNickname`, `originalUrl`, `field`, `originalTitle`, `originalDefaultValue`, `draftValue`, `draftDefaultValue`, `score`, `last_used_at`, `created_at`, `is_pinned`), reactive `inlineEdit` / `inlineEditWrapperRef` / `isClosingInlineEdit`, and update `onWindowFocusOrVisible` (skip reload when `inlineEdit !== null`) and `hasAnyBookmarklet` (check `inlineEdit?.field === 'url' && isBookmarkletUrl(inlineEdit.draftValue)`) in `src/List.vue`
+- [X] T003 Import PrimeVue `Textarea` (`primevue/textarea`) and Vue `nextTick`, and remove `EditBookmarkForm`, `showEditDialog`, `editBookmarkData`, `openEditDialog`, `saveEditBookmark`, and the edit `Dialog` markup in `src/List.vue`
+- [X] T004 Define `InlineEditField` (`'nickname' | 'title' | 'url'`), `InlineEditState` (`originalNickname`, `originalUrl`, `field`, `originalTitle`, `originalDefaultValue`, `draftValue`, `draftDefaultValue`, `score`, `last_used_at`, `created_at`, `is_pinned`), reactive `inlineEdit` / `inlineEditWrapperRef` / `isClosingInlineEdit`, and update `onWindowFocusOrVisible` (skip reload when `inlineEdit !== null`) and `hasAnyBookmarklet` (check `inlineEdit?.field === 'url' && isBookmarkletUrl(inlineEdit.draftValue)`) in `src/List.vue`
 
 **Checkpoint**: 編集モーダルが撤去され、インライン編集状態モデルの基盤が整った状態。
 
@@ -49,8 +49,8 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Apply `table-layout: fixed; width: 100%; min-width: 820px;` to `DataTable` and set fixed column widths (`nickname`: `180px`, `title`: `220px`, `url`: remaining fluid width >= `244px`, `is_pinned`: `72px`, `actions`: `104px`) in `src/List.vue`
-- [ ] T006 [US1] Style `nickname` and `title` cells with `overflow-wrap: anywhere`, and enforce single-line ellipsis truncation (`min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`) with `:title="slotProps.data.url"` tooltip on both regular URLs and bookmarklets in `src/List.vue`
+- [X] T005 [US1] Apply `table-layout: fixed; width: 100%; min-width: 820px;` to `DataTable` and set fixed column widths (`nickname`: `180px`, `title`: `220px`, `url`: remaining fluid width >= `260px`, `is_pinned`: `80px`, `actions`: `80px`) in `src/List.vue`
+- [X] T006 [US1] Style `nickname` and `title` cells with `overflow-wrap: anywhere`, and enforce single-line ellipsis truncation (`min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`) with `:title="slotProps.data.url"` tooltip on both regular URLs and bookmarklets in `src/List.vue`
 
 **Checkpoint**: User Story 1 が単独で機能し、固定列幅と URL の 1 行省略表示が確認できる状態。
 
@@ -64,9 +64,9 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 ### Implementation for User Story 2
 
-- [ ] T007 [US2] Render clickable cell containers (`.inline-editable-cell` with `min-height: 2rem` so empty `title` cells remain clickable, plus hover visual feedback) for `nickname`, `title`, and `url` columns, and implement `isEditingCell(row, field)` and `startInlineEdit(row, field)` with `nextTick()` auto-focus on the active `textarea` in `src/List.vue`
-- [ ] T008 [US2] Render PrimeVue `Textarea` inside `.inline-edit-wrapper` when `isEditingCell(slotProps.data, field)` is true, wiring `@focusout` (ignore if `relatedTarget` stays inside wrapper), `@keydown.enter` (ignore IME `isComposing || keyCode === 229`; call `preventDefault()` to forbid newlines including `Shift+Enter`, then commit), and `@keydown.escape` (cancel without saving) in `src/List.vue`
-- [ ] T009 [US2] Implement `cancelInlineEdit()` and `commitInlineEdit()` with no-op change detection, field validation (`normalizeNicknamePath(nickname) === ''` or `url.trim() === ''` -> `errorNicknameUrlRequired` toast & revert; duplicate `isSameUrl` in target nickname -> `errorUrlExists` toast & revert), snapshot rollback on `saveBookmarksData` error (`getSaveErrorMessage`), `successUpdated` toast on save, and `isClosingInlineEdit` re-entrancy guard in `src/List.vue`
+- [X] T007 [US2] Render clickable cell containers (`.inline-editable-cell` with `min-height: 2rem` so empty `title` cells remain clickable, plus hover visual feedback) for `nickname`, `title`, and `url` columns, and implement `isEditingCell(row, field)` and `startInlineEdit(row, field)` with `nextTick()` auto-focus on the active `textarea` in `src/List.vue`
+- [X] T008 [US2] Render PrimeVue `Textarea` inside `.inline-edit-wrapper` when `isEditingCell(slotProps.data, field)` is true, wiring `@focusout` (ignore if `relatedTarget` stays inside wrapper), `@keydown.enter` (ignore IME `isComposing || keyCode === 229`; call `preventDefault()` to forbid newlines including `Shift+Enter`, then commit), and `@keydown.escape` (cancel without saving) in `src/List.vue`
+- [X] T009 [US2] Implement `cancelInlineEdit()` and `commitInlineEdit()` with no-op change detection, field validation (`normalizeNicknamePath(nickname) === ''` or `url.trim() === ''` -> `errorNicknameUrlRequired` toast & revert; duplicate `isSameUrl` in target nickname -> `errorUrlExists` toast & revert), snapshot rollback on `saveBookmarksData` error (`getSaveErrorMessage`), `successUpdated` toast on save, and `isClosingInlineEdit` re-entrancy guard in `src/List.vue`
 
 **Checkpoint**: User Story 1 および User Story 2 がともに動作し、ポップアップなしのクリック編集・保存・キャンセルが完結する状態。
 
@@ -80,8 +80,8 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 ### Implementation for User Story 3
 
-- [ ] T010 [US3] Remove the `<a class="url-link">` wrapper from the URL column so the entire URL cell triggers inline editing, remove the legacy `pi-pencil` edit button from the actions column, and add `openBookmarkInNewTab(row)` with a `pi pi-external-link` button (rendered only when `!isBookmarkletUrl(slotProps.data.url)`, using `openInNewTabTooltip`) in `src/List.vue`
-- [ ] T011 [US3] Render the `default_value` `InputText` (`v-model="inlineEdit.draftDefaultValue"`, labeled with `t('defaultValueLabel')`) inside `.inline-edit-wrapper` beneath the URL `Textarea` whenever `inlineEdit.field === 'url' && isDynamicUrl(inlineEdit.draftValue)`, wiring `Enter`/`Escape` handlers and ensuring `commitInlineEdit()` preserves or clears `default_value` based on `isDynamicUrl(newUrl)` in `src/List.vue`
+- [X] T010 [US3] Remove the `<a class="url-link">` wrapper from the URL column so the entire URL cell triggers inline editing, and remove the legacy `pi-pencil` edit button from the actions column (leaving only the centered `pi-trash` delete button) in `src/List.vue`
+- [X] T011 [US3] Render the `default_value` `InputText` (`v-model="inlineEdit.draftDefaultValue"`, labeled with `t('defaultValueLabel')`) inside `.inline-edit-wrapper` beneath the URL `Textarea` whenever `inlineEdit.field === 'url' && isDynamicUrl(inlineEdit.draftValue)`, wiring `Enter`/`Escape` handlers and ensuring `commitInlineEdit()` preserves or clears `default_value` based on `isDynamicUrl(newUrl)` in `src/List.vue`
 
 **Checkpoint**: 全 3 つのユーザーストーリーが独立かつ統合的に動作する状態。
 
@@ -91,9 +91,9 @@ description: "Task list for 管理画面一覧の列幅固定・URL省略表示�
 
 **Purpose**: 未使用文言の整理、仕様ドキュメント同期、コード規約（日本語 JSDoc/コメント）確認、本番ビルドおよび実機検証を行う。
 
-- [ ] T012 [P] Review unused `editBookmarkTitle` key in `package/_locales/ja/messages.json` and `package/_locales/en/messages.json` and verify ja/en locale key parity
-- [ ] T013 [P] Synchronize section "G. ブックマーク一覧画面（管理画面）" in `.context/spec.md` with fixed column widths, single-line URL ellipsis, inline `Textarea` editing, dynamic URL default value editing, and actions-column open button
-- [ ] T014 Verify Japanese JSDoc and inline comments on all new/modified types and functions in `src/List.vue` and run `npm run build` to confirm clean TypeScript compilation and `package/js/` + `package.zip` generation
+- [X] T012 [P] Review unused `editBookmarkTitle` key in `package/_locales/ja/messages.json` and `package/_locales/en/messages.json` and verify ja/en locale key parity
+- [X] T013 [P] Synchronize section "G. ブックマーク一覧画面（管理画面）" in `.context/spec.md` with fixed column widths, single-line URL ellipsis, inline `Textarea` editing, dynamic URL default value editing, and actions-column open button
+- [X] T014 Verify Japanese JSDoc and inline comments on all new/modified types and functions in `src/List.vue` and run `npm run build` to confirm clean TypeScript compilation and `package/js/` + `package.zip` generation
 - [ ] T015 Execute manual validation scenarios defined in `specs/008-list-inline-editing/quickstart.md` in Chrome
 
 ---
