@@ -23,6 +23,8 @@ import {
   getSyncEnabled,
   loadBookmarksData,
   openFolderUrls,
+  updateHistorySearchEnabledCache,
+  updateMaxBatchOpenTabsCache,
   updateSyncEnabledCache
 } from './shared/storage';
 import {
@@ -432,6 +434,12 @@ if (typeof window === 'undefined') {
       if (changes.isSyncEnabled) {
         updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
         clearBookmarksCache();
+      }
+      if (changes.maxBatchOpenTabs) {
+        updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
+      }
+      if (changes.historySearchEnabled) {
+        updateHistorySearchEnabledCache(!!changes.historySearchEnabled.newValue);
       }
     }
 

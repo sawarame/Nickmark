@@ -1,6 +1,6 @@
 <template>
   <div class="container" v-if="isLoaded">
-    <Toast />
+    <Toast @close="handleToastClosed" @life-end="handleToastClosed" />
 
     <div :key="renderKey">
       <div class="header">
@@ -69,7 +69,8 @@
                 showButtons
                 buttonLayout="horizontal"
                 :step="1"
-                @change="saveMaxBatchOpenTabs"
+                @update:modelValue="handleMaxBatchOpenTabsUpdate"
+                @input="handleMaxBatchOpenTabsInput"
                 class="w-full"
               />
             </div>
@@ -139,15 +140,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import Card from 'primevue/card';
 import Select from 'primevue/select';
 import Button from 'primevue/button';
 import ToggleSwitch from 'primevue/toggleswitch';
-import InputNumber from 'primevue/inputnumber';
+import InputNumber, { InputNumberInputEvent } from 'primevue/inputnumber';
 import Dialog from 'primevue/dialog';
-import Toast from 'primevue/toast';
+import Toast, { ToastEvent, ToastMessageOptions } from 'primevue/toast';
 
 import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
 import { BookmarkEntry, DEFAULT_MAX_BATCH_OPEN_TABS } from './shared/types';
@@ -173,6 +174,44 @@ const isRequestingHistoryPermission = ref(false);
 const isLoaded = ref(false);
 const renderKey = ref(0);
 
+const activeToastKeys = new Set<string>();
+
+/**
+ * トーストメッセージの重複判定用識別キーを生成します。
+ * @param options - トーストメッセージ設定
+ * @returns 種別・見出し・本文を組み合わせた一意キー
+ */
+const getToastKey = (options: ToastMessageOptions): string =>
+  `${options.severity ?? ''}\0${options.summary ?? ''}\0${options.detail ?? ''}`;
+
+/**
+ * 同一内容のトーストが現在表示中の場合はスキップし、未表示の場合のみトーストを表示します。
+ * @param options - 表示するトースト設定
+ * @returns なし
+ */
+const addUniqueToast = (options: ToastMessageOptions): void => {
+  const key = getToastKey(options);
+  if (activeToastKeys.has(key)) return;
+  activeToastKeys.add(key);
+  toast.add(options);
+};
+
+/**
+ * トーストが閉じられた（手動クローズまたは表示時間終了）際に表示中キーを解除します。
+ * @param event - Toast コンポーネントの close / life-end イベント
+ * @returns なし
+ */
+const handleToastClosed = (event: ToastEvent): void => {
+  activeToastKeys.delete(getToastKey(event.message));
+};
+
+// 一括オープン安全上限の保存制御用状態（入力途中デバウンス・連続更新時の重複防止）
+let lastSavedMaxBatchOpenTabs = DEFAULT_MAX_BATCH_OPEN_TABS;
+let pendingMaxBatchOpenTabs: number | null = null;
+let maxBatchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let maxBatchToastTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSaveMaxBatchPromise: Promise<void> | null = null;
+
 // データ移行ダイアログ用の状態
 const showMigrationDialog = ref(false);
 const migrationType = ref<'enable' | 'disable'>('enable');
@@ -193,7 +232,9 @@ const loadSettings = async (): Promise<void> => {
   await initI18n();
   selectedLanguage.value = getCurrentLocale();
   syncEnabled.value = await getSyncEnabled();
-  maxBatchOpenTabs.value = await getMaxBatchOpenTabs();
+  const loadedLimit = await getMaxBatchOpenTabs();
+  maxBatchOpenTabs.value = loadedLimit;
+  lastSavedMaxBatchOpenTabs = loadedLimit;
   historySearchEnabled.value = await getEffectiveHistorySearchEnabled();
   isLoaded.value = true;
 };
@@ -213,7 +254,7 @@ const handleHistorySearchToggleRequest = async (): Promise<void> => {
       if (granted) {
         await setHistorySearchEnabled(true);
         historySearchEnabled.value = true;
-        toast.add({
+        addUniqueToast({
           severity: 'success',
           summary: t('saveSuccess') || 'Saved',
           detail:
@@ -224,7 +265,7 @@ const handleHistorySearchToggleRequest = async (): Promise<void> => {
       } else {
         await setHistorySearchEnabled(false);
         historySearchEnabled.value = false;
-        toast.add({
+        addUniqueToast({
           severity: 'warn',
           summary: t('historySearchTitle') || 'Browser History Search',
           detail:
@@ -241,7 +282,7 @@ const handleHistorySearchToggleRequest = async (): Promise<void> => {
 
   await setHistorySearchEnabled(false);
   historySearchEnabled.value = false;
-  toast.add({
+  addUniqueToast({
     severity: 'info',
     summary: t('saveSuccess') || 'Saved',
     detail:
@@ -252,18 +293,165 @@ const handleHistorySearchToggleRequest = async (): Promise<void> => {
 };
 
 /**
- * 一括オープン時の安全上限タブ数設定を保存します。
- * @returns 保存完了を示す Promise
+ * 安全上限タブ数を 1〜100 の整数へ丸めます。
+ * @param value - 正規化対象の数値
+ * @returns 1〜100 の整数値
  */
-const saveMaxBatchOpenTabs = async (): Promise<void> => {
-  if (typeof maxBatchOpenTabs.value === 'number') {
-    await setMaxBatchOpenTabs(maxBatchOpenTabs.value);
-    toast.add({
+const clampMaxBatchOpenTabs = (value: number): number =>
+  Math.max(1, Math.min(100, Math.floor(value)));
+
+/**
+ * 入力デバウンス用のタイマーをキャンセルします。
+ * @returns なし
+ */
+const clearMaxBatchDebounceTimer = (): void => {
+  if (maxBatchDebounceTimer !== null) {
+    clearTimeout(maxBatchDebounceTimer);
+    maxBatchDebounceTimer = null;
+  }
+};
+
+/**
+ * 安全上限設定の保存完了トーストを短いデバウンス付きで表示します。
+ * ボタン長押し等の連続変更時にトーストが大量に積み上がるのを防ぎます。
+ * @returns なし
+ */
+const scheduleMaxBatchSavedToast = (): void => {
+  if (maxBatchToastTimer !== null) {
+    clearTimeout(maxBatchToastTimer);
+  }
+  maxBatchToastTimer = setTimeout(() => {
+    maxBatchToastTimer = null;
+    addUniqueToast({
       severity: 'success',
       summary: t('saveSuccess') || 'Saved',
       detail: t('saveSuccess') || 'Saved',
       life: 2000
     });
+  }, 150);
+};
+
+/**
+ * 一括オープン時の安全上限タブ数設定をストレージへ保存します。
+ * @param value - 保存する上限タブ数
+ * @param showNotice - true の場合は保存完了トーストを表示します
+ * @returns 保存完了を示す Promise
+ */
+const saveMaxBatchOpenTabs = async (value: number, showNotice: boolean = true): Promise<void> => {
+  const normalized = clampMaxBatchOpenTabs(value);
+  clearMaxBatchDebounceTimer();
+  pendingMaxBatchOpenTabs = null;
+
+  if (normalized === lastSavedMaxBatchOpenTabs) {
+    maxBatchOpenTabs.value = normalized;
+    return;
+  }
+
+  const previousValue = lastSavedMaxBatchOpenTabs;
+  lastSavedMaxBatchOpenTabs = normalized;
+  maxBatchOpenTabs.value = normalized;
+
+  const task = setMaxBatchOpenTabs(normalized);
+  pendingSaveMaxBatchPromise = task;
+  try {
+    await task;
+    if (showNotice) {
+      scheduleMaxBatchSavedToast();
+    }
+  } catch (err: unknown) {
+    // 保存失敗時は直前の有効値へ戻し、エラーを通知する
+    lastSavedMaxBatchOpenTabs = previousValue;
+    maxBatchOpenTabs.value = previousValue;
+    addUniqueToast({
+      severity: 'error',
+      summary: 'Error',
+      detail: getSaveErrorMessage(err, 'Failed to save setting.'),
+      life: 4000
+    });
+  } finally {
+    if (pendingSaveMaxBatchPromise === task) {
+      pendingSaveMaxBatchPromise = null;
+    }
+  }
+};
+
+/**
+ * InputNumber の確定変更（スピンボタン・矢印キー・Enter・フォーカスアウト）を捕捉して保存します。
+ * 空欄のまま確定された場合は直前の有効値へ復元します。
+ * @param value - 更新後のモデル値（空欄時は null）
+ * @returns 処理完了を示す Promise
+ */
+const handleMaxBatchOpenTabsUpdate = async (value: number | null): Promise<void> => {
+  clearMaxBatchDebounceTimer();
+  pendingMaxBatchOpenTabs = null;
+
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    // 同一ティック内で元の値に戻すと InputNumber 側の watch が発火しないため nextTick 後に復元する
+    await nextTick();
+    maxBatchOpenTabs.value = lastSavedMaxBatchOpenTabs;
+    return;
+  }
+
+  await saveMaxBatchOpenTabs(value, true);
+};
+
+/**
+ * InputNumber への直接キー入力を捕捉し、有効範囲（1〜100）の数値であればデバウンス保存を予約します。
+ * フォーカスを外さずそのままリロード・遷移する場合の取りこぼしを防ぎます。
+ * @param event - InputNumber の入力イベントオブジェクト
+ * @returns なし
+ */
+const handleMaxBatchOpenTabsInput = (event: InputNumberInputEvent): void => {
+  if (
+    typeof event.value !== 'number' ||
+    !Number.isFinite(event.value) ||
+    event.value < 1 ||
+    event.value > 100
+  ) {
+    clearMaxBatchDebounceTimer();
+    pendingMaxBatchOpenTabs = null;
+    return;
+  }
+
+  const normalized = clampMaxBatchOpenTabs(event.value);
+  if (normalized === lastSavedMaxBatchOpenTabs) {
+    clearMaxBatchDebounceTimer();
+    pendingMaxBatchOpenTabs = null;
+    return;
+  }
+
+  pendingMaxBatchOpenTabs = normalized;
+  clearMaxBatchDebounceTimer();
+  maxBatchDebounceTimer = setTimeout(() => {
+    maxBatchDebounceTimer = null;
+    if (pendingMaxBatchOpenTabs !== null) {
+      void saveMaxBatchOpenTabs(pendingMaxBatchOpenTabs, true);
+    }
+  }, 350);
+};
+
+/**
+ * デバウンス待機中および実行中の安全上限設定保存をすべて完了させます。
+ * @param showNotice - true の場合は保存完了トーストを表示します
+ * @returns 完了を示す Promise
+ */
+const flushPendingMaxBatchOpenTabs = async (showNotice: boolean = false): Promise<void> => {
+  clearMaxBatchDebounceTimer();
+  if (pendingMaxBatchOpenTabs !== null) {
+    await saveMaxBatchOpenTabs(pendingMaxBatchOpenTabs, showNotice);
+  }
+  if (pendingSaveMaxBatchPromise) {
+    await pendingSaveMaxBatchPromise;
+  }
+};
+
+/**
+ * ページ離脱（リロード・タブ閉じ等）直前に未保存の安全上限入力値をストレージへフラッシュします。
+ * @returns なし
+ */
+const handlePageHide = (): void => {
+  if (pendingMaxBatchOpenTabs !== null) {
+    void flushPendingMaxBatchOpenTabs(false);
   }
 };
 
@@ -275,7 +463,7 @@ const saveLanguage = async (): Promise<void> => {
   await setLocale(selectedLanguage.value);
   renderKey.value++;
 
-  toast.add({
+  addUniqueToast({
     severity: 'success',
     summary: t('saveSuccess'),
     detail: t('saveSuccess'),
@@ -305,11 +493,11 @@ const applySyncTransition = async (
       await saveBookmarksData(bookmarksToSave);
     }
     syncEnabled.value = targetEnabled;
-    toast.add({ ...successNotice, life: 3000 });
+    addUniqueToast({ ...successNotice, life: 3000 });
     return true;
   } catch (err: unknown) {
     await setSyncEnabled(!targetEnabled);
-    toast.add({
+    addUniqueToast({
       severity: 'error',
       summary: errorSummary,
       detail: getSaveErrorMessage(err, fallbackError),
@@ -339,7 +527,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
 
   if (newValue) {
     if (isOverQuota(local.bookmarks)) {
-      toast.add({
+      addUniqueToast({
         severity: 'error',
         summary: 'Error',
         detail:
@@ -500,15 +688,26 @@ const getBookmarkCount = (bookmarks: Record<string, BookmarkEntry[]>): number =>
 };
 
 /**
- * ブックマーク一覧画面へ戻ります。
- * @returns なし
+ * 未保存の入力を確定させてからブックマーク一覧画面へ戻ります。
+ * @returns 遷移前の保存完了を示す Promise
  */
-const goBack = (): void => {
+const goBack = async (): Promise<void> => {
+  await flushPendingMaxBatchOpenTabs(false);
   window.location.href = 'list.html';
 };
 
 onMounted(async () => {
+  window.addEventListener('pagehide', handlePageHide);
   await loadSettings();
+});
+
+onUnmounted(() => {
+  window.removeEventListener('pagehide', handlePageHide);
+  clearMaxBatchDebounceTimer();
+  if (maxBatchToastTimer !== null) {
+    clearTimeout(maxBatchToastTimer);
+    maxBatchToastTimer = null;
+  }
 });
 </script>
 

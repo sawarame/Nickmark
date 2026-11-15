@@ -62,18 +62,27 @@ export function updateSyncEnabledCache(enabled: boolean): void {
 }
 
 /**
+ * フォルダ一括オープン時の安全上限タブ数の値を検証し、有効な整数値（1〜100）へ正規化します。
+ * 不正値・未設定・範囲外の場合はデフォルト値（20）を返します。
+ * @param value - 検証対象の値
+ * @returns 正規化された安全上限タブ数（1〜100）
+ */
+function parseValidMaxBatchOpenTabs(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 1 || num > 100) {
+    return DEFAULT_MAX_BATCH_OPEN_TABS;
+  }
+  return num;
+}
+
+/**
  * フォルダ一括オープン時の安全上限タブ数を取得します。
  * @returns 安全上限タブ数（デフォルト: 20）
  */
 export async function getMaxBatchOpenTabs(): Promise<number> {
   if (maxBatchOpenTabsCache !== null) return maxBatchOpenTabsCache;
   const data = await chrome.storage.local.get('maxBatchOpenTabs');
-  const val = Number(data.maxBatchOpenTabs);
-  if (!Number.isInteger(val) || val < 1 || val > 100) {
-    maxBatchOpenTabsCache = DEFAULT_MAX_BATCH_OPEN_TABS;
-  } else {
-    maxBatchOpenTabsCache = val;
-  }
+  maxBatchOpenTabsCache = parseValidMaxBatchOpenTabs(data.maxBatchOpenTabs);
   return maxBatchOpenTabsCache;
 }
 
@@ -83,9 +92,19 @@ export async function getMaxBatchOpenTabs(): Promise<number> {
  * @returns 更新完了を示す Promise
  */
 export async function setMaxBatchOpenTabs(limit: number): Promise<void> {
-  const safeLimit = Math.max(1, Math.min(100, Math.floor(limit) || DEFAULT_MAX_BATCH_OPEN_TABS));
+  const normalized = Number.isFinite(limit) ? Math.floor(limit) : DEFAULT_MAX_BATCH_OPEN_TABS;
+  const safeLimit = Math.max(1, Math.min(100, normalized));
   maxBatchOpenTabsCache = safeLimit;
   await chrome.storage.local.set({ maxBatchOpenTabs: safeLimit });
+}
+
+/**
+ * 一括オープン安全上限タブ数のメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param value - 更新後の設定値
+ * @returns なし
+ */
+export function updateMaxBatchOpenTabsCache(value: unknown): void {
+  maxBatchOpenTabsCache = parseValidMaxBatchOpenTabs(value);
 }
 
 /**
@@ -627,4 +646,20 @@ export async function deleteFolder(
 
   await saveBookmarksData(newBookmarks);
   return { success: true, deletedCount };
+}
+
+// 別タブ・別コンテキストで設定が変更された場合もメモリキャッシュを最新に保つ
+if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes.isSyncEnabled) {
+      updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
+    }
+    if (changes.maxBatchOpenTabs) {
+      updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
+    }
+    if (changes.historySearchEnabled) {
+      updateHistorySearchEnabledCache(!!changes.historySearchEnabled.newValue);
+    }
+  });
 }
