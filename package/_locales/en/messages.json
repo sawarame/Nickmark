@@ -74,9 +74,6 @@
   "addBookmarkTitle": {
     "message": "Add Nickmark"
   },
-  "editBookmarkTitle": {
-    "message": "Edit Nickmark"
-  },
   "saveBtn": {
     "message": "Save"
   },
@@ -446,5 +443,8 @@
   },
   "popupHistoryTag": {
     "message": "History"
+  },
+  "deleteBookmarkTooltip": {
+    "message": "Delete"
   }
 }
