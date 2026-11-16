@@ -216,6 +216,20 @@ export type RuntimeMessage =
     };
 
 /**
+ * ポップアップ起動直後の空白領域に表示する活用ヒント（Tip）の定義型
+ */
+export interface TipEntry {
+  /** Tip を一意に識別する ID */
+  id: string;
+  /** `messages.json` 上の本文メッセージキー */
+  messageKey: string;
+  /** 表示に用いる PrimeIcons クラス名（任意。未指定時は電球アイコン） */
+  icon?: string;
+  /** メッセージ内の `$1` に OS 別の主修飾キー表記（`Cmd` または `Ctrl`）を展開するか */
+  usesPrimaryModifier?: boolean;
+}
+
+/**
  * 一括オープン時のデフォルト安全上限タブ数
  */
 export const DEFAULT_MAX_BATCH_OPEN_TABS = 20;

@@ -172,6 +172,28 @@
         </div>
       </template>
     </div>
+
+    <!-- 起動直後など入力が空の空白領域に表示するクリック切替可能な Tips エリア -->
+    <div
+      v-else-if="shouldShowTips"
+      class="palette-tips"
+      role="button"
+      tabindex="-1"
+      :aria-label="tr('popupTipsNextHint') || 'クリックで次のヒントを表示'"
+      v-tooltip.bottom="tr('popupTipsNextHint') || 'クリックで次のヒントを表示'"
+      @mousedown.prevent
+      @click="cycleTip"
+    >
+      <i
+        :class="['pi', currentTip?.icon || 'pi-lightbulb', 'tips-leading-icon']"
+        aria-hidden="true"
+      />
+      <div class="tips-content">
+        <span class="tips-badge">{{ tr('popupTipsBadge') || 'TIP' }}</span>
+        <span class="tips-text">{{ currentTipText }}</span>
+      </div>
+      <i class="pi pi-refresh tips-next-icon" aria-hidden="true" />
+    </div>
   </div>
 </template>
 
@@ -187,7 +209,8 @@ import {
   BookmarkletExecutionResult,
   PaletteItem,
   RuntimeMessage,
-  TabDisposition
+  TabDisposition,
+  TipEntry
 } from './shared/types';
 import { executeNickmarkCommand, navigateWithDisposition, openUrlWithDisposition } from './shared/commands';
 import {
@@ -197,6 +220,7 @@ import {
 } from './shared/history';
 import { buildPaletteSuggestions } from './shared/search';
 import { loadBookmarksData, openFolderUrls } from './shared/storage';
+import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
 const HISTORY_SEARCH_DEBOUNCE_MS = 80;
@@ -224,15 +248,17 @@ const isExecuting = ref(false);
 const feedback = ref<FeedbackState | null>(null);
 const pendingBatchConfirm = ref<BatchOpenConfirmationData | null>(null);
 const failedFavicons = ref<Set<string>>(new Set());
+const currentTipIndex = ref<number>(pickRandomTipIndex(POPUP_TIPS.length));
 
 /**
  * initI18n 完了後にもテンプレート上の翻訳テキストを再評価するためのラッパー関数です。
  * @param key - メッセージキー
+ * @param substitutions - プレースホルダー（$1 等）へ埋め込む置換文字列配列（任意）
  * @returns 翻訳済み文字列
  */
-const tr = (key: string): string => {
+const tr = (key: string, substitutions?: string[]): string => {
   void i18nVersion.value;
-  return t(key);
+  return t(key, substitutions);
 };
 
 // DOM 参照・非同期制御
@@ -279,6 +305,38 @@ const items = computed((): PaletteItem[] => {
  */
 const shouldShowList = computed((): boolean => {
   return query.value.trim().length > 0 && !pendingBatchConfirm.value;
+});
+
+/**
+ * 現在選択されている Tip エントリを返します。
+ * @returns 現在の Tip エントリ（存在しない場合は null）
+ */
+const currentTip = computed((): TipEntry | null => {
+  return POPUP_TIPS[currentTipIndex.value] ?? null;
+});
+
+/**
+ * 現在の言語設定および実行 OS に応じて解決された Tip 本文を返します。
+ * @returns ローカライズ済みの Tip 本文文字列
+ */
+const currentTipText = computed((): string => {
+  if (!currentTip.value) return '';
+  return formatTipMessage(currentTip.value, tr);
+});
+
+/**
+ * 空白状態向けの Tips エリアを表示すべきかどうかを判定します。
+ * 多言語辞書の読み込みが完了し、検索欄が空で、通知および確認ダイアログが表示されていない場合に true を返します。
+ * @returns Tips 表示条件を満たす場合は true
+ */
+const shouldShowTips = computed((): boolean => {
+  return (
+    query.value.trim().length === 0 &&
+    !pendingBatchConfirm.value &&
+    !feedback.value &&
+    i18nVersion.value > 0 &&
+    currentTip.value !== null
+  );
 });
 
 /**
@@ -427,6 +485,15 @@ const markFaviconFailed = (url?: string): void => {
 const handleUserInput = (): void => {
   clearFeedbackDismissTimer();
   feedback.value = null;
+};
+
+/**
+ * 表示中の Tip とは異なる別の Tip へ切り替え、検索入力欄へのフォーカスを維持します。
+ * @returns フォーカス適用完了を示す Promise
+ */
+const cycleTip = async (): Promise<void> => {
+  currentTipIndex.value = pickRandomTipIndex(POPUP_TIPS.length, currentTipIndex.value);
+  await focusSearchInput();
 };
 
 /**
@@ -1093,5 +1160,67 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.palette-tips {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.9rem;
+  color: var(--p-text-muted-color);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.15s ease;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.palette-tips:hover {
+  background-color: var(--p-content-hover-background);
+}
+
+.tips-leading-icon {
+  font-size: 0.95rem;
+  color: var(--p-primary-color, #10b981);
+  flex-shrink: 0;
+}
+
+.tips-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.tips-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.08rem 0.38rem;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--p-primary-color, #10b981) 14%, transparent);
+  color: var(--p-primary-color, #10b981);
+  flex-shrink: 0;
+}
+
+.tips-text {
+  color: var(--p-text-muted-color);
+  word-break: break-word;
+}
+
+.tips-next-icon {
+  font-size: 0.8rem;
+  color: var(--p-text-muted-color);
+  opacity: 0.45;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+.palette-tips:hover .tips-next-icon {
+  opacity: 0.9;
 }
 </style>
