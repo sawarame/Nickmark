@@ -446,5 +446,38 @@
   },
   "deleteBookmarkTooltip": {
     "message": "Delete"
+  },
+  "popupTipsBadge": {
+    "message": "TIP"
+  },
+  "popupTipsNextHint": {
+    "message": "Click for next tip"
+  },
+  "popupTipAddCommand": {
+    "message": "Use :add <name> (or :a) to bookmark the current tab immediately."
+  },
+  "popupTipAddallCommand": {
+    "message": "Use :addall <name> (or :aa) to bookmark all tabs in the current window at once."
+  },
+  "popupTipFolderOpen": {
+    "message": "Type folder/ or :open folder/ and press Enter to open all bookmarks in that folder at once."
+  },
+  "popupTipDynamicUrl": {
+    "message": "Include %s in a URL to pass search terms via 'nickname query' (falls back to default value or homepage when omitted)."
+  },
+  "popupTipTabDisposition": {
+    "message": "Press Shift+Enter to open in a background tab while keeping the popup open, or $1+Enter to open in a new foreground tab.",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "popupTipKeyboardNav": {
+    "message": "Navigate suggestions with ↑/↓ or Ctrl+N/Ctrl+P, and press Tab to autocomplete the selected nickname or command."
+  },
+  "popupTipBookmarklet": {
+    "message": "Register bookmarklets with :add <name> javascript:... and run them directly on the active tab from search."
+  },
+  "popupTipManagementCommands": {
+    "message": "Run :ls to manage bookmarks and folders, :prefs for settings and sync, or :help to open the documentation."
   }
 }

@@ -446,5 +446,38 @@
   },
   "deleteBookmarkTooltip": {
     "message": "削除"
+  },
+  "popupTipsBadge": {
+    "message": "TIP"
+  },
+  "popupTipsNextHint": {
+    "message": "クリックで次のヒントを表示"
+  },
+  "popupTipAddCommand": {
+    "message": ":add <名前>（短縮 :a）で、開いているタブを即座にブックマーク登録できます。"
+  },
+  "popupTipAddallCommand": {
+    "message": ":addall <名前>（短縮 :aa）で、現在のウィンドウの全タブを一括登録できます。"
+  },
+  "popupTipFolderOpen": {
+    "message": "フォルダ名/ または :open フォルダ名/ と入力して Enter を押すと、配下のブックマークを一括で開けます。"
+  },
+  "popupTipDynamicUrl": {
+    "message": "URL に %s を含めて登録すると、「ニックネーム 検索語」で引数を埋め込んで検索・遷移できます（省略時はデフォルト値またはトップページへ遷移）。"
+  },
+  "popupTipTabDisposition": {
+    "message": "Shift+Enter でポップアップを閉じずにバックグラウンドタブへ連続起動、$1+Enter で新しいフォアグラウンドタブに開けます。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "popupTipKeyboardNav": {
+    "message": "↑ / ↓ や Ctrl+N / Ctrl+P で候補を移動し、Tab キーで選択中のニックネームやコマンドを入力欄へ補完できます。"
+  },
+  "popupTipBookmarklet": {
+    "message": ":add <名前> javascript:... でブックマークレットを登録し、検索結果から現在のタブ上で直接実行できます。"
+  },
+  "popupTipManagementCommands": {
+    "message": ":ls でブックマーク一覧・フォルダ管理、:prefs で言語・同期・履歴検索設定、:help でドキュメントを開けます。"
   }
 }

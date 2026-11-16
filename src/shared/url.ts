@@ -317,18 +317,35 @@ export function getFaviconUrl(pageUrl: string, size: number = 32): string {
 }
 
 /**
- * 実行環境の OS に応じたポップアップ起動ショートカットキー表記を返します。
- * macOS では `Option+Shift+D`、Windows / Linux 等では `Alt+Shift+D` を返します。
- * @returns OS に合わせたショートカットキー表記文字列
+ * 現在の実行環境が macOS プラットフォームであるかを判定します。
+ * @returns macOS 環境の場合は true、それ以外または判定不可時は false
  */
-export function getShortcutLabel(): string {
+export function isMacPlatform(): boolean {
   try {
     const nav = typeof navigator !== 'undefined'
       ? (navigator as Navigator & { userAgentData?: { platform?: string } })
       : undefined;
     const platform = nav?.userAgentData?.platform || nav?.platform || nav?.userAgent || '';
-    return /mac/i.test(platform) ? 'Option+Shift+D' : 'Alt+Shift+D';
+    return /mac/i.test(platform);
   } catch {
-    return 'Alt+Shift+D';
+    return false;
   }
+}
+
+/**
+ * 実行環境の OS に応じた主修飾キー表記を返します。
+ * macOS では `Cmd`、Windows / Linux 等では `Ctrl` を返します。
+ * @returns OS に合わせた修飾キー表記文字列
+ */
+export function getPrimaryModifierLabel(): 'Cmd' | 'Ctrl' {
+  return isMacPlatform() ? 'Cmd' : 'Ctrl';
+}
+
+/**
+ * 実行環境の OS に応じたポップアップ起動ショートカットキー表記を返します。
+ * macOS では `Option+Shift+D`、Windows / Linux 等では `Alt+Shift+D` を返します。
+ * @returns OS に合わせたショートカットキー表記文字列
+ */
+export function getShortcutLabel(): string {
+  return isMacPlatform() ? 'Option+Shift+D' : 'Alt+Shift+D';
 }
