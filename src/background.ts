@@ -24,6 +24,7 @@ import {
   loadBookmarksData,
   openFolderUrls,
   updateHistorySearchEnabledCache,
+  updateListSortOrderCache,
   updateMaxBatchOpenTabsCache,
   updateSyncEnabledCache
 } from './shared/storage';
@@ -45,6 +46,7 @@ import {
 export * from './shared/types';
 export * from './shared/url';
 export * from './shared/toast';
+export * from './shared/listSort';
 export * from './shared/storage';
 export * from './shared/search';
 export * from './shared/commands';
@@ -440,6 +442,9 @@ if (typeof window === 'undefined') {
       }
       if (changes.historySearchEnabled) {
         updateHistorySearchEnabledCache(!!changes.historySearchEnabled.newValue);
+      }
+      if (changes.listSortOrder) {
+        updateListSortOrderCache(changes.listSortOrder.newValue);
       }
     }
 
