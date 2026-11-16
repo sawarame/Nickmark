@@ -479,5 +479,23 @@
   },
   "popupTipManagementCommands": {
     "message": "Run :ls to manage bookmarks and folders, :prefs for settings and sync, or :help to open the documentation."
+  },
+  "sortOrderLabel": {
+    "message": "Sort"
+  },
+  "sortOrderDefault": {
+    "message": "Default"
+  },
+  "sortOrderLastUsedDesc": {
+    "message": "Last Used (Newest)"
+  },
+  "sortOrderLastUsedAsc": {
+    "message": "Last Used (Oldest)"
+  },
+  "sortOrderScoreDesc": {
+    "message": "Score (Highest)"
+  },
+  "sortOrderScoreAsc": {
+    "message": "Score (Lowest)"
   }
 }

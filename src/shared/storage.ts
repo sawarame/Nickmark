@@ -3,8 +3,10 @@ import {
   BookmarkEntry,
   DEFAULT_MAX_BATCH_OPEN_TABS,
   FolderInfo,
+  ListSortOption,
   SYNC_KEY_PREFIX
 } from './types';
+import { parseValidListSortOption } from './listSort';
 import {
   isBookmarkletUrl,
   isDynamicUrl,
@@ -29,6 +31,7 @@ let maxBatchOpenTabsCache: number | null = null;
 let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
 let historySearchEnabledCache: boolean | null = null;
+let listSortOrderCache: ListSortOption | null = null;
 let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
 
 /**
@@ -135,6 +138,38 @@ export async function setHistorySearchEnabled(enabled: boolean): Promise<void> {
  */
 export function updateHistorySearchEnabledCache(enabled: boolean): void {
   historySearchEnabledCache = enabled;
+}
+
+/**
+ * 管理画面のブックマーク一覧並び替え設定を取得します（ローカル専用設定）。
+ * 未設定または不正な値が保存されている場合はデフォルト順（'default'）を返します。
+ * @returns 現在の並び替え設定（ListSortOption）
+ */
+export async function getListSortOrder(): Promise<ListSortOption> {
+  if (listSortOrderCache !== null) return listSortOrderCache;
+  const data = await chrome.storage.local.get('listSortOrder');
+  listSortOrderCache = parseValidListSortOption(data.listSortOrder);
+  return listSortOrderCache;
+}
+
+/**
+ * 管理画面のブックマーク一覧並び替え設定をローカルストレージに保存します。
+ * @param sortOrder - 保存する並び替え設定
+ * @returns 更新完了を示す Promise
+ */
+export async function setListSortOrder(sortOrder: ListSortOption): Promise<void> {
+  const normalized = parseValidListSortOption(sortOrder);
+  listSortOrderCache = normalized;
+  await chrome.storage.local.set({ listSortOrder: normalized });
+}
+
+/**
+ * 一覧並び替え設定のメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param value - 更新後の設定値
+ * @returns なし
+ */
+export function updateListSortOrderCache(value: unknown): void {
+  listSortOrderCache = parseValidListSortOption(value);
 }
 
 /**

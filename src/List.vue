@@ -83,21 +83,39 @@
         </div>
       </template>
       <template #content>
-        <!-- フォルダ絞り込み・一括操作バー -->
+        <!-- フォルダ絞り込み・並び替え・一括操作バー -->
         <div class="folder-toolbar mb-3">
-          <div class="folder-select-group">
-            <label for="folder-filter" class="folder-filter-label">
-              <i class="pi pi-folder" style="margin-right: 0.25rem;"></i>
-              {{ t('folderFilterLabel') || 'Folder' }}:
-            </label>
-            <Select
-              id="folder-filter"
-              v-model="selectedFolder"
-              :options="folderOptions"
-              optionLabel="label"
-              optionValue="value"
-              class="folder-select"
-            />
+          <div class="toolbar-controls-group">
+            <div class="folder-select-group">
+              <label for="folder-filter" class="folder-filter-label">
+                <i class="pi pi-folder" style="margin-right: 0.25rem;"></i>
+                {{ t('folderFilterLabel') || 'Folder' }}:
+              </label>
+              <Select
+                id="folder-filter"
+                v-model="selectedFolder"
+                :options="folderOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="folder-select"
+                @change="tableFirst = 0"
+              />
+            </div>
+            <div class="sort-select-group">
+              <label for="bookmark-sort" class="sort-filter-label">
+                <i class="pi pi-sort-alt" style="margin-right: 0.25rem;"></i>
+                {{ t('sortOrderLabel') || 'Sort' }}:
+              </label>
+              <Select
+                id="bookmark-sort"
+                v-model="selectedSortOrder"
+                :options="sortOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="sort-select"
+                @change="handleToolbarSortChange"
+              />
+            </div>
           </div>
           <div v-if="isSpecificFolderSelected" class="folder-actions-group">
             <Button
@@ -127,11 +145,15 @@
         </div>
 
         <DataTable
-          :value="filteredBookmarks"
+          :value="sortedFilteredBookmarks"
+          v-model:first="tableFirst"
+          :sortField="tableSortField"
+          :sortOrder="tableSortOrder"
           stripedRows
           :paginator="true"
           :rows="10"
           :pt="{ table: { style: 'table-layout: fixed; width: 100%; min-width: 820px;' } }"
+          @sort="handleTableSort"
         >
           <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable style="width: 180px">
             <template #body="slotProps">
@@ -312,16 +334,20 @@ import InputText from 'primevue/inputtext';
 import Textarea from 'primevue/textarea';
 import AutoComplete, { AutoCompleteCompleteEvent } from 'primevue/autocomplete';
 import Button from 'primevue/button';
-import DataTable from 'primevue/datatable';
+import DataTable, { DataTableSortEvent } from 'primevue/datatable';
 import Column from 'primevue/column';
 import Card from 'primevue/card';
 import Toast from 'primevue/toast';
 import Dialog from 'primevue/dialog';
 import Message from 'primevue/message';
-import Select from 'primevue/select';
+import Select, { SelectChangeEvent } from 'primevue/select';
 import ConfirmDialog from 'primevue/confirmdialog';
 
-import { BookmarkEntry } from './shared/types';
+import {
+  BookmarkEntry,
+  DEFAULT_LIST_SORT_OPTION,
+  ListSortOption
+} from './shared/types';
 import {
   getFaviconUrl,
   isBookmarkletUrl,
@@ -332,16 +358,19 @@ import {
   resolveNavigableUrl
 } from './shared/url';
 import { renderToastInDocument } from './shared/toast';
+import { parseValidListSortOption, sortBookmarkRows } from './shared/listSort';
 import {
   createBookmarkEntry,
   deleteFolder,
   extractFolders,
+  getListSortOrder,
   getMaxBatchOpenTabs,
   getSaveErrorMessage,
   loadBookmarksData,
   openFolderUrls,
   renameFolder,
-  saveBookmarksData
+  saveBookmarksData,
+  setListSortOrder
 } from './shared/storage';
 import { filterNicknameSuggestions } from './shared/search';
 import { initI18n, t } from './i18n';
@@ -432,6 +461,26 @@ const selectedFolder = ref<string>('__ALL__');
 const showRenameDialog = ref(false);
 const newFolderName = ref('');
 
+// 並び替え・ページング状態
+const selectedSortOrder = ref<ListSortOption>(DEFAULT_LIST_SORT_OPTION);
+const tableFirst = ref<number>(0);
+const tableSortField = ref<keyof FlatBookmarkRow | undefined>(undefined);
+const tableSortOrder = ref<number | undefined>(undefined);
+
+/**
+ * ツールバーの並び替えセレクト用選択肢配列を算出します。
+ * @returns 並び替え選択肢オブジェクトの配列
+ */
+const sortOptions = computed((): Array<{ label: string; value: ListSortOption }> => {
+  return [
+    { label: t('sortOrderDefault') || 'デフォルト順', value: 'default' },
+    { label: t('sortOrderLastUsedDesc') || '最終使用日時（新しい順）', value: 'last_used_desc' },
+    { label: t('sortOrderLastUsedAsc') || '最終使用日時（古い順）', value: 'last_used_asc' },
+    { label: t('sortOrderScoreDesc') || 'スコア（高い順）', value: 'score_desc' },
+    { label: t('sortOrderScoreAsc') || 'スコア（低い順）', value: 'score_asc' }
+  ];
+});
+
 /**
  * 具体的なフォルダが選択されているか（すべて・ルート以外）を判定します。
  * @returns フォルダ選択中の場合は true
@@ -494,6 +543,45 @@ const filteredBookmarks = computed((): FlatBookmarkRow[] => {
   const prefix = folderPath + '/';
   return flatBookmarks.value.filter(item => normalizeNicknamePath(item.nickname).startsWith(prefix));
 });
+
+/**
+ * フォルダ絞り込み後のブックマーク行を、ツールバーで選択された並び替え基準に従って整列します。
+ * @returns 並び替え済みのブックマーク行配列
+ */
+const sortedFilteredBookmarks = computed((): FlatBookmarkRow[] => {
+  return sortBookmarkRows(filteredBookmarks.value, selectedSortOrder.value);
+});
+
+/**
+ * ツールバーの並び替えセレクト変更時に、列ヘッダーソートを解除して設定をローカル保存します。
+ * @param event - Select の変更イベント
+ * @returns 保存処理完了を示す Promise
+ */
+const handleToolbarSortChange = async (event: SelectChangeEvent): Promise<void> => {
+  const nextSort = parseValidListSortOption(event.value);
+  selectedSortOrder.value = nextSort;
+  // 列ヘッダーソートと競合しないようテーブル側のソート状態を解除し、1ページ目に戻す
+  tableSortField.value = undefined;
+  tableSortOrder.value = undefined;
+  tableFirst.value = 0;
+  await setListSortOrder(nextSort);
+};
+
+/**
+ * DataTable の列ヘッダークリックによるソート変更を処理します。
+ * 列ソート有効時はツールバーの表示矛盾や再選択不可を防ぐため、メモリ上のみデフォルト表示へ切り替えます。
+ * @param event - DataTable のソートイベント
+ * @returns なし
+ */
+const handleTableSort = (event: DataTableSortEvent): void => {
+  tableSortField.value =
+    typeof event.sortField === 'string' ? (event.sortField as keyof FlatBookmarkRow) : undefined;
+  tableSortOrder.value = event.sortOrder ?? undefined;
+  if (event.sortField) {
+    // ストレージの保存値は上書きせず、次回表示時は前回保存したツールバー選択を復元できるようにする
+    selectedSortOrder.value = DEFAULT_LIST_SORT_OPTION;
+  }
+};
 
 /**
  * 選択中フォルダの全ブックマークを一括で開きます。
@@ -725,6 +813,7 @@ onMounted(async () => {
   await initI18n();
   title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   refreshUserScriptsStatus();
+  selectedSortOrder.value = await getListSortOrder();
   await loadBookmarks();
   await checkAndConsumePendingToast();
 
@@ -1532,13 +1621,22 @@ body {
   gap: 1rem;
 }
 
-.folder-select-group {
+.toolbar-controls-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.folder-select-group,
+.sort-select-group {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 
-.folder-filter-label {
+.folder-filter-label,
+.sort-filter-label {
   font-size: 0.9rem;
   font-weight: 500;
   display: flex;
@@ -1547,6 +1645,10 @@ body {
 
 .folder-select {
   min-width: 220px;
+}
+
+.sort-select {
+  min-width: 230px;
 }
 
 .folder-actions-group {

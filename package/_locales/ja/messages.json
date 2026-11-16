@@ -479,5 +479,23 @@
   },
   "popupTipManagementCommands": {
     "message": ":ls でブックマーク一覧・フォルダ管理、:prefs で言語・同期・履歴検索設定、:help でドキュメントを開けます。"
+  },
+  "sortOrderLabel": {
+    "message": "並び替え"
+  },
+  "sortOrderDefault": {
+    "message": "デフォルト順"
+  },
+  "sortOrderLastUsedDesc": {
+    "message": "最終使用日時（新しい順）"
+  },
+  "sortOrderLastUsedAsc": {
+    "message": "最終使用日時（古い順）"
+  },
+  "sortOrderScoreDesc": {
+    "message": "スコア（高い順）"
+  },
+  "sortOrderScoreAsc": {
+    "message": "スコア（低い順）"
   }
 }

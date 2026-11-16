@@ -245,6 +245,21 @@ export const SYNC_KEY_PREFIX = 'sync_data_';
 export const OMNIBOX_MIGRATION_HINT_CONTENT = '→ Nickmark Popup Launcher';
 
 /**
+ * 管理画面一覧のツールバーで選択可能な並び替え基準の型定義
+ */
+export type ListSortOption =
+  | 'default'
+  | 'last_used_desc'
+  | 'last_used_asc'
+  | 'score_desc'
+  | 'score_asc';
+
+/**
+ * 管理画面一覧のデフォルト並び替え設定
+ */
+export const DEFAULT_LIST_SORT_OPTION: ListSortOption = 'default';
+
+/**
  * ポップアップに同時表示するブラウザ履歴候補の最大件数
  */
 export const MAX_HISTORY_SUGGESTIONS = 10;
