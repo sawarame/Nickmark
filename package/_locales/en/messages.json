@@ -577,5 +577,68 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "presetsTitle": {
+    "message": "Presets"
+  },
+  "presetsDescription": {
+    "message": "Easily enable popular search services (%s dynamic URLs) and handy bookmarklets via checkboxes. Only your checkbox selections are stored, consuming virtually zero storage space."
+  },
+  "presetsCategoryDynamicUrl": {
+    "message": "Search Services (Dynamic URLs)"
+  },
+  "presetsCategoryBookmarklet": {
+    "message": "Bookmarklets"
+  },
+  "presetsSelectAllBtn": {
+    "message": "Select All"
+  },
+  "presetsDeselectAllBtn": {
+    "message": "Deselect All"
+  },
+  "presetTitleGoogle": {
+    "message": "Google Search"
+  },
+  "presetTitleYoutube": {
+    "message": "YouTube Search"
+  },
+  "presetTitleGithub": {
+    "message": "GitHub Search"
+  },
+  "presetTitleMaps": {
+    "message": "Google Maps"
+  },
+  "presetTitleTranslate": {
+    "message": "Google Translate"
+  },
+  "presetTitleWikipedia": {
+    "message": "Wikipedia"
+  },
+  "presetTitleAmazon": {
+    "message": "Amazon Search"
+  },
+  "presetTitleX": {
+    "message": "X (Twitter) Search"
+  },
+  "presetTitleNpm": {
+    "message": "npm Search"
+  },
+  "presetTitleMdn": {
+    "message": "MDN Search"
+  },
+  "presetTitleMdlink": {
+    "message": "Copy Markdown Link"
+  },
+  "presetDescMdlink": {
+    "message": "Copy the current page's [Title](URL) to the clipboard"
+  },
+  "presetTitleWayback": {
+    "message": "Open in Wayback Machine"
+  },
+  "presetDescWayback": {
+    "message": "Open the current page URL in https://web.archive.org/web/*/"
+  },
+  "popupTipPresets": {
+    "message": "Enable built-in presets like Google Search (g) or GitHub Search (gh) with a single checkbox in Preferences (:prefs)."
   }
 }

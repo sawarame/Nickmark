@@ -2,11 +2,14 @@ import {
   BatchOpenResult,
   BookmarkEntry,
   DEFAULT_MAX_BATCH_OPEN_TABS,
+  ENABLED_PRESETS_STORAGE_KEY,
   FolderInfo,
   ListSortOption,
+  PresetId,
   SYNC_KEY_PREFIX
 } from './types';
 import { parseValidListSortOption } from './listSort';
+import { mergeBookmarksWithPresets, normalizeEnabledPresetIds } from './presets';
 import {
   isBookmarkletUrl,
   isDynamicUrl,
@@ -17,7 +20,7 @@ import {
   resolveNavigableUrl
 } from './url';
 import { showToast } from './toast';
-import { t } from '../i18n';
+import { getCurrentLocale, t } from '../i18n';
 
 // 8192バイト制限に対する安全な文字数（2,000文字 * UTF-8最大3バイト = 6,000バイト）
 const SYNC_CHUNK_SIZE = 2000;
@@ -32,7 +35,9 @@ let bookmarksCache: Record<string, BookmarkEntry[]> | null = null;
 let isSyncEnabledCache: boolean | null = null;
 let historySearchEnabledCache: boolean | null = null;
 let listSortOrderCache: ListSortOption | null = null;
+let enabledPresetsCache: PresetId[] | null = null;
 let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
+let loadEnabledPresetsPromise: Promise<PresetId[]> | null = null;
 
 /**
  * Google アカウント同期が有効かどうかを取得します。
@@ -170,6 +175,103 @@ export async function setListSortOrder(sortOrder: ListSortOption): Promise<void>
  */
 export function updateListSortOrderCache(value: unknown): void {
   listSortOrderCache = parseValidListSortOption(value);
+}
+
+/**
+ * メモリ上に保持されている有効化プリセット ID キャッシュおよび読み込みプロミスを破棄します。
+ * @returns なし
+ */
+export function clearEnabledPresetsCache(): void {
+  enabledPresetsCache = null;
+  loadEnabledPresetsPromise = null;
+}
+
+/**
+ * 有効化プリセット ID リストのメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param value - 更新後の設定値
+ * @returns なし
+ */
+export function updateEnabledPresetsCache(value: unknown): void {
+  enabledPresetsCache = normalizeEnabledPresetIds(value);
+  loadEnabledPresetsPromise = null;
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）から有効化プリセット ID 配列を読み込みます。
+ * @param area - 読み込み元のストレージ領域（'local' または 'sync'）
+ * @returns 正規化された有効化プリセット ID 配列
+ */
+export async function loadEnabledPresetsFromStorage(
+  area: 'local' | 'sync'
+): Promise<PresetId[]> {
+  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+  const data = await storageArea.get(ENABLED_PRESETS_STORAGE_KEY);
+  return normalizeEnabledPresetIds(data[ENABLED_PRESETS_STORAGE_KEY]);
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）に有効化プリセット ID 配列を保存します。
+ * @param area - 保存先のストレージ領域（'local' または 'sync'）
+ * @param presetIds - 保存するプリセット ID 配列
+ * @returns 正規化されて保存された PresetId 配列
+ */
+export async function saveEnabledPresetsToStorage(
+  area: 'local' | 'sync',
+  presetIds: readonly string[]
+): Promise<PresetId[]> {
+  const normalized = normalizeEnabledPresetIds(presetIds);
+  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+  await storageArea.set({ [ENABLED_PRESETS_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+/**
+ * 現在有効化されているプリセット ID 配列を取得します。
+ * Google アカウント同期が ON の場合は sync ストレージ、OFF の場合は local ストレージから取得し、メモリにキャッシュします。
+ * @param forceRefresh - true の場合、キャッシュを破棄してストレージから再読み込みします
+ * @returns 有効化されている PresetId 配列（初期状態は空配列 `[]`）
+ */
+export async function getEnabledPresetIds(
+  forceRefresh: boolean = false
+): Promise<PresetId[]> {
+  if (forceRefresh) {
+    clearEnabledPresetsCache();
+  }
+  if (enabledPresetsCache !== null) return enabledPresetsCache;
+  if (loadEnabledPresetsPromise) return loadEnabledPresetsPromise;
+
+  loadEnabledPresetsPromise = (async () => {
+    try {
+      const isSync = await getSyncEnabled();
+      const loaded = await loadEnabledPresetsFromStorage(isSync ? 'sync' : 'local');
+      enabledPresetsCache = loaded;
+      return loaded;
+    } finally {
+      loadEnabledPresetsPromise = null;
+    }
+  })();
+
+  return loadEnabledPresetsPromise;
+}
+
+/**
+ * 有効化されたプリセット ID 配列を保存します。
+ * Google アカウント同期が ON の場合は sync と local の双方に保存し、OFF の場合は local に保存します。
+ * @param presetIds - 保存するプリセット ID の配列
+ * @returns 正規化されて保存された PresetId 配列
+ */
+export async function setEnabledPresetIds(
+  presetIds: readonly string[]
+): Promise<PresetId[]> {
+  const normalized = normalizeEnabledPresetIds(presetIds);
+  const isSync = await getSyncEnabled();
+  if (isSync) {
+    await saveEnabledPresetsToStorage('sync', normalized);
+  }
+  await saveEnabledPresetsToStorage('local', normalized);
+  enabledPresetsCache = normalized;
+  loadEnabledPresetsPromise = null;
+  return normalized;
 }
 
 /**
@@ -320,8 +422,15 @@ async function saveToStorage(
     chunkCount++;
   }
 
-  // 古いチャンクやサイズ超過データの残存による Quota エラーを防ぐため事前にクリアする
-  await chrome.storage.sync.clear();
+  // 古いチャンクデータの残存による Quota エラーを防ぐため、既存のチャンクキー（sync_data_*）のみを事前に削除する
+  // ※ enabledPresets 等の別キーを消去しないよう sync.clear() は使用しない
+  const existingSyncData = await chrome.storage.sync.get(null);
+  const existingChunkKeys = Object.keys(existingSyncData).filter(k =>
+    k.startsWith(SYNC_KEY_PREFIX)
+  );
+  if (existingChunkKeys.length > 0) {
+    await chrome.storage.sync.remove(existingChunkKeys);
+  }
   await chrome.storage.sync.set(chunks);
 }
 
@@ -362,6 +471,22 @@ export async function loadBookmarksData(
   })();
 
   return loadBookmarksPromise;
+}
+
+/**
+ * ユーザー登録ブックマークに現在有効なプリセットを仮想エントリとして合成した検索用のブックマーク辞書を取得します。
+ * 通常の `loadBookmarksData()` のキャッシュには影響を与えず、ストレージ容量も消費しません。
+ * @param forceRefresh - true の場合、キャッシュを破棄して強制的にストレージから再読み込みします
+ * @returns プリセット合成済みの検索用ブックマーク辞書
+ */
+export async function loadSearchableBookmarksData(
+  forceRefresh: boolean = false
+): Promise<Record<string, BookmarkEntry[]>> {
+  const [bookmarks, enabledPresetIds] = await Promise.all([
+    loadBookmarksData(forceRefresh),
+    getEnabledPresetIds(forceRefresh)
+  ]);
+  return mergeBookmarksWithPresets(bookmarks, enabledPresetIds, getCurrentLocale());
 }
 
 /**
@@ -686,15 +811,25 @@ export async function deleteFolder(
 // 別タブ・別コンテキストで設定が変更された場合もメモリキャッシュを最新に保つ
 if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local') return;
-    if (changes.isSyncEnabled) {
-      updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
+    if (area === 'local') {
+      if (changes.isSyncEnabled) {
+        updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
+        clearEnabledPresetsCache();
+      }
+      if (changes.maxBatchOpenTabs) {
+        updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
+      }
+      if (changes.historySearchEnabled) {
+        updateHistorySearchEnabledCache(!!changes.historySearchEnabled.newValue);
+      }
     }
-    if (changes.maxBatchOpenTabs) {
-      updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
-    }
-    if (changes.historySearchEnabled) {
-      updateHistorySearchEnabledCache(!!changes.historySearchEnabled.newValue);
+    if (changes[ENABLED_PRESETS_STORAGE_KEY]) {
+      if (
+        (isSyncEnabledCache === true && area === 'sync') ||
+        (isSyncEnabledCache !== true && area === 'local')
+      ) {
+        updateEnabledPresetsCache(changes[ENABLED_PRESETS_STORAGE_KEY].newValue);
+      }
     }
   });
 }

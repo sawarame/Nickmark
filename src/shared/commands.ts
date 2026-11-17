@@ -21,6 +21,7 @@ import {
   getMaxBatchOpenTabs,
   getSaveErrorMessage,
   loadBookmarksData,
+  loadSearchableBookmarksData,
   openFolderUrls,
   openTargetsAndUpdateScores,
   saveBookmarksData,
@@ -363,7 +364,7 @@ export async function executeNickmarkCommand(
       };
     }
 
-    const bookmarks = await loadBookmarksData();
+    const searchableBookmarks = await loadSearchableBookmarksData();
     const isExplicitFolder = rawTarget.endsWith('/');
     const cleanTarget = normalizeNicknamePath(rawTarget);
 
@@ -376,10 +377,10 @@ export async function executeNickmarkCommand(
       };
     }
 
-    // 1. 明示的なフォルダ指定でなく単一ニックネームが存在する場合は単一ニックネームを開く
-    if (!isExplicitFolder && (bookmarks[cleanTarget] || bookmarks[rawTarget])) {
-      const targetKey = bookmarks[cleanTarget] ? cleanTarget : rawTarget;
-      const entries = bookmarks[targetKey];
+    // 1. 明示的なフォルダ指定でなく単一ニックネーム（有効なプリセットを含む）が存在する場合は単一ニックネームを開く
+    if (!isExplicitFolder && (searchableBookmarks[cleanTarget] || searchableBookmarks[rawTarget])) {
+      const targetKey = searchableBookmarks[cleanTarget] ? cleanTarget : rawTarget;
+      const entries = searchableBookmarks[targetKey];
       const openableTargets = entries
         .filter(entry => !isBookmarkletUrl(entry.url))
         .map(entry => ({
@@ -402,7 +403,7 @@ export async function executeNickmarkCommand(
     }
 
     // 2. フォルダとして一括オープン
-    const folders = extractFolders(bookmarks);
+    const folders = extractFolders(searchableBookmarks);
     if (folders.has(cleanTarget) || isExplicitFolder) {
       const result = await openFolderUrls(cleanTarget, false, undefined);
       if (result.requiresConfirmation && result.folderPath && result.urls) {

@@ -95,6 +95,102 @@
           </div>
         </template>
       </Card>
+
+      <Card class="mb-4">
+        <template #title>
+          <div class="presets-header-row">
+            <span>{{ t('presetsTitle') || 'Presets' }}</span>
+            <div class="presets-bulk-actions">
+              <Button
+                type="button"
+                :label="t('presetsSelectAllBtn') || 'Select All'"
+                severity="secondary"
+                text
+                size="small"
+                :disabled="enabledPresetIds.length === PRESET_DEFINITIONS.length"
+                @click="selectAllPresets"
+              />
+              <Button
+                type="button"
+                :label="t('presetsDeselectAllBtn') || 'Deselect All'"
+                severity="secondary"
+                text
+                size="small"
+                :disabled="enabledPresetIds.length === 0"
+                @click="deselectAllPresets"
+              />
+            </div>
+          </div>
+        </template>
+        <template #content>
+          <div class="sync-desc presets-intro">
+            {{
+              t('presetsDescription') ||
+              'Easily enable popular search services (%s dynamic URLs) and handy bookmarklets via checkboxes. Only your checkbox selections are stored, consuming virtually zero storage space.'
+            }}
+          </div>
+
+          <div class="preset-category-block">
+            <div class="preset-category-title">
+              {{ t('presetsCategoryDynamicUrl') || 'Search Services (Dynamic URLs)' }}
+            </div>
+            <div class="preset-grid">
+              <label
+                v-for="preset in dynamicUrlPresets"
+                :key="preset.id"
+                class="preset-item"
+                :class="{ 'is-enabled': enabledPresetIds.includes(preset.id) }"
+                :for="'preset-' + preset.id"
+              >
+                <Checkbox
+                  v-model="enabledPresetIds"
+                  :inputId="'preset-' + preset.id"
+                  :value="preset.id"
+                  @change="handlePresetCheckboxChange"
+                />
+                <div class="preset-item-body">
+                  <div class="preset-item-top">
+                    <span class="preset-badge">{{ preset.nickname }}</span>
+                    <span class="preset-title">{{ t(preset.titleKey) || preset.id }}</span>
+                    <span class="preset-type-tag">[%s]</span>
+                  </div>
+                  <div class="preset-preview">{{ getPresetPreviewText(preset) }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div class="preset-category-block">
+            <div class="preset-category-title">
+              {{ t('presetsCategoryBookmarklet') || 'Bookmarklets' }}
+            </div>
+            <div class="preset-grid">
+              <label
+                v-for="preset in bookmarkletPresets"
+                :key="preset.id"
+                class="preset-item"
+                :class="{ 'is-enabled': enabledPresetIds.includes(preset.id) }"
+                :for="'preset-' + preset.id"
+              >
+                <Checkbox
+                  v-model="enabledPresetIds"
+                  :inputId="'preset-' + preset.id"
+                  :value="preset.id"
+                  @change="handlePresetCheckboxChange"
+                />
+                <div class="preset-item-body">
+                  <div class="preset-item-top">
+                    <span class="preset-badge">{{ preset.nickname }}</span>
+                    <span class="preset-title">{{ t(preset.titleKey) || preset.id }}</span>
+                    <span class="preset-type-tag">[JS]</span>
+                  </div>
+                  <div class="preset-preview">{{ getPresetPreviewText(preset) }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </template>
+      </Card>
     </div>
 
     <!-- データ移行・競合解決ダイアログ -->
@@ -140,25 +236,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import Card from 'primevue/card';
 import Select from 'primevue/select';
 import Button from 'primevue/button';
+import Checkbox from 'primevue/checkbox';
 import ToggleSwitch from 'primevue/toggleswitch';
 import InputNumber, { InputNumberInputEvent } from 'primevue/inputnumber';
 import Dialog from 'primevue/dialog';
 import Toast, { ToastEvent, ToastMessageOptions } from 'primevue/toast';
 
 import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
-import { BookmarkEntry, DEFAULT_MAX_BATCH_OPEN_TABS } from './shared/types';
 import {
+  BookmarkEntry,
+  DEFAULT_MAX_BATCH_OPEN_TABS,
+  ENABLED_PRESETS_STORAGE_KEY,
+  PresetDefinition,
+  PresetId
+} from './shared/types';
+import {
+  PRESET_DEFINITIONS,
+  normalizeEnabledPresetIds,
+  resolvePresetUrl
+} from './shared/presets';
+import {
+  getEnabledPresetIds,
   getMaxBatchOpenTabs,
   getSaveErrorMessage,
   getStorageDataWithTimestamp,
   getSyncEnabled,
   isOverQuota,
+  loadEnabledPresetsFromStorage,
   saveBookmarksData,
+  saveEnabledPresetsToStorage,
+  setEnabledPresetIds,
   setHistorySearchEnabled,
   setMaxBatchOpenTabs,
   setSyncEnabled
@@ -171,8 +283,25 @@ const syncEnabled = ref(false);
 const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
 const historySearchEnabled = ref(false);
 const isRequestingHistoryPermission = ref(false);
+const enabledPresetIds = ref<PresetId[]>([]);
 const isLoaded = ref(false);
 const renderKey = ref(0);
+
+/**
+ * 検索サービス（動的 URL）カテゴリのプリセット一覧を返します。
+ * @returns 動的 URL プリセット定義の配列
+ */
+const dynamicUrlPresets = computed((): PresetDefinition[] =>
+  PRESET_DEFINITIONS.filter(p => p.category === 'dynamic_url')
+);
+
+/**
+ * ブックマークレットカテゴリのプリセット一覧を返します。
+ * @returns ブックマークレットプリセット定義の配列
+ */
+const bookmarkletPresets = computed((): PresetDefinition[] =>
+  PRESET_DEFINITIONS.filter(p => p.category === 'bookmarklet')
+);
 
 const activeToastKeys = new Set<string>();
 
@@ -210,14 +339,15 @@ let lastSavedMaxBatchOpenTabs = DEFAULT_MAX_BATCH_OPEN_TABS;
 let pendingMaxBatchOpenTabs: number | null = null;
 let maxBatchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let maxBatchToastTimer: ReturnType<typeof setTimeout> | null = null;
+let presetToastTimer: ReturnType<typeof setTimeout> | null = null;
 let pendingSaveMaxBatchPromise: Promise<void> | null = null;
 
 // データ移行ダイアログ用の状態
 const showMigrationDialog = ref(false);
 const migrationType = ref<'enable' | 'disable'>('enable');
 const migrationMessage = ref('');
-const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number } | null>(null);
-const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number } | null>(null);
+const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[] } | null>(null);
+const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[] } | null>(null);
 
 const languageOptions = ref([
   { label: 'English', value: 'en' },
@@ -236,7 +366,109 @@ const loadSettings = async (): Promise<void> => {
   maxBatchOpenTabs.value = loadedLimit;
   lastSavedMaxBatchOpenTabs = loadedLimit;
   historySearchEnabled.value = await getEffectiveHistorySearchEnabled();
+  enabledPresetIds.value = await getEnabledPresetIds(true);
   isLoaded.value = true;
+};
+
+/**
+ * プリセットのプレビュー表示テキスト（動的 URL またはブックマークレットの説明文）を取得します。
+ * @param preset - 対象のプリセット定義
+ * @returns 表示用のプレビュー文字列
+ */
+const getPresetPreviewText = (preset: PresetDefinition): string => {
+  if (preset.descriptionKey) {
+    return t(preset.descriptionKey) || resolvePresetUrl(preset, selectedLanguage.value);
+  }
+  return resolvePresetUrl(preset, selectedLanguage.value);
+};
+
+/**
+ * プリセット設定の保存完了トーストを短いデバウンス付きで表示します。
+ * 連続チェック操作時にトーストが積み上がるのを防ぎます。
+ * @returns なし
+ */
+const schedulePresetSavedToast = (): void => {
+  if (presetToastTimer !== null) {
+    clearTimeout(presetToastTimer);
+  }
+  presetToastTimer = setTimeout(() => {
+    presetToastTimer = null;
+    addUniqueToast({
+      severity: 'success',
+      summary: t('saveSuccess') || 'Saved',
+      detail: t('saveSuccess') || 'Saved',
+      life: 2000
+    });
+  }, 150);
+};
+
+/**
+ * 有効化プリセット ID リストをストレージへ保存し、UI 状態を正規化します。
+ * @param nextIds - 保存するプリセット ID リスト
+ * @returns 保存完了を示す Promise
+ */
+const savePresetsSelection = async (nextIds: readonly string[]): Promise<void> => {
+  try {
+    const saved = await setEnabledPresetIds(nextIds);
+    enabledPresetIds.value = saved;
+    schedulePresetSavedToast();
+  } catch (err: unknown) {
+    enabledPresetIds.value = await getEnabledPresetIds(true);
+    addUniqueToast({
+      severity: 'error',
+      summary: 'Error',
+      detail: getSaveErrorMessage(err, 'Failed to save presets.'),
+      life: 4000
+    });
+  }
+};
+
+/**
+ * 個別のプリセットチェックボックス変更時に選択状態を保存します。
+ * @returns 保存完了を示す Promise
+ */
+const handlePresetCheckboxChange = async (): Promise<void> => {
+  await savePresetsSelection(enabledPresetIds.value);
+};
+
+/**
+ * 全プリセットを一括で有効化（すべて選択）して保存します。
+ * @returns 保存完了を示す Promise
+ */
+const selectAllPresets = async (): Promise<void> => {
+  const allIds = PRESET_DEFINITIONS.map(p => p.id);
+  enabledPresetIds.value = allIds;
+  await savePresetsSelection(allIds);
+};
+
+/**
+ * 全プリセットを一括で無効化（すべて解除）して保存します。
+ * @returns 保存完了を示す Promise
+ */
+const deselectAllPresets = async (): Promise<void> => {
+  enabledPresetIds.value = [];
+  await savePresetsSelection([]);
+};
+
+/**
+ * 他タブやバックグラウンドでプリセット設定が変更された際に設定画面の表示を同期します。
+ * @param changes - 変更されたストレージキーの辞書
+ * @param area - 変更が発生したストレージ領域
+ * @returns なし
+ */
+const handleStorageChanged = (
+  changes: { [key: string]: chrome.storage.StorageChange },
+  area: string
+): void => {
+  if (!changes[ENABLED_PRESETS_STORAGE_KEY]) return;
+  if (
+    (syncEnabled.value && area === 'sync') ||
+    (!syncEnabled.value && area === 'local')
+  ) {
+    enabledPresetIds.value = normalizeEnabledPresetIds(
+      changes[ENABLED_PRESETS_STORAGE_KEY].newValue
+    );
+  }
 };
 
 /**
@@ -472,9 +704,10 @@ const saveLanguage = async (): Promise<void> => {
 };
 
 /**
- * 同期設定の更新および必要に応じてデータ保存を行い、失敗時は元の設定へロールバックします。
+ * 同期設定の更新および必要に応じてブックマーク・プリセットのデータ保存を行い、失敗時は元の設定へロールバックします。
  * @param targetEnabled - 切り替え後の同期設定（true: 有効、false: 無効）
  * @param bookmarksToSave - 切り替え先にコピー保存するブックマークデータ（省略時は設定変更のみ）
+ * @param presetsToSave - 切り替え先にコピー保存するプリセット ID 配列（省略時は移行先既存値を維持）
  * @param successNotice - 成功時のトースト通知設定
  * @param errorSummary - 失敗時のトースト見出し
  * @param fallbackError - 不明エラー時のフォールバック文言
@@ -483,6 +716,7 @@ const saveLanguage = async (): Promise<void> => {
 const applySyncTransition = async (
   targetEnabled: boolean,
   bookmarksToSave: Record<string, BookmarkEntry[]> | null,
+  presetsToSave: PresetId[] | null,
   successNotice: { severity: 'success' | 'info'; summary: string; detail: string },
   errorSummary: string,
   fallbackError: string
@@ -492,11 +726,20 @@ const applySyncTransition = async (
     if (bookmarksToSave) {
       await saveBookmarksData(bookmarksToSave);
     }
+    if (presetsToSave !== null) {
+      await setEnabledPresetIds(presetsToSave);
+    } else if (targetEnabled) {
+      // クラウド側の既存データを採用して同期を有効化した場合は、クラウドのプリセット設定をローカルにもミラーする
+      const cloudPresets = await loadEnabledPresetsFromStorage('sync');
+      await saveEnabledPresetsToStorage('local', cloudPresets);
+    }
     syncEnabled.value = targetEnabled;
+    enabledPresetIds.value = await getEnabledPresetIds(true);
     addUniqueToast({ ...successNotice, life: 3000 });
     return true;
   } catch (err: unknown) {
     await setSyncEnabled(!targetEnabled);
+    enabledPresetIds.value = await getEnabledPresetIds(true);
     addUniqueToast({
       severity: 'error',
       summary: errorSummary,
@@ -523,7 +766,10 @@ const handleToggleRequest = (): void => {
  * @returns 処理完了を示す Promise
  */
 const handleSyncToggle = async (newValue: boolean): Promise<void> => {
-  const local = await getStorageDataWithTimestamp('local');
+  const [local, localPresets] = await Promise.all([
+    getStorageDataWithTimestamp('local'),
+    loadEnabledPresetsFromStorage('local')
+  ]);
 
   if (newValue) {
     if (isOverQuota(local.bookmarks)) {
@@ -538,14 +784,17 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       return;
     }
 
-    const sync = await getStorageDataWithTimestamp('sync');
-    if (Object.keys(sync.bookmarks).length > 0) {
+    const [sync, syncPresets] = await Promise.all([
+      getStorageDataWithTimestamp('sync'),
+      loadEnabledPresetsFromStorage('sync')
+    ]);
+    if (Object.keys(sync.bookmarks).length > 0 || syncPresets.length > 0) {
       migrationType.value = 'enable';
       migrationMessage.value =
         t('confirmEnableSyncWithData') ||
         'Existing cloud data found. Which data do you want to use?';
-      localInfo.value = local;
-      syncInfo.value = sync;
+      localInfo.value = { ...local, presets: localPresets };
+      syncInfo.value = { ...sync, presets: syncPresets };
       showMigrationDialog.value = true;
       return;
     }
@@ -553,6 +802,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     await applySyncTransition(
       true,
       local.bookmarks,
+      localPresets,
       {
         severity: 'success',
         summary: 'Sync Enabled',
@@ -564,14 +814,17 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     return;
   }
 
-  const sync = await getStorageDataWithTimestamp('sync');
-  if (Object.keys(local.bookmarks).length > 0) {
+  const [sync, syncPresets] = await Promise.all([
+    getStorageDataWithTimestamp('sync'),
+    loadEnabledPresetsFromStorage('sync')
+  ]);
+  if (Object.keys(local.bookmarks).length > 0 || localPresets.length > 0) {
     migrationType.value = 'disable';
     migrationMessage.value =
       t('confirmDisableSyncWithData') ||
       'Local data already exists. Which data do you want to keep?';
-    localInfo.value = local;
-    syncInfo.value = sync;
+    localInfo.value = { ...local, presets: localPresets };
+    syncInfo.value = { ...sync, presets: syncPresets };
     showMigrationDialog.value = true;
     return;
   }
@@ -579,6 +832,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
   await applySyncTransition(
     false,
     sync.bookmarks,
+    syncPresets,
     {
       severity: 'info',
       summary: 'Sync Disabled',
@@ -598,10 +852,14 @@ const performMigration = async (): Promise<void> => {
   const sourceBookmarks = isEnabling
     ? localInfo.value?.bookmarks ?? null
     : syncInfo.value?.bookmarks ?? null;
+  const sourcePresets = isEnabling
+    ? localInfo.value?.presets ?? null
+    : syncInfo.value?.presets ?? null;
 
   const ok = await applySyncTransition(
     isEnabling,
     sourceBookmarks,
+    sourcePresets,
     {
       severity: 'success',
       summary: 'Success',
@@ -624,6 +882,7 @@ const useExistingSyncData = async (): Promise<void> => {
   await applySyncTransition(
     true,
     null,
+    null,
     {
       severity: 'success',
       summary: 'Sync Enabled',
@@ -642,6 +901,7 @@ const useExistingSyncData = async (): Promise<void> => {
 const keepExistingLocalData = async (): Promise<void> => {
   await applySyncTransition(
     false,
+    null,
     null,
     {
       severity: 'info',
@@ -698,15 +958,25 @@ const goBack = async (): Promise<void> => {
 
 onMounted(async () => {
   window.addEventListener('pagehide', handlePageHide);
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(handleStorageChanged);
+  }
   await loadSettings();
 });
 
 onUnmounted(() => {
   window.removeEventListener('pagehide', handlePageHide);
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.removeListener(handleStorageChanged);
+  }
   clearMaxBatchDebounceTimer();
   if (maxBatchToastTimer !== null) {
     clearTimeout(maxBatchToastTimer);
     maxBatchToastTimer = null;
+  }
+  if (presetToastTimer !== null) {
+    clearTimeout(presetToastTimer);
+    presetToastTimer = null;
   }
 });
 </script>
@@ -846,5 +1116,113 @@ onUnmounted(() => {
 
 .latest .comp-time {
   color: var(--p-primary-color);
+}
+
+.presets-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.presets-bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.presets-intro {
+  margin-bottom: 1.25rem;
+  line-height: 1.5;
+}
+
+.preset-category-block {
+  margin-top: 1.25rem;
+}
+
+.preset-category-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--p-text-muted-color);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 0.75rem;
+}
+
+.preset-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid var(--p-content-border-color);
+  background-color: var(--p-content-background);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  user-select: none;
+}
+
+.preset-item:hover {
+  border-color: color-mix(in srgb, var(--p-primary-color) 45%, var(--p-content-border-color));
+}
+
+.preset-item.is-enabled {
+  background-color: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-content-background));
+  border-color: color-mix(in srgb, var(--p-primary-color) 45%, var(--p-content-border-color));
+}
+
+.preset-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.preset-item-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.preset-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  background-color: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+
+.preset-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--p-text-color);
+}
+
+.preset-type-tag {
+  font-size: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--p-text-muted-color);
+  margin-left: auto;
+}
+
+.preset-preview {
+  font-size: 0.75rem;
+  color: var(--p-text-muted-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

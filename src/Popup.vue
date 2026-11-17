@@ -208,12 +208,14 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import CommandPromptIcon from './components/CommandPromptIcon.vue';
-import { initI18n, t } from './i18n';
+import { getCurrentLocale, initI18n, t } from './i18n';
 import {
   BatchOpenConfirmationData,
   BookmarkEntry,
   BookmarkletExecutionResult,
+  ENABLED_PRESETS_STORAGE_KEY,
   PaletteItem,
+  PresetId,
   RuntimeMessage,
   TabDisposition,
   TipEntry
@@ -224,8 +226,9 @@ import {
   searchHistoryPaletteItems,
   shouldSearchHistoryForQuery
 } from './shared/history';
+import { mergeBookmarksWithPresets } from './shared/presets';
 import { buildPaletteSuggestions } from './shared/search';
-import { loadBookmarksData, openFolderUrls } from './shared/storage';
+import { getEnabledPresetIds, loadBookmarksData, openFolderUrls } from './shared/storage';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
@@ -243,6 +246,7 @@ interface FeedbackState {
 const query = ref('');
 const selectedIndex = ref(0);
 const bookmarksSnapshot = ref<Record<string, BookmarkEntry[]>>({});
+const enabledPresetIds = ref<PresetId[]>([]);
 const currentTab = ref<chrome.tabs.Tab | undefined>(undefined);
 const isHistorySearchActive = ref(false);
 const historyItems = ref<PaletteItem[]>([]);
@@ -284,12 +288,30 @@ const isCommandInput = computed((): boolean => {
 });
 
 /**
+ * ユーザー登録ブックマークに現在有効なプリセットを仮想合成した通常検索用の辞書を算出します。
+ * 言語設定や有効プリセットの変更時にリアクティブに再評価されます。
+ * @returns プリセット合成済みの検索用ブックマーク辞書
+ */
+const searchableBookmarks = computed((): Record<string, BookmarkEntry[]> => {
+  void i18nVersion.value;
+  return mergeBookmarksWithPresets(
+    bookmarksSnapshot.value,
+    enabledPresetIds.value,
+    getCurrentLocale()
+  );
+});
+
+/**
  * 検索入力文字列に基づいて同期算出されるブックマーク・コマンド候補リストを返します。
+ * 通常検索時はプリセットを合成した辞書を用い、`:` コマンド入力時はユーザー登録ブックマークのみを参照します。
  * 入力が空の場合は空配列を返します。
  * @returns ブックマーク・コマンド系パレット候補アイテム配列
  */
 const bookmarkItems = computed((): PaletteItem[] => {
-  return buildPaletteSuggestions(query.value, bookmarksSnapshot.value, {
+  const targetBookmarks = isCommandInput.value
+    ? bookmarksSnapshot.value
+    : searchableBookmarks.value;
+  return buildPaletteSuggestions(query.value, targetBookmarks, {
     url: currentTab.value?.url,
     title: currentTab.value?.title
   });
@@ -865,15 +887,37 @@ const handleGlobalKeyDown = (event: KeyboardEvent): void => {
 };
 
 /**
- * 初期化処理: 多言語設定、ブックマークデータ、およびアクティブタブ情報を読み込み入力欄へフォーカスします。
+ * ストレージ変更イベントに応じて言語設定や有効化プリセットをリアクティブに同期します。
+ * @param changes - 変更されたストレージキーの辞書
+ * @returns 処理完了を示す Promise
+ */
+const handlePopupStorageChanged = async (
+  changes: { [key: string]: chrome.storage.StorageChange }
+): Promise<void> => {
+  if (changes.language) {
+    await initI18n();
+    i18nVersion.value += 1;
+  }
+  if (changes[ENABLED_PRESETS_STORAGE_KEY] || changes.isSyncEnabled) {
+    enabledPresetIds.value = await getEnabledPresetIds(true);
+  }
+};
+
+/**
+ * 初期化処理: 多言語設定、ブックマークデータ、プリセット設定、およびアクティブタブ情報を読み込み入力欄へフォーカスします。
  * @returns 初期化完了を示す Promise
  */
 onMounted(async (): Promise<void> => {
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(handlePopupStorageChanged);
+  }
+
   await initI18n();
   i18nVersion.value += 1;
 
-  const [bookmarksResult, tabsResult, historyEnabledResult] = await Promise.allSettled([
+  const [bookmarksResult, presetsResult, tabsResult, historyEnabledResult] = await Promise.allSettled([
     loadBookmarksData(),
+    getEnabledPresetIds(),
     chrome.tabs.query({ active: true, currentWindow: true }),
     getEffectiveHistorySearchEnabled()
   ]);
@@ -882,6 +926,12 @@ onMounted(async (): Promise<void> => {
     bookmarksSnapshot.value = bookmarksResult.value;
   } else {
     console.warn('ブックマークデータの読み込みに失敗しました:', bookmarksResult.reason);
+  }
+
+  if (presetsResult.status === 'fulfilled') {
+    enabledPresetIds.value = presetsResult.value;
+  } else {
+    console.warn('プリセット設定の読み込みに失敗しました:', presetsResult.reason);
   }
 
   if (tabsResult.status === 'fulfilled' && tabsResult.value.length > 0) {
@@ -900,6 +950,9 @@ onMounted(async (): Promise<void> => {
 });
 
 onUnmounted(() => {
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.removeListener(handlePopupStorageChanged);
+  }
   clearFeedbackDismissTimer();
   clearHistoryDebounceTimer();
 });
