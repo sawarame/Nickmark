@@ -3,8 +3,21 @@
 <head>
   <meta charset="utf-8">
   <title>Nickmark Bookmarks</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: var(--p-page-background, #f1f5f9);
+      color: var(--p-text-color, #334155);
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        background-color: var(--p-page-background, #09090b);
+        color: var(--p-text-color, #ffffff);
+      }
+    }
+  </style>
 </head>
-<body style="margin: 0; background-color: var(--p-surface-100);">
+<body>
   <div id="app"></div>
   <script src="js/list.js"></script>
 </body>

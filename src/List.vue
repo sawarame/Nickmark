@@ -1353,6 +1353,7 @@ const saveJsonEdit = async (): Promise<void> => {
 /* PrimeVue 要素向けのグローバルリセット */
 body {
   margin: 0;
+  color: var(--p-text-color);
   font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -1364,7 +1365,7 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--p-page-background);
   min-height: 100vh;
 }
 

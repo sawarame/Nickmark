@@ -716,7 +716,7 @@ onUnmounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
-  background-color: var(--p-surface-100);
+  background-color: var(--p-page-background);
   min-height: 100vh;
 }
 
@@ -800,10 +800,11 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 1rem;
-  background: var(--p-surface-50);
+  background: var(--p-form-field-filled-background);
+  color: var(--p-text-color);
   padding: 1rem;
   border-radius: 8px;
-  border: 1px solid var(--p-surface-200);
+  border: 1px solid var(--p-content-border-color);
 }
 
 .comparison-item {
@@ -815,8 +816,9 @@ onUnmounted(() => {
 }
 
 .comparison-item.latest {
-  background: var(--p-primary-50);
-  border: 1px solid var(--p-primary-200);
+  background: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+  border: 1px solid color-mix(in srgb, var(--p-primary-color) 35%, transparent);
 }
 
 .comp-label {

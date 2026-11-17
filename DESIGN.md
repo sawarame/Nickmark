@@ -14,7 +14,7 @@
 - **スタイリング**:
   - コンポーネントの配置やレイアウトの調整には、CSS の Flexbox や Grid を利用する。
   - Vue の `<style scoped>` を用いてコンポーネント内にスタイルをカプセル化する。
-  - 背景色やテキストカラーは PrimeVue の CSS 変数（例: `var(--p-surface-100)`, `var(--p-text-color)`）を利用し、テーマに追従させる。
+  - 背景色やテキストカラーはライト／ダークモードに追従する PrimeVue のセマンティック CSS 変数（例: `var(--p-page-background)`, `var(--p-content-background)`, `var(--p-text-color)`）を利用し、テーマに追従させる（`--p-surface-50` / `--p-surface-100` 等の非反転スケールトークンを直接背景色に使用しない）。
 
 ## 3. 使用する主なコンポーネント
 
