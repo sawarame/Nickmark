@@ -307,6 +307,35 @@ export type ListSortOption =
 export const DEFAULT_LIST_SORT_OPTION: ListSortOption = 'default';
 
 /**
+ * 管理画面一覧テーブルで列別フィルター対象となるフィールド種別
+ */
+export type FilterableColumnField = 'nickname' | 'title' | 'url';
+
+/**
+ * 単一列のフィルター UI 開閉および検索クエリ状態
+ */
+export interface ColumnFilterItemState {
+  /** フィルター入力欄（テキストエリア）が展開表示されているか */
+  open: boolean;
+  /** 入力されている検索ワード文字列 */
+  query: string;
+}
+
+/**
+ * 一覧テーブル全 3 列のフィルター状態マップ
+ */
+export type ColumnFiltersState = Record<FilterableColumnField, ColumnFilterItemState>;
+
+/**
+ * 列別フィルタリング判定関数へ渡すクエリ文字列マップ
+ */
+export interface ColumnFilterQueries {
+  nickname?: string;
+  title?: string;
+  url?: string;
+}
+
+/**
  * ポップアップに同時表示するブラウザ履歴候補の最大件数
  */
 export const MAX_HISTORY_SUGGESTIONS = 10;

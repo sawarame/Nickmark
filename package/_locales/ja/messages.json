@@ -640,5 +640,20 @@
   },
   "popupTipPresets": {
     "message": "設定画面（:prefs）から、Google 検索（g）や GitHub 検索（gh）などの定番プリセットをチェックひとつで有効化できます。"
+  },
+  "columnFilterBtnTooltip": {
+    "message": "$1で絞り込む",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "columnFilterPlaceholder": {
+    "message": "$1を検索...",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "clearColumnFilterTooltip": {
+    "message": "フィルターをクリア"
   }
 }

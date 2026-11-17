@@ -1,4 +1,4 @@
-import { DEFAULT_LIST_SORT_OPTION, ListSortOption } from './types';
+import { ColumnFilterQueries, DEFAULT_LIST_SORT_OPTION, ListSortOption } from './types';
 
 /**
  * 一覧の並び替え対象として最小限必要なブックマーク行インターフェース
@@ -8,6 +8,15 @@ export interface SortableBookmarkRow {
   url: string;
   score: number;
   last_used_at: number;
+}
+
+/**
+ * 列別フィルタリング対象として最小限必要なブックマーク行インターフェース
+ */
+export interface FilterableBookmarkRow {
+  nickname: string;
+  title?: string;
+  url: string;
 }
 
 /**
@@ -113,4 +122,51 @@ export function sortBookmarkRows<T extends SortableBookmarkRow>(
     }
     return compareBookmarkRowTieBreaker(a, b);
   });
+}
+
+/**
+ * 対象フィールドの文字列が、指定された検索クエリに一致するかを判定します。
+ * 大文字・小文字を区別せず、空白区切りで複数ワードが入力された場合はすべてのワードが含まれる（AND 部分一致）かを検証します。
+ * クエリが空（または空白のみ）の場合は常に true を返します。
+ * @param fieldValue - 検査対象のセル文字列
+ * @param rawQuery - ユーザーが入力した検索クエリ文字列
+ * @returns 条件を満たす場合は true、それ以外は false
+ */
+export function matchesColumnFilter(
+  fieldValue: string | undefined | null,
+  rawQuery: string | undefined | null
+): boolean {
+  const trimmedQuery = (rawQuery || '').trim();
+  if (!trimmedQuery) return true;
+
+  const targetLower = (fieldValue || '').toLowerCase();
+  const tokens = trimmedQuery.toLowerCase().split(/\s+/).filter(Boolean);
+  return tokens.every(token => targetLower.includes(token));
+}
+
+/**
+ * ブックマーク行配列に対して、「ニックネーム」「タイトル」「URL」の列別フィルタークエリを AND 条件で適用し、
+ * 条件に合致する行のみを非破壊で抽出して返します。
+ * @param rows - 絞り込み対象のブックマーク行配列
+ * @param queries - 各列（`nickname`, `title`, `url`）の検索クエリ
+ * @returns 絞り込み済みの新しい配列
+ */
+export function filterBookmarkRowsByColumns<T extends FilterableBookmarkRow>(
+  rows: readonly T[],
+  queries: ColumnFilterQueries
+): T[] {
+  const nickQuery = (queries.nickname || '').trim();
+  const titleQuery = (queries.title || '').trim();
+  const urlQuery = (queries.url || '').trim();
+
+  if (!nickQuery && !titleQuery && !urlQuery) {
+    return [...rows];
+  }
+
+  return rows.filter(
+    row =>
+      matchesColumnFilter(row.nickname, nickQuery) &&
+      matchesColumnFilter(row.title, titleQuery) &&
+      matchesColumnFilter(row.url, urlQuery)
+  );
 }
