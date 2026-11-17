@@ -47,6 +47,7 @@ export * from './shared/types';
 export * from './shared/url';
 export * from './shared/toast';
 export * from './shared/listSort';
+export * from './shared/bookmarkImport';
 export * from './shared/storage';
 export * from './shared/search';
 export * from './shared/commands';

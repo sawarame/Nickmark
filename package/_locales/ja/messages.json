@@ -497,5 +497,85 @@
   },
   "sortOrderScoreAsc": {
     "message": "スコア（低い順）"
+  },
+  "importBtn": {
+    "message": "インポート"
+  },
+  "importDialogTitle": {
+    "message": "ブックマークのインポート"
+  },
+  "importFileInfoLabel": {
+    "message": "対象ファイル"
+  },
+  "importFormatLabel": {
+    "message": "検出形式"
+  },
+  "importFormatJson": {
+    "message": "Nickmark JSON"
+  },
+  "importFormatChromeHtml": {
+    "message": "Chrome ブックマーク HTML"
+  },
+  "importSummaryCount": {
+    "message": "$1 件のブックマーク（$2 ニックネーム）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "importSkippedSummary": {
+    "message": "内部URL等 $1 件は対象外としてスキップされます",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importBaseFolderLabel": {
+    "message": "取り込み先フォルダ（任意）"
+  },
+  "importBaseFolderPlaceholder": {
+    "message": "例: imported（空欄時は元の階層を使用）"
+  },
+  "importModeLabel": {
+    "message": "インポート方法"
+  },
+  "importModeMergeLabel": {
+    "message": "マージ（既存データを保持して追加・統合）"
+  },
+  "importModeOverwriteLabel": {
+    "message": "上書き（現在のブックマークをすべて置換）"
+  },
+  "importOverwriteWarning": {
+    "message": "上書きを実行すると、現在登録されている $1 件のブックマークはすべて消去され、インポート内容に置き換わります。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importExecuteBtn": {
+    "message": "インポート実行"
+  },
+  "successImported": {
+    "message": "インポート完了"
+  },
+  "successImportedDetail": {
+    "message": "$1 件のブックマークをインポートしました（合計 $2 件）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "errorImportEmptyFile": {
+    "message": "選択されたファイルが空です。"
+  },
+  "errorImportNoValidBookmarks": {
+    "message": "インポート可能なブックマークが見つかりませんでした。"
+  },
+  "errorImportInvalidHtml": {
+    "message": "有効なブックマーク HTML ファイルとして読み込めませんでした。"
+  },
+  "errorImportInvalidEntry": {
+    "message": "ブックマークデータの形式が不正です（$1）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }

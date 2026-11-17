@@ -497,5 +497,85 @@
   },
   "sortOrderScoreAsc": {
     "message": "Score (Lowest)"
+  },
+  "importBtn": {
+    "message": "Import"
+  },
+  "importDialogTitle": {
+    "message": "Import Bookmarks"
+  },
+  "importFileInfoLabel": {
+    "message": "Source File"
+  },
+  "importFormatLabel": {
+    "message": "Detected Format"
+  },
+  "importFormatJson": {
+    "message": "Nickmark JSON"
+  },
+  "importFormatChromeHtml": {
+    "message": "Chrome Bookmarks HTML"
+  },
+  "importSummaryCount": {
+    "message": "$1 bookmarks ($2 nicknames)",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "importSkippedSummary": {
+    "message": "$1 non-navigable item(s) will be skipped",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importBaseFolderLabel": {
+    "message": "Destination Folder (Optional)"
+  },
+  "importBaseFolderPlaceholder": {
+    "message": "e.g. imported (keep original hierarchy if empty)"
+  },
+  "importModeLabel": {
+    "message": "Import Mode"
+  },
+  "importModeMergeLabel": {
+    "message": "Merge (keep existing & add/combine)"
+  },
+  "importModeOverwriteLabel": {
+    "message": "Overwrite (replace all existing bookmarks)"
+  },
+  "importOverwriteWarning": {
+    "message": "Overwriting will replace all $1 existing bookmark(s) with the imported data.",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importExecuteBtn": {
+    "message": "Run Import"
+  },
+  "successImported": {
+    "message": "Imported"
+  },
+  "successImportedDetail": {
+    "message": "Imported $1 bookmark(s) (Total: $2).",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "errorImportEmptyFile": {
+    "message": "The selected file is empty."
+  },
+  "errorImportNoValidBookmarks": {
+    "message": "No valid bookmarks found to import."
+  },
+  "errorImportInvalidHtml": {
+    "message": "Could not parse as a valid bookmark HTML file."
+  },
+  "errorImportInvalidEntry": {
+    "message": "Invalid bookmark entry data ($1).",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }
