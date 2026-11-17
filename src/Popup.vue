@@ -2,8 +2,14 @@
   <div class="palette-container" @keydown="handleGlobalKeyDown">
     <!-- 検索入力ヘッダーエリア -->
     <div class="palette-search-bar">
+      <!-- コマンド入力モード時は >_ アイコン、通常検索時は虫眼鏡アイコンを表示する -->
+      <CommandPromptIcon
+        v-if="isCommandInput"
+        class="search-leading-icon"
+      />
       <i
-        :class="['pi', isCommandInput ? 'pi-terminal' : 'pi-search', 'search-leading-icon']"
+        v-else
+        class="pi pi-search search-leading-icon"
         aria-hidden="true"
       />
       <InputText
@@ -142,10 +148,9 @@
               alt=""
               @error="markFaviconFailed(item.faviconUrl)"
             />
-            <i
+            <CommandPromptIcon
               v-else-if="item.kind === 'command' || item.kind === 'completion'"
-              class="pi pi-terminal item-icon item-icon-cmd"
-              aria-hidden="true"
+              class="item-icon item-icon-cmd"
             />
             <i
               v-else-if="item.kind === 'history'"
@@ -202,6 +207,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
+import CommandPromptIcon from './components/CommandPromptIcon.vue';
 import { initI18n, t } from './i18n';
 import {
   BatchOpenConfirmationData,
@@ -920,6 +926,11 @@ onUnmounted(() => {
 }
 
 .search-leading-icon {
+  width: 1rem;
+  height: 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 1rem;
   color: var(--p-primary-color, #10b981);
   flex-shrink: 0;
