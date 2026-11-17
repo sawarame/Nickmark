@@ -1,5 +1,9 @@
 # Nickmark
 
+![Version](https://img.shields.io/github/package-json/v/sawarame/Nickmark?color=blue)
+![Chrome Web Store](https://img.shields.io/chrome-web-store/v/bicojpjoabhecikokcohbjgaiojggpno.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+
 A keyboard-first Chrome extension for lightning-fast bookmark, dynamic search, folder, and bookmarklet access via a command palette and the address bar.
 
 [English](#english) | [日本語](#japanese)
