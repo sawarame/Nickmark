@@ -263,3 +263,29 @@ export const DEFAULT_LIST_SORT_OPTION: ListSortOption = 'default';
  * ポップアップに同時表示するブラウザ履歴候補の最大件数
  */
 export const MAX_HISTORY_SUGGESTIONS = 10;
+
+/**
+ * インポート対象ファイルの判別済みフォーマット種別
+ */
+export type ImportFileFormat = 'json' | 'chrome_html';
+
+/**
+ * インポート実行時の既存データに対する適用方式
+ */
+export type ImportApplyMode = 'merge' | 'overwrite';
+
+/**
+ * インポートファイルの解析・検証・正規化結果を保持する型定義
+ */
+export interface ParsedImportResult {
+  /** 検出されたファイル形式 */
+  format: ImportFileFormat;
+  /** 正規化・重複排除済みのブックマーク候補辞書 */
+  bookmarks: Record<string, BookmarkEntry[]>;
+  /** 一意なニックネーム数 */
+  nicknameCount: number;
+  /** ブックマークエントリ総数 */
+  bookmarkCount: number;
+  /** 無効スキーム等によりスキップされた件数 */
+  skippedCount: number;
+}

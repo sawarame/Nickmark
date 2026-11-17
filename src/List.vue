@@ -76,9 +76,34 @@
       <template #title>
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span>{{ t('manageNickmarksTitle') || 'Manage Nickmarks' }}</span>
-          <div style="display: flex; gap: 0.5rem;">
-            <Button :label="t('exportBtn') || 'Export'" icon="pi pi-download" severity="secondary" size="small" @click="downloadJsonFile" />
-            <Button :label="t('editJsonBtn') || 'Jsonで編集'" icon="pi pi-code" size="small" @click="openJsonDialog" />
+          <div class="header-actions-group">
+            <Button
+              :label="t('importBtn') || 'Import'"
+              icon="pi pi-upload"
+              severity="secondary"
+              size="small"
+              @click="triggerImportFile"
+            />
+            <Button
+              :label="t('exportBtn') || 'Export'"
+              icon="pi pi-download"
+              severity="secondary"
+              size="small"
+              @click="downloadJsonFile"
+            />
+            <Button
+              :label="t('editJsonBtn') || 'Jsonで編集'"
+              icon="pi pi-code"
+              size="small"
+              @click="openJsonDialog"
+            />
+            <input
+              ref="importFileInputRef"
+              type="file"
+              accept=".json,.html,.htm,application/json,text/html"
+              class="hidden-file-input"
+              @change="handleImportFileSelected"
+            />
           </div>
         </div>
       </template>
@@ -321,6 +346,119 @@
         <Button :label="t('saveBtn') || 'Save'" icon="pi pi-check" @click="saveJsonEdit" autofocus :disabled="!isJsonValid" />
       </template>
     </Dialog>
+
+    <!-- ブックマークインポート確認ダイアログ -->
+    <Dialog
+      v-model:visible="showImportDialog"
+      modal
+      :header="t('importDialogTitle') || 'Import Bookmarks'"
+      :closable="!isImporting"
+      :style="{ width: '560px', maxWidth: '92vw' }"
+    >
+      <div v-if="importPreview" class="import-dialog-body">
+        <div class="import-summary-card">
+          <div class="import-summary-row">
+            <span class="import-summary-label">{{ t('importFileInfoLabel') || 'Source File' }}</span>
+            <span class="import-summary-value import-filename">{{ importPreview.fileName }}</span>
+          </div>
+          <div class="import-summary-row">
+            <span class="import-summary-label">{{ t('importFormatLabel') || 'Detected Format' }}</span>
+            <span class="import-summary-value">
+              {{
+                importPreview.result.format === 'chrome_html'
+                  ? (t('importFormatChromeHtml') || 'Chrome Bookmarks HTML')
+                  : (t('importFormatJson') || 'Nickmark JSON')
+              }}
+            </span>
+          </div>
+          <div class="import-summary-row">
+            <span class="import-summary-label">{{ t('manageNickmarksTitle') || 'Bookmarks' }}</span>
+            <span class="import-summary-value">
+              {{
+                t('importSummaryCount', [
+                  String(importPreview.result.bookmarkCount),
+                  String(importPreview.result.nicknameCount)
+                ]) ||
+                `${importPreview.result.bookmarkCount} bookmarks (${importPreview.result.nicknameCount} nicknames)`
+              }}
+            </span>
+          </div>
+          <div v-if="importPreview.result.skippedCount > 0" class="import-skipped-note">
+            <i class="pi pi-info-circle" aria-hidden="true"></i>
+            <span>
+              {{
+                t('importSkippedSummary', [String(importPreview.result.skippedCount)]) ||
+                `${importPreview.result.skippedCount} non-navigable item(s) will be skipped`
+              }}
+            </span>
+          </div>
+        </div>
+
+        <div class="import-field">
+          <label for="import-base-folder" class="import-field-label">
+            {{ t('importBaseFolderLabel') || 'Destination Folder (Optional)' }}
+          </label>
+          <InputText
+            id="import-base-folder"
+            v-model="importBaseFolder"
+            :placeholder="t('importBaseFolderPlaceholder') || 'e.g. imported (keep original hierarchy if empty)'"
+            :disabled="isImporting"
+            class="w-full"
+          />
+        </div>
+
+        <div class="import-field">
+          <span class="import-field-label">{{ t('importModeLabel') || 'Import Mode' }}</span>
+          <div class="import-mode-group">
+            <label for="import-mode-merge" class="import-mode-option">
+              <RadioButton
+                inputId="import-mode-merge"
+                v-model="importMode"
+                name="importMode"
+                value="merge"
+                :disabled="isImporting"
+              />
+              <span>{{ t('importModeMergeLabel') || 'Merge (keep existing & add/combine)' }}</span>
+            </label>
+            <label for="import-mode-overwrite" class="import-mode-option">
+              <RadioButton
+                inputId="import-mode-overwrite"
+                v-model="importMode"
+                name="importMode"
+                value="overwrite"
+                :disabled="isImporting"
+              />
+              <span>{{ t('importModeOverwriteLabel') || 'Overwrite (replace all existing bookmarks)' }}</span>
+            </label>
+          </div>
+        </div>
+
+        <Message v-if="importMode === 'overwrite' && flatBookmarks.length > 0" severity="warn" :closable="false">
+          {{
+            t('importOverwriteWarning', [String(flatBookmarks.length)]) ||
+            `Overwriting will replace all ${flatBookmarks.length} existing bookmark(s) with the imported data.`
+          }}
+        </Message>
+      </div>
+
+      <template #footer>
+        <Button
+          :label="t('cancelBtn') || 'Cancel'"
+          icon="pi pi-times"
+          severity="secondary"
+          text
+          :disabled="isImporting"
+          @click="closeImportDialog"
+        />
+        <Button
+          :label="t('importExecuteBtn') || 'Run Import'"
+          :icon="isImporting ? 'pi pi-spin pi-spinner' : 'pi pi-check'"
+          :severity="importMode === 'overwrite' ? 'danger' : 'primary'"
+          :loading="isImporting"
+          @click="executeImport"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 
@@ -342,12 +480,22 @@ import Dialog from 'primevue/dialog';
 import Message from 'primevue/message';
 import Select, { SelectChangeEvent } from 'primevue/select';
 import ConfirmDialog from 'primevue/confirmdialog';
+import RadioButton from 'primevue/radiobutton';
 
 import {
   BookmarkEntry,
   DEFAULT_LIST_SORT_OPTION,
-  ListSortOption
+  ImportApplyMode,
+  ListSortOption,
+  ParsedImportResult
 } from './shared/types';
+import {
+  applyBaseFolderPrefix,
+  BookmarkImportError,
+  countBookmarksSummary,
+  mergeBookmarksDictionaries,
+  parseImportFileContent
+} from './shared/bookmarkImport';
 import {
   getFaviconUrl,
   isBookmarkletUrl,
@@ -441,6 +589,22 @@ const isClosingInlineEdit = ref(false);
 // JSON 編集ダイアログの状態
 const showJsonDialog = ref(false);
 const jsonEditText = ref('');
+
+/**
+ * インポート確認ダイアログに表示する解析済みプレビュー状態
+ */
+interface ImportPreviewState {
+  fileName: string;
+  result: ParsedImportResult;
+}
+
+// インポートダイアログ・ファイル選択状態
+const importFileInputRef = ref<HTMLInputElement | null>(null);
+const showImportDialog = ref(false);
+const importPreview = ref<ImportPreviewState | null>(null);
+const importMode = ref<ImportApplyMode>('merge');
+const importBaseFolder = ref('');
+const isImporting = ref(false);
 
 /**
  * JSON エディタ内の文字列が有効な JSON 構文であるかを検証します。
@@ -764,7 +928,7 @@ const onWindowFocusOrVisible = async (): Promise<void> => {
   refreshUserScriptsStatus();
   if (document.visibilityState === 'hidden') return;
   await checkAndConsumePendingToast();
-  if (inlineEdit.value !== null || showJsonDialog.value || showRenameDialog.value) {
+  if (inlineEdit.value !== null || showJsonDialog.value || showRenameDialog.value || showImportDialog.value) {
     return;
   }
   await loadBookmarks(true);
@@ -981,6 +1145,156 @@ const downloadJsonFile = (): void => {
     detail: t('successFileDownloaded') || 'File downloaded successfully.',
     life: 3000
   });
+};
+
+/**
+ * 隠しファイル選択インプットをクリックしてインポート用ファイル選択ダイアログを開きます。
+ * @returns なし
+ */
+const triggerImportFile = (): void => {
+  importFileInputRef.value?.click();
+};
+
+/**
+ * インポート解析エラーに応じたローカライズ済みメッセージを解決します。
+ * @param err - キャッチされたエラーオブジェクト
+ * @returns ユーザーへ表示するエラーメッセージ文字列
+ */
+const getImportErrorMessage = (err: unknown): string => {
+  if (err instanceof BookmarkImportError) {
+    switch (err.code) {
+      case 'EMPTY_FILE':
+        return t('errorImportEmptyFile') || 'The selected file is empty.';
+      case 'INVALID_JSON_FORMAT':
+        return t('errorInvalidJsonFormat') || 'Invalid JSON format.';
+      case 'INVALID_JSON_STRUCTURE':
+        return t('errorInvalidJsonStructure') || 'Invalid JSON structure. Missing "bookmarks" root key.';
+      case 'INVALID_HTML_BOOKMARKS':
+        return t('errorImportInvalidHtml') || 'Could not parse as a valid bookmark HTML file.';
+      case 'NO_VALID_BOOKMARKS':
+        return t('errorImportNoValidBookmarks') || 'No valid bookmarks found to import.';
+      case 'INVALID_BOOKMARK_ENTRY':
+        return (
+          t('errorImportInvalidEntry', [err.detailParam || '']) ||
+          `Invalid bookmark entry data (${err.detailParam || ''}).`
+        );
+    }
+  }
+  return getSaveErrorMessage(err);
+};
+
+/**
+ * ファイル選択ダイアログで選択されたファイルを読み込み、形式判別・解析を行って確認ダイアログを開きます。
+ * 同じファイルを続けて再選択できるよう、処理完了後に input の値をリセットします。
+ * @param event - input[type="file"] の change イベント
+ * @returns 処理完了を示す Promise
+ */
+const handleImportFileSelected = async (event: Event): Promise<void> => {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
+  if (!file) return;
+
+  if (inlineEdit.value && !isClosingInlineEdit.value) {
+    cancelInlineEdit();
+  }
+
+  try {
+    const content = await file.text();
+    const parsed = parseImportFileContent(content, file.name);
+    importPreview.value = {
+      fileName: file.name,
+      result: parsed
+    };
+    importMode.value = 'merge';
+    importBaseFolder.value = '';
+    showImportDialog.value = true;
+  } catch (err: unknown) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getImportErrorMessage(err),
+      life: 4000
+    });
+  } finally {
+    if (input) {
+      input.value = '';
+    }
+  }
+};
+
+/**
+ * インポート確認ダイアログを閉じて一時プレビュー状態を初期化します。
+ * @returns なし
+ */
+const closeImportDialog = (): void => {
+  if (isImporting.value) return;
+  showImportDialog.value = false;
+  importPreview.value = null;
+  importBaseFolder.value = '';
+  importMode.value = 'merge';
+};
+
+/**
+ * 確認ダイアログで選択されたモード（マージまたは上書き）とベースフォルダ設定に従い、
+ * インポートデータをストレージへ保存して一覧を更新します。
+ * @returns インポート完了を示す Promise
+ */
+const executeImport = async (): Promise<void> => {
+  if (!importPreview.value || isImporting.value) return;
+  isImporting.value = true;
+
+  try {
+    const preparedIncoming = applyBaseFolderPrefix(
+      importPreview.value.result.bookmarks,
+      importBaseFolder.value
+    );
+    const nextBookmarks =
+      importMode.value === 'merge'
+        ? mergeBookmarksDictionaries(bookmarksData.value, preparedIncoming)
+        : preparedIncoming;
+
+    await saveBookmarksData(nextBookmarks);
+    await loadBookmarks(true);
+
+    // 上書き等により選択中フォルダが消滅した場合は全体表示へ戻す
+    if (
+      selectedFolder.value !== '__ALL__' &&
+      selectedFolder.value !== '__ROOT__' &&
+      !extractFolders(bookmarksData.value).has(selectedFolder.value)
+    ) {
+      selectedFolder.value = '__ALL__';
+    }
+    tableFirst.value = 0;
+
+    const importedSummary = countBookmarksSummary(preparedIncoming);
+    const totalSummary = countBookmarksSummary(bookmarksData.value);
+
+    showImportDialog.value = false;
+    importPreview.value = null;
+    importBaseFolder.value = '';
+    importMode.value = 'merge';
+
+    toast.add({
+      severity: 'success',
+      summary: t('successImported') || 'Imported',
+      detail:
+        t('successImportedDetail', [
+          String(importedSummary.bookmarkCount),
+          String(totalSummary.bookmarkCount)
+        ]) ||
+        `Imported ${importedSummary.bookmarkCount} bookmark(s) (Total: ${totalSummary.bookmarkCount}).`,
+      life: 4000
+    });
+  } catch (err: unknown) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getSaveErrorMessage(err),
+      life: 4500
+    });
+  } finally {
+    isImporting.value = false;
+  }
 };
 
 /**
@@ -1656,5 +1970,94 @@ body {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.header-actions-group {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+/* インポート確認ダイアログ */
+.import-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.import-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--p-border-radius-md, 6px);
+  border: 1px solid var(--p-content-border-color);
+  background-color: var(--p-content-background);
+}
+
+.import-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.import-summary-label {
+  color: var(--p-text-muted-color);
+  flex-shrink: 0;
+}
+
+.import-summary-value {
+  color: var(--p-text-color);
+  font-weight: 500;
+  text-align: right;
+  word-break: break-all;
+}
+
+.import-filename {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.import-skipped-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  font-size: 0.82rem;
+  color: var(--p-text-muted-color);
+}
+
+.import-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.import-field-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--p-text-color);
+}
+
+.import-mode-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.import-mode-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: var(--p-text-color);
 }
 </style>
