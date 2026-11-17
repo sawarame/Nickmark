@@ -577,5 +577,68 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "presetsTitle": {
+    "message": "定番プリセット"
+  },
+  "presetsDescription": {
+    "message": "よく使われる検索サービス（%s 動的 URL）や定番ブックマークレットをチェックボックスで簡単に有効化できます。チェック状態のみを保存するため、ストレージ容量をほとんど消費しません。"
+  },
+  "presetsCategoryDynamicUrl": {
+    "message": "検索サービス（動的 URL）"
+  },
+  "presetsCategoryBookmarklet": {
+    "message": "ブックマークレット"
+  },
+  "presetsSelectAllBtn": {
+    "message": "すべて選択"
+  },
+  "presetsDeselectAllBtn": {
+    "message": "すべて解除"
+  },
+  "presetTitleGoogle": {
+    "message": "Google 検索"
+  },
+  "presetTitleYoutube": {
+    "message": "YouTube 検索"
+  },
+  "presetTitleGithub": {
+    "message": "GitHub 検索"
+  },
+  "presetTitleMaps": {
+    "message": "Google マップ検索"
+  },
+  "presetTitleTranslate": {
+    "message": "Google 翻訳"
+  },
+  "presetTitleWikipedia": {
+    "message": "Wikipedia 検索"
+  },
+  "presetTitleAmazon": {
+    "message": "Amazon 検索"
+  },
+  "presetTitleX": {
+    "message": "X (Twitter) 検索"
+  },
+  "presetTitleNpm": {
+    "message": "npm パッケージ検索"
+  },
+  "presetTitleMdn": {
+    "message": "MDN Web Docs 検索"
+  },
+  "presetTitleMdlink": {
+    "message": "Markdown リンクをコピー"
+  },
+  "presetDescMdlink": {
+    "message": "現在のページの [タイトル](URL) をクリップボードへコピー"
+  },
+  "presetTitleWayback": {
+    "message": "Wayback Machine で表示"
+  },
+  "presetDescWayback": {
+    "message": "現在のページ URL を https://web.archive.org/web/*/ で開く"
+  },
+  "popupTipPresets": {
+    "message": "設定画面（:prefs）から、Google 検索（g）や GitHub 検索（gh）などの定番プリセットをチェックひとつで有効化できます。"
   }
 }

@@ -46,6 +46,11 @@ export const POPUP_TIPS: readonly TipEntry[] = [
     id: 'management-commands',
     messageKey: 'popupTipManagementCommands',
     icon: 'pi-lightbulb'
+  },
+  {
+    id: 'presets',
+    messageKey: 'popupTipPresets',
+    icon: 'pi-lightbulb'
   }
 ];
 

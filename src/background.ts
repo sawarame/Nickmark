@@ -1,6 +1,7 @@
 import { getCurrentLocale, initI18n, t } from './i18n';
 import {
   BookmarkEntry,
+  ENABLED_PRESETS_STORAGE_KEY,
   OMNIBOX_MIGRATION_HINT_CONTENT,
   RuntimeMessage,
   SuggestedMatchTarget,
@@ -18,11 +19,14 @@ import {
 import { openOrReuseListTab, renderToastInDocument, showToast } from './shared/toast';
 import {
   clearBookmarksCache,
+  clearEnabledPresetsCache,
   extractFolders,
   getMaxBatchOpenTabs,
   getSyncEnabled,
   loadBookmarksData,
+  loadSearchableBookmarksData,
   openFolderUrls,
+  updateEnabledPresetsCache,
   updateHistorySearchEnabledCache,
   updateListSortOrderCache,
   updateMaxBatchOpenTabsCache,
@@ -48,6 +52,7 @@ export * from './shared/url';
 export * from './shared/toast';
 export * from './shared/listSort';
 export * from './shared/bookmarkImport';
+export * from './shared/presets';
 export * from './shared/storage';
 export * from './shared/search';
 export * from './shared/commands';
@@ -437,6 +442,7 @@ if (typeof window === 'undefined') {
       if (changes.isSyncEnabled) {
         updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
         clearBookmarksCache();
+        clearEnabledPresetsCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -453,6 +459,9 @@ if (typeof window === 'undefined') {
     if ((isSync && area === 'sync') || (!isSync && area === 'local')) {
       if (changes.bookmarks || Object.keys(changes).some(k => k.startsWith(SYNC_KEY_PREFIX))) {
         clearBookmarksCache();
+      }
+      if (changes[ENABLED_PRESETS_STORAGE_KEY]) {
+        updateEnabledPresetsCache(changes[ENABLED_PRESETS_STORAGE_KEY].newValue);
       }
     }
   });
@@ -507,13 +516,14 @@ if (typeof window === 'undefined') {
 
     omniboxDebounceTimer = setTimeout(async () => {
       try {
-        const bookmarks = await loadBookmarksData();
-        if (thisRequestId !== currentRequestId) return;
-
         if (cleanText.startsWith(':')) {
+          const bookmarks = await loadBookmarksData();
+          if (thisRequestId !== currentRequestId) return;
           handleCommandModeSuggestions(cleanText, suggest, bookmarks);
         } else {
-          handleRegularSearchSuggestions(text, suggest, bookmarks);
+          const searchableBookmarks = await loadSearchableBookmarksData();
+          if (thisRequestId !== currentRequestId) return;
+          handleRegularSearchSuggestions(text, suggest, searchableBookmarks);
         }
       } catch (error) {
         console.error('Failed to handle omnibox suggestions:', error);
@@ -614,17 +624,17 @@ if (typeof window === 'undefined') {
         matchedTemplateUrl = mappedMatch.templateUrl;
         matchedNickname = mappedMatch.nickname;
       } else if (!cleanTrimmed.startsWith('http://') && !cleanTrimmed.startsWith('https://')) {
-        const bookmarks = await loadBookmarksData();
+        const searchableBookmarks = await loadSearchableBookmarksData();
 
         // 2. Service Worker 再起動時フォールバック：ゼロ幅マーカーから復元
-        const decodedFromMarker = resolveMatchFromZeroWidthMarker(text, bookmarks);
+        const decodedFromMarker = resolveMatchFromZeroWidthMarker(text, searchableBookmarks);
         if (decodedFromMarker) {
           targetUrl = decodedFromMarker.resolvedUrl;
           matchedTemplateUrl = decodedFromMarker.templateUrl;
           matchedNickname = decodedFromMarker.nickname;
         } else {
           // 3. 通常検索として最上位候補に解決
-          const allMatches = resolveRegularSearchMatches(cleanTrimmed, bookmarks);
+          const allMatches = resolveRegularSearchMatches(cleanTrimmed, searchableBookmarks);
           if (allMatches.length === 0) return;
           targetUrl = allMatches[0].resolvedUrl;
           matchedTemplateUrl = allMatches[0].entry.url;

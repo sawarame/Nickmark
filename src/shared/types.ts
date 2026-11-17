@@ -240,6 +240,53 @@ export const DEFAULT_MAX_BATCH_OPEN_TABS = 20;
 export const SYNC_KEY_PREFIX = 'sync_data_';
 
 /**
+ * 有効化されたプリセット ID 配列を保存するストレージキー
+ */
+export const ENABLED_PRESETS_STORAGE_KEY = 'enabledPresets';
+
+/**
+ * 標準プリセットの種別
+ */
+export type PresetCategory = 'dynamic_url' | 'bookmarklet';
+
+/**
+ * 標準収録される全 12 件のプリセット ID リテラル型
+ */
+export type PresetId =
+  | 'g'
+  | 'yt'
+  | 'gh'
+  | 'map'
+  | 'tr'
+  | 'wiki'
+  | 'amz'
+  | 'x'
+  | 'npm'
+  | 'mdn'
+  | 'mdlink'
+  | 'wayback';
+
+/**
+ * 内蔵プリセット 1 件の静的定義モデル
+ */
+export interface PresetDefinition {
+  /** プリセットの一意な識別子（ニックネームと同一） */
+  id: PresetId;
+  /** 検索・呼び出しに使用するニックネーム */
+  nickname: PresetId;
+  /** プリセットの種別（動的 URL またはブックマークレット） */
+  category: PresetCategory;
+  /** `messages.json` 上のタイトルメッセージキー */
+  titleKey: string;
+  /** `messages.json` 上の補足説明メッセージキー（主にブックマークレットの内容表示用） */
+  descriptionKey?: string;
+  /** デフォルト（日本語設定時）の URL または `javascript:` コード */
+  urlJa: string;
+  /** 英語設定時の URL（言語により検索先ドメインが異なる `wiki` 等で指定） */
+  urlEn?: string;
+}
+
+/**
  * オムニボックスで表示するポップアップ移行案内候補の識別 content 文字列
  */
 export const OMNIBOX_MIGRATION_HINT_CONTENT = '→ Nickmark Popup Launcher';
