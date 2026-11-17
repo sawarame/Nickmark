@@ -640,5 +640,20 @@
   },
   "popupTipPresets": {
     "message": "Enable built-in presets like Google Search (g) or GitHub Search (gh) with a single checkbox in Preferences (:prefs)."
+  },
+  "columnFilterBtnTooltip": {
+    "message": "Filter by $1",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "columnFilterPlaceholder": {
+    "message": "Filter $1...",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "clearColumnFilterTooltip": {
+    "message": "Clear filter"
   }
 }

@@ -180,7 +180,65 @@
           :pt="{ table: { style: 'table-layout: fixed; width: 100%; min-width: 820px;' } }"
           @sort="handleTableSort"
         >
-          <Column field="nickname" :header="t('nicknameLabel') || 'Nickname'" sortable style="width: 180px">
+          <Column
+            field="nickname"
+            sortable
+            style="width: 180px"
+            :pt="{ columnHeaderContent: { class: 'filterable-header-content' } }"
+          >
+            <template #header>
+              <span class="p-datatable-column-title" data-pc-section="columntitle">
+                {{ t('nicknameLabel') || 'Nickname' }}
+              </span>
+              <Button
+                type="button"
+                :icon="hasActiveColumnFilter('nickname') ? 'pi pi-filter-fill' : 'pi pi-filter'"
+                :severity="hasActiveColumnFilter('nickname') || columnFilters.nickname.open ? 'primary' : 'secondary'"
+                text
+                rounded
+                size="small"
+                class="column-filter-toggle-btn"
+                :class="{ 'is-active': hasActiveColumnFilter('nickname') }"
+                :aria-label="getColumnFilterTooltip('nickname')"
+                :aria-expanded="columnFilters.nickname.open"
+                v-tooltip.top="getColumnFilterTooltip('nickname')"
+                @click.stop="toggleColumnFilter('nickname')"
+                @mousedown.stop
+                @keydown.stop
+              />
+              <div
+                v-if="columnFilters.nickname.open"
+                :ref="el => setColumnFilterBoxRef('nickname', el)"
+                class="column-filter-box"
+                @click.stop
+                @mousedown.stop
+                @keydown.stop
+              >
+                <Textarea
+                  :modelValue="columnFilters.nickname.query"
+                  autoResize
+                  rows="1"
+                  class="column-filter-textarea"
+                  :placeholder="getColumnFilterPlaceholder('nickname')"
+                  :aria-label="getColumnFilterPlaceholder('nickname')"
+                  @update:modelValue="val => updateColumnFilterQuery('nickname', val)"
+                  @keydown="e => handleColumnFilterKeydown(e, 'nickname')"
+                />
+                <Button
+                  v-if="columnFilters.nickname.query"
+                  type="button"
+                  icon="pi pi-times"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  class="column-filter-clear-btn"
+                  :aria-label="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  v-tooltip.top="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  @click.stop="clearColumnFilter('nickname')"
+                />
+              </div>
+            </template>
             <template #body="slotProps">
               <div
                 v-if="isEditingCell(slotProps.data, 'nickname') && inlineEdit"
@@ -206,7 +264,65 @@
               </div>
             </template>
           </Column>
-          <Column field="title" :header="t('titleLabel') || 'Title'" sortable style="width: 220px">
+          <Column
+            field="title"
+            sortable
+            style="width: 220px"
+            :pt="{ columnHeaderContent: { class: 'filterable-header-content' } }"
+          >
+            <template #header>
+              <span class="p-datatable-column-title" data-pc-section="columntitle">
+                {{ t('titleLabel') || 'Title' }}
+              </span>
+              <Button
+                type="button"
+                :icon="hasActiveColumnFilter('title') ? 'pi pi-filter-fill' : 'pi pi-filter'"
+                :severity="hasActiveColumnFilter('title') || columnFilters.title.open ? 'primary' : 'secondary'"
+                text
+                rounded
+                size="small"
+                class="column-filter-toggle-btn"
+                :class="{ 'is-active': hasActiveColumnFilter('title') }"
+                :aria-label="getColumnFilterTooltip('title')"
+                :aria-expanded="columnFilters.title.open"
+                v-tooltip.top="getColumnFilterTooltip('title')"
+                @click.stop="toggleColumnFilter('title')"
+                @mousedown.stop
+                @keydown.stop
+              />
+              <div
+                v-if="columnFilters.title.open"
+                :ref="el => setColumnFilterBoxRef('title', el)"
+                class="column-filter-box"
+                @click.stop
+                @mousedown.stop
+                @keydown.stop
+              >
+                <Textarea
+                  :modelValue="columnFilters.title.query"
+                  autoResize
+                  rows="1"
+                  class="column-filter-textarea"
+                  :placeholder="getColumnFilterPlaceholder('title')"
+                  :aria-label="getColumnFilterPlaceholder('title')"
+                  @update:modelValue="val => updateColumnFilterQuery('title', val)"
+                  @keydown="e => handleColumnFilterKeydown(e, 'title')"
+                />
+                <Button
+                  v-if="columnFilters.title.query"
+                  type="button"
+                  icon="pi pi-times"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  class="column-filter-clear-btn"
+                  :aria-label="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  v-tooltip.top="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  @click.stop="clearColumnFilter('title')"
+                />
+              </div>
+            </template>
             <template #body="slotProps">
               <div
                 v-if="isEditingCell(slotProps.data, 'title') && inlineEdit"
@@ -232,7 +348,64 @@
               </div>
             </template>
           </Column>
-          <Column field="url" :header="t('urlLabel') || 'URL'" sortable>
+          <Column
+            field="url"
+            sortable
+            :pt="{ columnHeaderContent: { class: 'filterable-header-content' } }"
+          >
+            <template #header>
+              <span class="p-datatable-column-title" data-pc-section="columntitle">
+                {{ t('urlLabel') || 'URL' }}
+              </span>
+              <Button
+                type="button"
+                :icon="hasActiveColumnFilter('url') ? 'pi pi-filter-fill' : 'pi pi-filter'"
+                :severity="hasActiveColumnFilter('url') || columnFilters.url.open ? 'primary' : 'secondary'"
+                text
+                rounded
+                size="small"
+                class="column-filter-toggle-btn"
+                :class="{ 'is-active': hasActiveColumnFilter('url') }"
+                :aria-label="getColumnFilterTooltip('url')"
+                :aria-expanded="columnFilters.url.open"
+                v-tooltip.top="getColumnFilterTooltip('url')"
+                @click.stop="toggleColumnFilter('url')"
+                @mousedown.stop
+                @keydown.stop
+              />
+              <div
+                v-if="columnFilters.url.open"
+                :ref="el => setColumnFilterBoxRef('url', el)"
+                class="column-filter-box"
+                @click.stop
+                @mousedown.stop
+                @keydown.stop
+              >
+                <Textarea
+                  :modelValue="columnFilters.url.query"
+                  autoResize
+                  rows="1"
+                  class="column-filter-textarea"
+                  :placeholder="getColumnFilterPlaceholder('url')"
+                  :aria-label="getColumnFilterPlaceholder('url')"
+                  @update:modelValue="val => updateColumnFilterQuery('url', val)"
+                  @keydown="e => handleColumnFilterKeydown(e, 'url')"
+                />
+                <Button
+                  v-if="columnFilters.url.query"
+                  type="button"
+                  icon="pi pi-times"
+                  severity="secondary"
+                  text
+                  rounded
+                  size="small"
+                  class="column-filter-clear-btn"
+                  :aria-label="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  v-tooltip.top="t('clearColumnFilterTooltip') || 'Clear filter'"
+                  @click.stop="clearColumnFilter('url')"
+                />
+              </div>
+            </template>
             <template #body="slotProps">
               <div
                 v-if="isEditingCell(slotProps.data, 'url') && inlineEdit"
@@ -463,7 +636,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from 'vue';
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import { useConfirm } from 'primevue/useconfirm';
 
@@ -484,7 +657,9 @@ import RadioButton from 'primevue/radiobutton';
 
 import {
   BookmarkEntry,
+  ColumnFiltersState,
   DEFAULT_LIST_SORT_OPTION,
+  FilterableColumnField,
   ImportApplyMode,
   ListSortOption,
   ParsedImportResult
@@ -506,7 +681,11 @@ import {
   resolveNavigableUrl
 } from './shared/url';
 import { renderToastInDocument } from './shared/toast';
-import { parseValidListSortOption, sortBookmarkRows } from './shared/listSort';
+import {
+  filterBookmarkRowsByColumns,
+  parseValidListSortOption,
+  sortBookmarkRows
+} from './shared/listSort';
 import {
   createBookmarkEntry,
   deleteFolder,
@@ -631,6 +810,162 @@ const tableFirst = ref<number>(0);
 const tableSortField = ref<keyof FlatBookmarkRow | undefined>(undefined);
 const tableSortOrder = ref<number | undefined>(undefined);
 
+// 列別フィルター状態（ニックネーム・タイトル・URL）
+const columnFilters = reactive<ColumnFiltersState>({
+  nickname: { open: false, query: '' },
+  title: { open: false, query: '' },
+  url: { open: false, query: '' }
+});
+const columnFilterBoxRefs = new Map<FilterableColumnField, HTMLElement>();
+
+/**
+ * 列フィールド名からローカライズ済みの列見出し文字列を取得します。
+ * @param field - 対象の列フィールド
+ * @returns ローカライズされた列見出し
+ */
+const getColumnHeaderLabel = (field: FilterableColumnField): string => {
+  switch (field) {
+    case 'nickname':
+      return t('nicknameLabel') || 'Nickname';
+    case 'title':
+      return t('titleLabel') || 'Title';
+    case 'url':
+      return t('urlLabel') || 'URL';
+  }
+};
+
+/**
+ * 列ヘッダーのフィルターボタンに表示するツールチップ文言を取得します。
+ * @param field - 対象の列フィールド
+ * @returns ツールチップ文字列
+ */
+const getColumnFilterTooltip = (field: FilterableColumnField): string => {
+  const label = getColumnHeaderLabel(field);
+  return t('columnFilterBtnTooltip', [label]) || `Filter by ${label}`;
+};
+
+/**
+ * 列フィルター入力欄のプレースホルダー文言を取得します。
+ * @param field - 対象の列フィールド
+ * @returns プレースホルダー文字列
+ */
+const getColumnFilterPlaceholder = (field: FilterableColumnField): string => {
+  const label = getColumnHeaderLabel(field);
+  return t('columnFilterPlaceholder', [label]) || `Filter ${label}...`;
+};
+
+/**
+ * 指定された列に有効な検索クエリが入力されているかを判定します。
+ * @param field - 対象の列フィールド
+ * @returns 空白以外の検索ワードが入力されている場合は true
+ */
+const hasActiveColumnFilter = (field: FilterableColumnField): boolean => {
+  return columnFilters[field].query.trim().length > 0;
+};
+
+/**
+ * 列フィルター入力ボックスの DOM 要素参照を記録または解除します。
+ * @param field - 対象の列フィールド
+ * @param el - DOM 要素または null
+ * @returns なし
+ */
+const setColumnFilterBoxRef = (field: FilterableColumnField, el: unknown): void => {
+  if (el instanceof HTMLElement) {
+    columnFilterBoxRefs.set(field, el);
+  } else {
+    columnFilterBoxRefs.delete(field);
+  }
+};
+
+/**
+ * 指定された列のフィルター入力テキストエリアへフォーカスを当てます。
+ * @param field - 対象の列フィールド
+ * @returns フォーカス適用完了を示す Promise
+ */
+const focusColumnFilterInput = async (field: FilterableColumnField): Promise<void> => {
+  await nextTick();
+  const boxEl = columnFilterBoxRefs.get(field);
+  const textareaEl = boxEl?.querySelector('textarea');
+  if (textareaEl && typeof textareaEl.focus === 'function') {
+    textareaEl.focus();
+  }
+};
+
+/**
+ * 指定された列のフィルター入力欄の表示／非表示を切り替えます。
+ * 閉じる際に検索クエリが残っている場合は自動的にクリアして絞り込みを解除します。
+ * @param field - 対象の列フィールド
+ * @returns 処理完了を示す Promise
+ */
+const toggleColumnFilter = async (field: FilterableColumnField): Promise<void> => {
+  const state = columnFilters[field];
+  if (state.open) {
+    state.open = false;
+    if (state.query) {
+      state.query = '';
+      tableFirst.value = 0;
+    }
+    return;
+  }
+  state.open = true;
+  await focusColumnFilterInput(field);
+};
+
+/**
+ * 列フィルターの検索クエリを更新し、ページネーションを 1 ページ目へリセットします。
+ * テキストエリア内の改行文字は空白へ正規化して 1 行クエリとして扱います。
+ * @param field - 対象の列フィールド
+ * @param value - 更新後の入力文字列
+ * @returns なし
+ */
+const updateColumnFilterQuery = (
+  field: FilterableColumnField,
+  value: string | undefined
+): void => {
+  const sanitized = (value ?? '').replace(/[\r\n]+/g, ' ');
+  columnFilters[field].query = sanitized;
+  tableFirst.value = 0;
+};
+
+/**
+ * 指定された列のフィルター検索クエリをクリアし、入力欄へフォーカスを維持します。
+ * @param field - 対象の列フィールド
+ * @returns 処理完了を示す Promise
+ */
+const clearColumnFilter = async (field: FilterableColumnField): Promise<void> => {
+  columnFilters[field].query = '';
+  tableFirst.value = 0;
+  await focusColumnFilterInput(field);
+};
+
+/**
+ * 列フィルターのテキストエリア上でのキー操作（Enter 改行抑止・Escape クリア／クローズ）を処理します。
+ * @param event - キーボードイベント
+ * @param field - 対象の列フィールド
+ * @returns なし
+ */
+const handleColumnFilterKeydown = (
+  event: KeyboardEvent,
+  field: FilterableColumnField
+): void => {
+  if (event.isComposing || event.keyCode === 229) return;
+
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    return;
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    if (columnFilters[field].query) {
+      columnFilters[field].query = '';
+      tableFirst.value = 0;
+    } else {
+      columnFilters[field].open = false;
+    }
+  }
+};
+
 /**
  * ツールバーの並び替えセレクト用選択肢配列を算出します。
  * @returns 並び替え選択肢オブジェクトの配列
@@ -693,19 +1028,30 @@ const folderOptions = computed(() => {
 });
 
 /**
- * 選択中フォルダに応じてテーブルに表示するブックマーク行を絞り込みます。
+ * 選択中フォルダおよび列別フィルター（ニックネーム・タイトル・URL）に応じてテーブルに表示するブックマーク行を絞り込みます。
  * @returns 絞り込み済みのブックマーク行配列
  */
 const filteredBookmarks = computed((): FlatBookmarkRow[] => {
+  let folderFiltered: FlatBookmarkRow[];
   if (selectedFolder.value === '__ALL__') {
-    return flatBookmarks.value;
+    folderFiltered = flatBookmarks.value;
+  } else if (selectedFolder.value === '__ROOT__') {
+    folderFiltered = flatBookmarks.value.filter(
+      item => !normalizeNicknamePath(item.nickname).includes('/')
+    );
+  } else {
+    const folderPath = normalizeNicknamePath(selectedFolder.value);
+    const prefix = folderPath + '/';
+    folderFiltered = flatBookmarks.value.filter(item =>
+      normalizeNicknamePath(item.nickname).startsWith(prefix)
+    );
   }
-  if (selectedFolder.value === '__ROOT__') {
-    return flatBookmarks.value.filter(item => !normalizeNicknamePath(item.nickname).includes('/'));
-  }
-  const folderPath = normalizeNicknamePath(selectedFolder.value);
-  const prefix = folderPath + '/';
-  return flatBookmarks.value.filter(item => normalizeNicknamePath(item.nickname).startsWith(prefix));
+
+  return filterBookmarkRowsByColumns(folderFiltered, {
+    nickname: columnFilters.nickname.query,
+    title: columnFilters.title.query,
+    url: columnFilters.url.query
+  });
 });
 
 /**
@@ -2059,5 +2405,56 @@ body {
   cursor: pointer;
   font-size: 0.92rem;
   color: var(--p-text-color);
+}
+
+/* 列ヘッダー内のフィルターボタンおよび展開テキストエリア */
+:deep(.filterable-header-content) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  width: 100%;
+  gap: 0.25rem;
+}
+
+.column-filter-toggle-btn {
+  order: 2;
+  margin-left: auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.column-filter-toggle-btn.is-active {
+  background-color: var(--p-highlight-background);
+  color: var(--p-highlight-color);
+}
+
+.column-filter-box {
+  order: 3;
+  flex: 0 0 100%;
+  width: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 0.35rem;
+  font-weight: normal;
+}
+
+.column-filter-textarea {
+  width: 100%;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  padding: 0.3rem 1.75rem 0.3rem 0.5rem;
+  resize: none;
+  overflow: hidden;
+}
+
+.column-filter-clear-btn {
+  position: absolute;
+  right: 0.15rem;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
 }
 </style>
