@@ -3,6 +3,7 @@ import {
   BookmarkEntry,
   ENABLED_PRESETS_STORAGE_KEY,
   OMNIBOX_MIGRATION_HINT_CONTENT,
+  OPEN_IN_NEW_TAB_STORAGE_KEY,
   RuntimeMessage,
   SuggestedMatchTarget,
   SYNC_KEY_PREFIX
@@ -20,6 +21,7 @@ import { openOrReuseListTab, renderToastInDocument, showToast } from './shared/t
 import {
   clearBookmarksCache,
   clearEnabledPresetsCache,
+  clearOpenInNewTabCache,
   extractFolders,
   getMaxBatchOpenTabs,
   getSyncEnabled,
@@ -30,6 +32,7 @@ import {
   updateHistorySearchEnabledCache,
   updateListSortOrderCache,
   updateMaxBatchOpenTabsCache,
+  updateOpenInNewTabCache,
   updateSyncEnabledCache
 } from './shared/storage';
 import {
@@ -443,6 +446,7 @@ if (typeof window === 'undefined') {
         updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
         clearBookmarksCache();
         clearEnabledPresetsCache();
+        clearOpenInNewTabCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -462,6 +466,9 @@ if (typeof window === 'undefined') {
       }
       if (changes[ENABLED_PRESETS_STORAGE_KEY]) {
         updateEnabledPresetsCache(changes[ENABLED_PRESETS_STORAGE_KEY].newValue);
+      }
+      if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY]) {
+        updateOpenInNewTabCache(changes[OPEN_IN_NEW_TAB_STORAGE_KEY].newValue);
       }
     }
   });

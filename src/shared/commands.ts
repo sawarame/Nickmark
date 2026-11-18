@@ -136,6 +136,23 @@ export async function executeBookmarklet(params: {
 }
 
 /**
+ * 修飾キーの押下状態および「デフォルトで別タブで開く」設定から、ポップアップ遷移時のタブの開き方を決定します。
+ * 設定が有効な場合、修飾キーなしおよび Cmd/Ctrl/Alt 併用時は新しいフォアグラウンドタブで開き、
+ * Shift キー併用時は設定の有効/無効にかかわらず新しいバックグラウンドタブで開きます。
+ * @param modifiers - キーボードまたはマウスイベントの修飾キー押下状態
+ * @param openInNewTabByDefault - デフォルトで別タブで開く設定が有効かどうか
+ * @returns 決定されたタブの開き方（TabDisposition）
+ */
+export function resolvePopupTabDisposition(
+  modifiers: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean },
+  openInNewTabByDefault: boolean
+): TabDisposition {
+  if (modifiers.shiftKey) return 'newBackgroundTab';
+  if (modifiers.metaKey || modifiers.ctrlKey || modifiers.altKey) return 'newForegroundTab';
+  return openInNewTabByDefault ? 'newForegroundTab' : 'currentTab';
+}
+
+/**
  * ブックマークの学習スコアを更新せずに、指定された URL をタブの開き方に応じて開きます。
  * ブラウザ履歴候補などスコア更新対象外の遷移で使用します。
  * @param targetUrl - 遷移先の解決済み URL

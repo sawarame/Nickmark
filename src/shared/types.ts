@@ -245,6 +245,11 @@ export const SYNC_KEY_PREFIX = 'sync_data_';
 export const ENABLED_PRESETS_STORAGE_KEY = 'enabledPresets';
 
 /**
+ * デフォルトで別タブで開く設定を保存するストレージキー
+ */
+export const OPEN_IN_NEW_TAB_STORAGE_KEY = 'openInNewTab';
+
+/**
  * 標準プリセットの種別
  */
 export type PresetCategory = 'dynamic_url' | 'bookmarklet';
