@@ -9,9 +9,9 @@
 
 ## 2. コーディングスタイル
 
-- **コメントの記載**: ソースコードにはできるだけ日本語でコメントを残すようにする。クラスやメソッドには必ずその機能についてのコメントを書くこと。
+- **コメントの記載**: ソースコードには日本語でコメントを記述する。すべてのクラス、関数、メソッドには JSDoc 形式（概要、`@param`、`@returns`）で日本語のドキュメントコメントを記載すること。
 - **型の明示**: 変数、関数の引数、戻り値には可能な限り型を明示する。
-- **インタフェースと型エイリアス**: データの構造（例: `BookmarkEntry`, `NickmarkData`）は `interface` または `type` で定義し、バックグラウンドとオプション画面で共有する。
+- **インタフェースと型エイリアス**: データの構造（例: `BookmarkEntry`, `NickmarkData`）は `src/shared/types.ts`（および `src/background.ts` からの再エクスポート）で定義し、バックグラウンドと各 UI 画面（`List.vue`, `Preferences.vue`, `Popup.vue`）で共有する。
 - **非同期処理**: `Promise` を扱う場合は `async/await` 構文を使用し、`then/catch` の連鎖を避けて可読性を高める。
 - **Chrome API の利用**: `chrome.*` API は Promise を返す V3 の仕様に合わせて `await chrome.storage.local.get(...)` のように記述する。
 
@@ -24,4 +24,4 @@
 
 ## 4. モジュールとインポート
 
-- 共通の型定義や定数はエクスポートし、他のファイルからインポートして再利用する（例: `src/background.ts` から `BookmarkEntry` を `src/Options.vue` にインポート）。
+- 共通の型定義・定数・ドメインロジックは `src/shared/` 配下の各モジュールおよび `src/background.ts` からエクスポートし、各画面コンポーネント（`src/List.vue`, `src/Preferences.vue`, `src/Popup.vue`）からインポートして再利用する。

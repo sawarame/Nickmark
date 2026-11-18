@@ -4,10 +4,11 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
 
 ## 1. コア技術
 
-- **Chrome Extension Manifest V3**: 拡張機能のベース。
-- **TypeScript**: 静的型付け言語。全てのスクリプト（バックグラウンド、ブックマーク一覧画面）で使用。
-- **Vue.js (Vue 3)**: ブックマーク一覧画面の UI 構築のための Composition API ベースのフレームワーク。
-- **PrimeVue (v4)**: Vue 3 向けの UI コンポーネントライブラリ。
+- **Chrome Extension Manifest V3**: 拡張機能のベース（`minimum_chrome_version: "135"`）。
+- **TypeScript**: 静的型付け言語。全てのスクリプト（バックグラウンド、一覧画面、設定画面、ポップアップランチャー）で使用。
+- **Vue.js (Vue 3)**: 一覧画面・設定画面・ポップアップランチャーの UI 構築のための Composition API ベースのフレームワーク。
+- **PrimeVue (v4)**: Vue 3 向けの UI コンポーネントライブラリ（`@primeuix/themes/aura` および `primeicons` を使用）。
+- **vue3-ts-jsoneditor**: 一覧画面での JSON 一括編集・エクスポート用の JSON エディタコンポーネント。
 
 ## 2. ビルド・バンドルツール
 
@@ -25,6 +26,8 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
   - `preferences.ts` / `Preferences.vue`: 設定画面のエントリーポイントおよびメインコンポーネント。
   - `popup.ts` / `Popup.vue`: コマンドパレット型ポップアップランチャーのエントリーポイントおよびメインコンポーネント。
   - `i18n.ts`: 多言語対応（`en` / `ja`）モジュール。
+  - `components/`: 再利用可能な UI コンポーネント群。
+    - `CommandPromptIcon.vue`: ポップアップのコマンド候補等で使用するコマンドプロンプト（`>_`）SVG アイコンコンポーネント。
   - `shared/`: モジュール間で共有するドメイン別内部モジュール群。
     - `types.ts`: データ構造（`BookmarkEntry`, `NickmarkData`, `FolderInfo`, `PaletteItem` 等）および定数定義。
     - `url.ts`: パス正規化、URL 同一性判定、動的 URL 展開、ブックマークレット解析、Favicon・ショートカット表記ユーティリティ。
@@ -36,6 +39,7 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
     - `tips.ts`: ポップアップ空白状態向けの活用ヒント（Tips）カタログ・重複回避ランダム選出・OS 別表記解決ロジック。
     - `listSort.ts`: 管理画面一覧の「最終使用日時」「スコア」並び替えおよび設定値正規化の純粋ロジック。
     - `bookmarkImport.ts`: Nickmark JSON・Chrome ブックマーク HTML の解析、バリデーション、ニックネームサニタイズ、ベースフォルダ付与、マージ統合ロジック。
+    - `presets.ts`: 定番検索サービス・ブックマークレットのプリセットカタログ定義、正規化、および通常検索時の仮想エントリ合成ロジック。
     - `appBootstrap.ts`: Vue 3 + PrimeVue アプリケーションの共通初期化ヘルパー。
 - `package/`: 拡張機能としてブラウザに読み込ませる（配布する）ディレクトリ。
   - `manifest.json`: 拡張機能の定義ファイル。
