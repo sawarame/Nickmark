@@ -94,7 +94,10 @@ export function renderToastInDocument(
     opacity: '0'
   });
 
-  document.body.appendChild(div);
+  const container = document.body || document.documentElement;
+  if (!container) return;
+
+  container.appendChild(div);
   // リフローを強制して初期 opacity: 0 からトランジションを開始させる
   void div.offsetHeight;
   div.style.opacity = '1';
@@ -105,6 +108,33 @@ export function renderToastInDocument(
     div.style.transform = 'translateX(-50%)';
     setTimeout(() => div.remove(), 300);
   }, duration);
+}
+
+/**
+ * 指定されたタブのページ上のみに一時的なトースト通知を表示します。
+ * スクリプト注入不可ページなどで失敗した場合でも管理画面（list.html）へは遷移せず、false を返します。
+ * @param tabId - 対象となるタブの ID
+ * @param message - 表示するメッセージ文字列
+ * @param durationMs - トーストの表示時間（ミリ秒、デフォルト: 2200）
+ * @param elementId - 付与する DOM 要素 ID（デフォルト: 'nickmark-toast'）
+ * @returns トースト注入に成功した場合は true、失敗した場合は false
+ */
+export async function showInPageToastOnly(
+  tabId: number,
+  message: string,
+  durationMs: number = 2200,
+  elementId: string = 'nickmark-toast'
+): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: renderToastInDocument,
+      args: [message, durationMs, elementId, '2147483647']
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

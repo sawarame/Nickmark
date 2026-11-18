@@ -5,9 +5,10 @@ import { isSameUrl, normalizeUrlForComparison } from './url';
 /**
  * Markdown リンクコピー（`mdlink`）用のブックマークレットコード
  * 現在のページの `[タイトル](URL)` をクリップボードへコピーし、画面上部に控えめな完了通知を表示します。
+ * ページ側でのコピーに失敗した場合は戻り値を検証し、失敗時の誤通知を防ぎます。
  */
 const MDLINK_BOOKMARKLET_URL =
-  "javascript:(()=>{const t=(document.title||location.href).replace(/([\\[\\]])/g,'\\\\$1');const m=`[${t}](${location.href})`;const notify=()=>{const id='nickmark-mdlink-toast';const old=document.getElementById(id);if(old)old.remove();const el=document.createElement('div');el.id=id;el.textContent='Copied: '+m;Object.assign(el.style,{position:'fixed',top:'20px',left:'50%',transform:'translateX(-50%)',backgroundColor:'#1e293b',color:'#f8fafc',padding:'10px 18px',borderRadius:'8px',fontSize:'13px',zIndex:'2147483647',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.4)',border:'1px solid #334155',maxWidth:'80vw',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'});document.body.appendChild(el);setTimeout(()=>el.remove(),2200);};const fallback=()=>{const a=document.createElement('textarea');a.value=m;a.style.position='fixed';a.style.opacity='0';document.body.appendChild(a);a.select();document.execCommand('copy');a.remove();notify();};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(m).then(notify).catch(fallback);}else{fallback();}})();";
+  "javascript:(()=>{const t=(document.title||location.href).replace(/([\\[\\]])/g,'\\\\$1');const m=`[${t}](${location.href})`;const notify=(msg,err)=>{const id='nickmark-mdlink-toast';const old=document.getElementById(id);if(old)old.remove();const el=document.createElement('div');el.id=id;el.textContent=msg;Object.assign(el.style,{position:'fixed',top:'20px',left:'50%',transform:'translateX(-50%)',backgroundColor:err?'#7f1d1d':'#1e293b',color:'#f8fafc',padding:'10px 18px',borderRadius:'8px',fontSize:'13px',zIndex:'2147483647',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.4)',border:err?'1px solid #ef4444':'1px solid #334155',maxWidth:'80vw',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'});const root=document.body||document.documentElement;if(root){root.appendChild(el);setTimeout(()=>el.remove(),2600);}};const fallback=()=>{const a=document.createElement('textarea');a.value=m;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';const root=document.body||document.documentElement;if(!root){return;}root.appendChild(a);a.focus({preventScroll:true});a.select();let ok=false;try{ok=document.execCommand('copy');}catch{ok=false;}a.remove();if(ok){notify('Copied: '+m,false);}else{notify('Copy failed. Please run mdlink from the Nickmark popup.',true);}};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(m).then(()=>notify('Copied: '+m,false)).catch(fallback);}else{fallback();}})();";
 
 /**
  * Wayback Machine 表示（`wayback`）用のブックマークレットコード
@@ -228,4 +229,29 @@ export function mergeBookmarksWithPresets(
   }
 
   return merged;
+}
+
+/**
+ * 指定された URL 文字列が標準プリセット `mdlink` のブックマークレットコードと一致するかを判定します。
+ * @param url - 判定対象の URL またはブックマークレット文字列
+ * @returns `mdlink` プリセットと一致する場合は true、それ以外は false
+ */
+export function isPresetMdlinkUrl(url: string): boolean {
+  if (!url) return false;
+  return isSameUrl(url.trim(), MDLINK_BOOKMARKLET_URL);
+}
+
+/**
+ * ページタイトルと URL から Markdown 形式のリンク文字列 `[タイトル](URL)` を生成します。
+ * タイトル内の角括弧（`[` / `]`）はリンク構文の崩れを防ぐためバックスラッシュでエスケープし、
+ * タイトルが空または空白のみの場合は URL 文字列をタイトルとして使用します。
+ * @param title - 対象ページのタイトル（未取得時は undefined）
+ * @param url - 対象ページの URL
+ * @returns Markdown 形式のリンク文字列
+ */
+export function formatMarkdownLink(title: string | undefined, url: string): string {
+  const trimmedUrl = (url || '').trim();
+  const rawTitle = (title || '').trim() || trimmedUrl;
+  const escapedTitle = rawTitle.replace(/([\[\]])/g, '\\$1');
+  return `[${escapedTitle}](${trimmedUrl})`;
 }
