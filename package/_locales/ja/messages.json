@@ -655,5 +655,14 @@
   },
   "clearColumnFilterTooltip": {
     "message": "フィルターをクリア"
+  },
+  "openInNewTabTitle": {
+    "message": "別タブで開く"
+  },
+  "openInNewTabLabel": {
+    "message": "デフォルトで別タブで開く"
+  },
+  "openInNewTabDescription": {
+    "message": "有効にすると、ポップアップからブックマークやブラウザ履歴を開く際に、修飾キーなしでも新しいフォアグラウンドタブで開きます（Shift+Enter でバックグラウンドタブに開く操作は引き続き有効です）。"
   }
 }

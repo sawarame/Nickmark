@@ -214,13 +214,19 @@ import {
   BookmarkEntry,
   BookmarkletExecutionResult,
   ENABLED_PRESETS_STORAGE_KEY,
+  OPEN_IN_NEW_TAB_STORAGE_KEY,
   PaletteItem,
   PresetId,
   RuntimeMessage,
   TabDisposition,
   TipEntry
 } from './shared/types';
-import { executeNickmarkCommand, navigateWithDisposition, openUrlWithDisposition } from './shared/commands';
+import {
+  executeNickmarkCommand,
+  navigateWithDisposition,
+  openUrlWithDisposition,
+  resolvePopupTabDisposition
+} from './shared/commands';
 import {
   getEffectiveHistorySearchEnabled,
   searchHistoryPaletteItems,
@@ -228,7 +234,7 @@ import {
 } from './shared/history';
 import { mergeBookmarksWithPresets } from './shared/presets';
 import { buildPaletteSuggestions } from './shared/search';
-import { getEnabledPresetIds, loadBookmarksData, openFolderUrls } from './shared/storage';
+import { getEnabledPresetIds, getOpenInNewTab, loadBookmarksData, openFolderUrls } from './shared/storage';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
@@ -249,6 +255,7 @@ const bookmarksSnapshot = ref<Record<string, BookmarkEntry[]>>({});
 const enabledPresetIds = ref<PresetId[]>([]);
 const currentTab = ref<chrome.tabs.Tab | undefined>(undefined);
 const isHistorySearchActive = ref(false);
+const openInNewTabByDefault = ref(false);
 const historyItems = ref<PaletteItem[]>([]);
 const isHistorySearchPending = ref(false);
 
@@ -581,14 +588,12 @@ const applyTabCompletion = (): void => {
 };
 
 /**
- * キーボードまたはマウスイベントの修飾キーからタブの開き方（disposition）を判定します。
+ * キーボードまたはマウスイベントの修飾キーと設定値からタブの開き方（disposition）を判定します。
  * @param event - KeyboardEvent または MouseEvent
  * @returns タブの開き方
  */
 const getDispositionFromEvent = (event: KeyboardEvent | MouseEvent): TabDisposition => {
-  if (event.shiftKey) return 'newBackgroundTab';
-  if (event.metaKey || event.ctrlKey || event.altKey) return 'newForegroundTab';
-  return 'currentTab';
+  return resolvePopupTabDisposition(event, openInNewTabByDefault.value);
 };
 
 /**
@@ -887,7 +892,7 @@ const handleGlobalKeyDown = (event: KeyboardEvent): void => {
 };
 
 /**
- * ストレージ変更イベントに応じて言語設定や有効化プリセットをリアクティブに同期します。
+ * ストレージ変更イベントに応じて言語設定、有効化プリセット、別タブ開き方設定をリアクティブに同期します。
  * @param changes - 変更されたストレージキーの辞書
  * @returns 処理完了を示す Promise
  */
@@ -900,6 +905,9 @@ const handlePopupStorageChanged = async (
   }
   if (changes[ENABLED_PRESETS_STORAGE_KEY] || changes.isSyncEnabled) {
     enabledPresetIds.value = await getEnabledPresetIds(true);
+  }
+  if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY] || changes.isSyncEnabled) {
+    openInNewTabByDefault.value = await getOpenInNewTab(true);
   }
 };
 
@@ -915,11 +923,12 @@ onMounted(async (): Promise<void> => {
   await initI18n();
   i18nVersion.value += 1;
 
-  const [bookmarksResult, presetsResult, tabsResult, historyEnabledResult] = await Promise.allSettled([
+  const [bookmarksResult, presetsResult, tabsResult, historyEnabledResult, openInNewTabResult] = await Promise.allSettled([
     loadBookmarksData(),
     getEnabledPresetIds(),
     chrome.tabs.query({ active: true, currentWindow: true }),
-    getEffectiveHistorySearchEnabled()
+    getEffectiveHistorySearchEnabled(),
+    getOpenInNewTab()
   ]);
 
   if (bookmarksResult.status === 'fulfilled') {
@@ -944,6 +953,12 @@ onMounted(async (): Promise<void> => {
     isHistorySearchActive.value = historyEnabledResult.value;
   } else {
     isHistorySearchActive.value = false;
+  }
+
+  if (openInNewTabResult.status === 'fulfilled') {
+    openInNewTabByDefault.value = openInNewTabResult.value;
+  } else {
+    openInNewTabByDefault.value = false;
   }
 
   await focusSearchInput();

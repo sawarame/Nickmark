@@ -655,5 +655,14 @@
   },
   "clearColumnFilterTooltip": {
     "message": "Clear filter"
+  },
+  "openInNewTabTitle": {
+    "message": "Open in New Tab"
+  },
+  "openInNewTabLabel": {
+    "message": "Open in a new tab by default"
+  },
+  "openInNewTabDescription": {
+    "message": "When enabled, opening a bookmark or browser history item from the popup without modifier keys opens it in a new foreground tab (Shift+Enter still opens in a background tab)."
   }
 }
