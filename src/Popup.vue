@@ -232,10 +232,22 @@ import {
   searchHistoryPaletteItems,
   shouldSearchHistoryForQuery
 } from './shared/history';
-import { mergeBookmarksWithPresets } from './shared/presets';
+import {
+  mergeBookmarksWithPresets,
+  formatMarkdownLink,
+  isPresetMdlinkUrl
+} from './shared/presets';
 import { buildPaletteSuggestions } from './shared/search';
-import { getEnabledPresetIds, getOpenInNewTab, loadBookmarksData, openFolderUrls } from './shared/storage';
+import {
+  getEnabledPresetIds,
+  getOpenInNewTab,
+  loadBookmarksData,
+  openFolderUrls,
+  updateScore
+} from './shared/storage';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
+import { showInPageToastOnly } from './shared/toast';
+import { isRestrictedTabUrl } from './shared/url';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
 const HISTORY_SEARCH_DEBOUNCE_MS = 80;
@@ -657,6 +669,101 @@ const runCommandInPopup = async (commandText: string): Promise<void> => {
 };
 
 /**
+ * ポップアップ自身のドキュメントフォーカスと User Activation を用いてテキストをクリップボードへ書き込みます。
+ * `navigator.clipboard.writeText` を優先し、失敗時は一時 `textarea` と `document.execCommand('copy')` の
+ * 戻り値を検証して成否を判定します。
+ * @param text - クリップボードへコピーする文字列
+ * @returns コピーに成功した場合は true、失敗した場合は false
+ */
+const copyTextInPopup = async (text: string): Promise<boolean> => {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Clipboard API が利用不可または拒否された場合は execCommand フォールバックへ進む
+    }
+  }
+
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    const copied = document.execCommand('copy');
+    textarea.remove();
+    return copied;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * プリセット `mdlink` をポップアップ内で直接実行し、現在タブの Markdown リンクをクリップボードへコピーします。
+ * 通常ページでは対象タブ上部に完了トーストを表示してポップアップを閉じ、
+ * スクリプト注入不可ページ等ではポップアップ内フィードバックで完了を通知します。
+ * @param item - 実行対象のパレット候補アイテム
+ * @returns 処理完了を示す Promise
+ */
+const executeMdlinkInPopup = async (item: PaletteItem): Promise<void> => {
+  const tab = currentTab.value;
+  const tabUrl = tab?.url;
+  if (!tabUrl) {
+    feedback.value = {
+      severity: 'error',
+      message:
+        t('popupNoOpenableTabUrl') ||
+        '現在のタブから登録可能な URL を取得できませんでした。'
+    };
+    return;
+  }
+
+  // ポップアップにフォーカスと User Activation が残っている間にクリップボード書き込みを実行する
+  const markdownLink = formatMarkdownLink(tab.title, tabUrl);
+  const copied = await copyTextInPopup(markdownLink);
+  if (!copied) {
+    feedback.value = {
+      severity: 'error',
+      message:
+        t('errorMdlinkCopyFailed') || 'クリップボードへのコピーに失敗しました。'
+    };
+    return;
+  }
+
+  await updateScore(
+    item.executeValue,
+    item.matchTarget?.templateUrl,
+    item.matchTarget?.nickname
+  );
+
+  const copiedMsg =
+    t('presetMdlinkCopiedToast', [markdownLink]) || `Copied: ${markdownLink}`;
+  if (tab.id !== undefined && !isRestrictedTabUrl(tabUrl)) {
+    const toastShown = await showInPageToastOnly(
+      tab.id,
+      copiedMsg,
+      2200,
+      'nickmark-mdlink-toast'
+    );
+    if (toastShown) {
+      closePopup();
+      return;
+    }
+  }
+
+  // 特殊ページ等でページ内トーストを注入できない場合はポップアップ内で完了を通知する
+  query.value = '';
+  showSuccessFeedback(copiedMsg);
+  await focusSearchInput();
+};
+
+/**
  * 指定された候補アイテムを実行します（URL 遷移、ブックマークレット、フォルダ一括オープン、補完またはコマンド）。
  * @param item - 実行対象の候補アイテム
  * @param disposition - 通常 URL 遷移時のタブの開き方
@@ -707,6 +814,11 @@ const executeItem = async (item: PaletteItem, disposition: TabDisposition): Prom
     }
 
     if (item.kind === 'bookmarklet') {
+      if (isPresetMdlinkUrl(item.executeValue)) {
+        await executeMdlinkInPopup(item);
+        return;
+      }
+
       const tabId = currentTab.value?.id;
       if (tabId === undefined) {
         feedback.value = {

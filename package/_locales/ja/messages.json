@@ -664,5 +664,20 @@
   },
   "openInNewTabDescription": {
     "message": "有効にすると、ポップアップからブックマークやブラウザ履歴を開く際に、修飾キーなしでも新しいフォアグラウンドタブで開きます（Shift+Enter でバックグラウンドタブに開く操作は引き続き有効です）。"
+  },
+  "presetMdlinkCopiedToast": {
+    "message": "コピーしました: $1",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorMdlinkCopyFailed": {
+    "message": "クリップボードへのコピーに失敗しました。"
+  },
+  "errorMdlinkUsePopup": {
+    "message": "クリップボードへのコピーはポップアップ（$1）から実行してください。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }

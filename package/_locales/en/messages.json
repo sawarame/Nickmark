@@ -664,5 +664,20 @@
   },
   "openInNewTabDescription": {
     "message": "When enabled, opening a bookmark or browser history item from the popup without modifier keys opens it in a new foreground tab (Shift+Enter still opens in a background tab)."
+  },
+  "presetMdlinkCopiedToast": {
+    "message": "Copied: $1",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorMdlinkCopyFailed": {
+    "message": "Failed to copy to the clipboard."
+  },
+  "errorMdlinkUsePopup": {
+    "message": "Please run mdlink from the Nickmark popup ($1) to copy to the clipboard.",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }
