@@ -45,6 +45,16 @@
               class="w-full"
               inputClass="w-full"
               placeholder="e.g. work/gh"
+              :pt="{
+                pcInputText: {
+                  root: {
+                    onKeydown: handleNoSpaceKeydown,
+                    onCompositionstart: handleNicknameCompositionStart,
+                    onCompositionend: (e: CompositionEvent) => handleNicknameCompositionEnd(e, val => { newBookmark.nickname = val; }),
+                    onInput: (e: Event) => handleNicknameInput(e, val => { newBookmark.nickname = val; })
+                  }
+                }
+              }"
               @complete="searchNewBookmarkNicknames"
             />
           </div>
@@ -253,6 +263,9 @@
                   class="inline-textarea"
                   :aria-label="t('nicknameLabel') || 'Nickname'"
                   @keydown="handleInlineKeydown"
+                  @compositionstart="handleInlineNicknameCompositionStart"
+                  @compositionend="handleInlineNicknameCompositionEnd"
+                  @input="handleInlineNicknameInput"
                 />
               </div>
               <div
@@ -496,7 +509,10 @@
             v-model="newFolderName"
             class="w-full"
             placeholder="e.g. office"
-            @keydown.enter.prevent="executeRenameFolder"
+            @keydown="handleFolderRenameKeydown"
+            @compositionstart="handleNicknameCompositionStart"
+            @compositionend="e => handleNicknameCompositionEnd(e, val => { newFolderName = val; })"
+            @input="e => handleNicknameInput(e, val => { newFolderName = val; })"
           />
         </div>
       </div>
@@ -577,6 +593,10 @@
             :placeholder="t('importBaseFolderPlaceholder') || 'e.g. imported (keep original hierarchy if empty)'"
             :disabled="isImporting"
             class="w-full"
+            @keydown="handleNoSpaceKeydown"
+            @compositionstart="handleNicknameCompositionStart"
+            @compositionend="e => handleNicknameCompositionEnd(e, val => { importBaseFolder = val; })"
+            @input="e => handleNicknameInput(e, val => { importBaseFolder = val; })"
           />
         </div>
 
@@ -678,7 +698,8 @@ import {
   isSameUrl,
   isUserScriptsAvailable,
   normalizeNicknamePath,
-  resolveNavigableUrl
+  resolveNavigableUrl,
+  stripNicknameWhitespace
 } from './shared/url';
 import { renderToastInDocument } from './shared/toast';
 import {
@@ -755,9 +776,119 @@ const newBookmarkNicknameSuggestions = ref<string[]>([]);
  */
 const searchNewBookmarkNicknames = (event: AutoCompleteCompleteEvent): void => {
   newBookmarkNicknameSuggestions.value = filterNicknameSuggestions(
-    event.query || '',
+    stripNicknameWhitespace(event.query || ''),
     bookmarksData.value
   );
+};
+
+// ニックネーム系入力欄ごとの IME 変換中状態（DOM 要素単位で管理）
+const composingInputElements = new WeakSet<EventTarget>();
+
+/**
+ * テキスト入力系 DOM 要素から空白文字（半角・全角スペース等）を除去し、キャレット位置を保持します。
+ * @param target - 対象の HTMLInputElement または HTMLTextAreaElement
+ * @returns 空白除去後の文字列
+ */
+const sanitizeInputElementWhitespace = (
+  target: HTMLInputElement | HTMLTextAreaElement
+): string => {
+  const original = target.value;
+  const sanitized = stripNicknameWhitespace(original);
+  if (sanitized !== original) {
+    const selectionStart = target.selectionStart ?? original.length;
+    const selectionEnd = target.selectionEnd ?? selectionStart;
+    const nextStart = stripNicknameWhitespace(original.slice(0, selectionStart)).length;
+    const nextEnd = stripNicknameWhitespace(original.slice(0, selectionEnd)).length;
+    target.value = sanitized;
+    try {
+      target.setSelectionRange(nextStart, nextEnd);
+    } catch {
+      // 選択範囲の設定に対応していない入力状態では無視する
+    }
+  }
+  return sanitized;
+};
+
+/**
+ * キーボードイベントが空白文字（半角スペース・全角スペース）の直接入力であるかを判定します。
+ * IME 変換中の Space キーおよび修飾キー併用ショートカットは抑止対象外とします。
+ * @param event - キーボードイベント
+ * @returns 抑止すべき空白入力であれば true
+ */
+const isBlockedNicknameSpaceKey = (event: KeyboardEvent): boolean => {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  if (event.isComposing || event.keyCode === 229) return false;
+  if (event.target && composingInputElements.has(event.target)) return false;
+  return (
+    event.key === ' ' ||
+    event.key === 'Spacebar' ||
+    event.key === '\u3000' ||
+    event.code === 'Space'
+  );
+};
+
+/**
+ * ニックネーム系入力欄でスペースキー押下を抑止します。
+ * @param event - キーボードイベント
+ * @returns なし
+ */
+const handleNoSpaceKeydown = (event: KeyboardEvent): void => {
+  if (isBlockedNicknameSpaceKey(event)) {
+    event.preventDefault();
+  }
+};
+
+/**
+ * ニックネーム系入力欄で IME 変換が開始されたことを記録します。
+ * @param event - CompositionEvent
+ * @returns なし
+ */
+const handleNicknameCompositionStart = (event: CompositionEvent): void => {
+  if (event.target) {
+    composingInputElements.add(event.target);
+  }
+};
+
+/**
+ * ニックネーム系入力欄で IME 変換が確定した際、確定文字列から空白文字を除去して状態へ反映します。
+ * @param event - CompositionEvent
+ * @param applyValue - サニタイズ済み文字列を状態へ反映するコールバック
+ * @returns なし
+ */
+const handleNicknameCompositionEnd = (
+  event: CompositionEvent,
+  applyValue: (value: string) => void
+): void => {
+  const target = event.target;
+  if (target) {
+    composingInputElements.delete(target);
+  }
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    applyValue(sanitizeInputElementWhitespace(target));
+  }
+};
+
+/**
+ * ニックネーム系入力欄の input イベント時に、IME 変換中でなければ空白文字を除去して状態へ反映します。
+ * @param event - 入力イベント
+ * @param applyValue - サニタイズ済み文字列を状態へ反映するコールバック
+ * @returns なし
+ */
+const handleNicknameInput = (
+  event: Event,
+  applyValue: (value: string) => void
+): void => {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+    return;
+  }
+  if (
+    (event instanceof InputEvent && event.isComposing) ||
+    composingInputElements.has(target)
+  ) {
+    return;
+  }
+  applyValue(sanitizeInputElementWhitespace(target));
 };
 
 // インライン編集状態（同時に1セルのみアクティブ）
@@ -1152,12 +1283,29 @@ const openRenameFolderDialog = (): void => {
 };
 
 /**
+ * フォルダ名変更ダイアログ入力欄のキー操作（スペース入力抑止・Enter 確定）を処理します。
+ * @param event - キーボードイベント
+ * @returns なし
+ */
+const handleFolderRenameKeydown = (event: KeyboardEvent): void => {
+  if (isBlockedNicknameSpaceKey(event)) {
+    event.preventDefault();
+    return;
+  }
+  if (event.key === 'Enter') {
+    if (event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    void executeRenameFolder();
+  }
+};
+
+/**
  * フォルダ名の一括変更を実行します。
  * @returns 処理完了を示す Promise
  */
 const executeRenameFolder = async (): Promise<void> => {
   const oldPath = selectedFolder.value;
-  const newPath = normalizeNicknamePath(newFolderName.value);
+  const newPath = normalizeNicknamePath(stripNicknameWhitespace(newFolderName.value));
   if (!newPath || normalizeNicknamePath(oldPath) === newPath) {
     showRenameDialog.value = false;
     return;
@@ -1382,7 +1530,7 @@ const openPreferences = (): void => {
  */
 const addBookmark = async (): Promise<void> => {
   const { nickname, url, title: inputTitle, default_value } = newBookmark.value;
-  const trimmedNickname = normalizeNicknamePath(nickname);
+  const trimmedNickname = normalizeNicknamePath(stripNicknameWhitespace(nickname));
   const trimmedUrl = url.trim();
   const trimmedDefault = isDynamicUrl(trimmedUrl) ? (default_value || '').trim() : '';
 
@@ -1592,7 +1740,7 @@ const executeImport = async (): Promise<void> => {
   try {
     const preparedIncoming = applyBaseFolderPrefix(
       importPreview.value.result.bookmarks,
-      importBaseFolder.value
+      stripNicknameWhitespace(importBaseFolder.value)
     );
     const nextBookmarks =
       importMode.value === 'merge'
@@ -1799,7 +1947,9 @@ const commitInlineEdit = async (): Promise<void> => {
   const normalizedOrigNickname = normalizeNicknamePath(current.originalNickname);
   const newNickname =
     current.field === 'nickname'
-      ? normalizeNicknamePath(current.draftValue)
+      ? current.draftValue === current.originalNickname
+        ? normalizedOrigNickname
+        : normalizeNicknamePath(stripNicknameWhitespace(current.draftValue))
       : normalizedOrigNickname;
   const newTitle =
     current.field === 'title'
@@ -1928,12 +2078,16 @@ const commitInlineEdit = async (): Promise<void> => {
 };
 
 /**
- * インライン編集中のキーボードイベント（Enter による保存確定、Escape によるキャンセル）を処理します。
+ * インライン編集中のキーボードイベント（Enter による保存確定、Escape によるキャンセル、ニックネーム列でのスペース抑止）を処理します。
  * 日本語 IME 変換確定中の Enter は誤確定を防ぐため無視し、Shift+Enter を含め改行入力は行いません。
  * @param event - キーボードイベント
  * @returns なし
  */
 const handleInlineKeydown = (event: KeyboardEvent): void => {
+  if (inlineEdit.value?.field === 'nickname' && isBlockedNicknameSpaceKey(event)) {
+    event.preventDefault();
+    return;
+  }
   if (event.key === 'Enter') {
     if (event.isComposing || event.keyCode === 229) {
       return;
@@ -1946,6 +2100,41 @@ const handleInlineKeydown = (event: KeyboardEvent): void => {
     event.preventDefault();
     cancelInlineEdit();
   }
+};
+
+/**
+ * ニックネーム列のインライン編集で IME 変換開始を記録します。
+ * @param event - CompositionEvent
+ * @returns なし
+ */
+const handleInlineNicknameCompositionStart = (event: CompositionEvent): void => {
+  handleNicknameCompositionStart(event);
+};
+
+/**
+ * ニックネーム列のインライン編集で IME 変換確定時に空白文字を除去します。
+ * @param event - CompositionEvent
+ * @returns なし
+ */
+const handleInlineNicknameCompositionEnd = (event: CompositionEvent): void => {
+  handleNicknameCompositionEnd(event, val => {
+    if (inlineEdit.value && inlineEdit.value.field === 'nickname') {
+      inlineEdit.value.draftValue = val;
+    }
+  });
+};
+
+/**
+ * ニックネーム列のインライン編集で入力値から空白文字を除去します。
+ * @param event - 入力イベント
+ * @returns なし
+ */
+const handleInlineNicknameInput = (event: Event): void => {
+  handleNicknameInput(event, val => {
+    if (inlineEdit.value && inlineEdit.value.field === 'nickname') {
+      inlineEdit.value.draftValue = val;
+    }
+  });
 };
 
 /**
