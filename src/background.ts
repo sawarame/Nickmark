@@ -52,7 +52,7 @@ import {
   executeNickmarkCommand,
   navigateWithDisposition
 } from './shared/commands';
-import { isPresetMdlinkUrl } from './shared/presets';
+import { isPresetHtmllinkUrl, isPresetMdlinkUrl } from './shared/presets';
 
 // 共有型・定数・ユーティリティ・ストレージ・コマンド操作関数をバックグラウンドモジュールからも再エクスポート
 export * from './shared/types';
@@ -682,11 +682,14 @@ if (typeof window === 'undefined') {
 
       if (isBookmarkletUrl(targetUrl)) {
         const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (isPresetMdlinkUrl(targetUrl)) {
+        const isMdlink = isPresetMdlinkUrl(targetUrl);
+        const isHtmllink = !isMdlink && isPresetHtmllinkUrl(targetUrl);
+        if (isMdlink || isHtmllink) {
           if (currentTab?.id !== undefined) {
             const shortcut = getShortcutLabel();
+            const messageKey = isHtmllink ? 'errorHtmllinkUsePopup' : 'errorMdlinkUsePopup';
             const msg =
-              t('errorMdlinkUsePopup', [shortcut]) ||
+              t(messageKey, [shortcut]) ||
               `クリップボードへのコピーはポップアップ（${shortcut}）から実行してください。`;
             await showToast(currentTab.id, msg, 4500);
           }

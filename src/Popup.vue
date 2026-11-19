@@ -235,7 +235,9 @@ import {
 } from './shared/history';
 import {
   mergeBookmarksWithPresets,
+  formatHtmlLink,
   formatMarkdownLink,
+  isPresetHtmllinkUrl,
   isPresetMdlinkUrl
 } from './shared/presets';
 import { buildPaletteSuggestions } from './shared/search';
@@ -677,9 +679,45 @@ const runCommandInPopup = async (commandText: string): Promise<void> => {
 };
 
 /**
- * ポップアップ自身のドキュメントフォーカスと User Activation を用いてテキストをクリップボードへ書き込みます。
- * `navigator.clipboard.writeText` を優先し、失敗時は一時 `textarea` と `document.execCommand('copy')` の
- * 戻り値を検証して成否を判定します。
+ * 一時 `textarea` と `document.execCommand('copy')` を用いたフォールバックコピーを実行します。
+ * `onCopy` を指定すると `copy` イベント経由で複数 MIME タイプ（`text/html` 等）を書き込めます。
+ * @param plainText - 選択用テキストエリアに設定するプレーンテキスト
+ * @param onCopy - 任意指定の `copy` イベントハンドラ
+ * @returns コピーに成功した場合は true、失敗した場合は false
+ */
+const execCommandCopyFallback = (
+  plainText: string,
+  onCopy?: (event: ClipboardEvent) => void
+): boolean => {
+  let textarea: HTMLTextAreaElement | null = null;
+  try {
+    textarea = document.createElement('textarea');
+    textarea.value = plainText;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '0';
+    textarea.style.left = '0';
+    textarea.style.opacity = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    if (onCopy) {
+      document.addEventListener('copy', onCopy, true);
+    }
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    if (onCopy) {
+      document.removeEventListener('copy', onCopy, true);
+    }
+    textarea?.remove();
+  }
+};
+
+/**
+ * ポップアップ自身のドキュメントフォーカスと User Activation を用いてプレーンテキストをクリップボードへ書き込みます。
+ * `navigator.clipboard.writeText` を優先し、失敗時は一時 `textarea` と `document.execCommand('copy')` へフォールバックします。
  * @param text - クリップボードへコピーする文字列
  * @returns コピーに成功した場合は true、失敗した場合は false
  */
@@ -693,33 +731,56 @@ const copyTextInPopup = async (text: string): Promise<boolean> => {
     }
   }
 
-  try {
-    const textarea = document.createElement('textarea');
-    textarea.value = text;
-    textarea.setAttribute('readonly', '');
-    textarea.style.position = 'fixed';
-    textarea.style.top = '0';
-    textarea.style.left = '0';
-    textarea.style.opacity = '0';
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    const copied = document.execCommand('copy');
-    textarea.remove();
-    return copied;
-  } catch {
-    return false;
-  }
+  return execCommandCopyFallback(text);
 };
 
 /**
- * プリセット `mdlink` をポップアップ内で直接実行し、現在タブの Markdown リンクをクリップボードへコピーします。
+ * ポップアップ自身のドキュメントフォーカスと User Activation を用いて `text/html` と `text/plain` の両方を同時にクリップボードへ書き込みます。
+ * `navigator.clipboard.write`（`ClipboardItem`）を優先し、失敗時は `copy` イベントの `clipboardData.setData` を用いた
+ * `document.execCommand('copy')` フォールバックで両 MIME タイプを書き込みます。
+ * @param html - `text/html` として書き込む HTML 文字列
+ * @param plain - `text/plain` として書き込むプレーンテキスト文字列
+ * @returns コピーに成功した場合は true、失敗した場合は false
+ */
+const copyMultiMimeInPopup = async (html: string, plain: string): Promise<boolean> => {
+  if (
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard?.write &&
+    typeof ClipboardItem !== 'undefined'
+  ) {
+    try {
+      const clipboardItem = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' })
+      });
+      await navigator.clipboard.write([clipboardItem]);
+      return true;
+    } catch {
+      // ClipboardItem が利用不可または拒否された場合は copy イベント経由の execCommand フォールバックへ進む
+    }
+  }
+
+  return execCommandCopyFallback(plain, (event: ClipboardEvent) => {
+    event.preventDefault();
+    if (event.clipboardData) {
+      event.clipboardData.setData('text/html', html);
+      event.clipboardData.setData('text/plain', plain);
+    }
+  });
+};
+
+/**
+ * クリップボードコピー系プリセット（`mdlink` / `htmllink`）をポップアップ内で直接実行します。
  * 通常ページでは対象タブ上部に完了トーストを表示してポップアップを閉じ、
  * スクリプト注入不可ページ等ではポップアップ内フィードバックで完了を通知します。
  * @param item - 実行対象のパレット候補アイテム
+ * @param mode - 実行するコピー種別（`'mdlink'` または `'htmllink'`）
  * @returns 処理完了を示す Promise
  */
-const executeMdlinkInPopup = async (item: PaletteItem): Promise<void> => {
+const executeClipboardPresetInPopup = async (
+  item: PaletteItem,
+  mode: 'mdlink' | 'htmllink'
+): Promise<void> => {
   const tab = currentTab.value;
   const tabUrl = tab?.url;
   if (!tabUrl) {
@@ -733,8 +794,15 @@ const executeMdlinkInPopup = async (item: PaletteItem): Promise<void> => {
   }
 
   // ポップアップにフォーカスと User Activation が残っている間にクリップボード書き込みを実行する
-  const markdownLink = formatMarkdownLink(tab.title, tabUrl);
-  const copied = await copyTextInPopup(markdownLink);
+  const formattedLink =
+    mode === 'htmllink'
+      ? formatHtmlLink(tab.title, tabUrl)
+      : formatMarkdownLink(tab.title, tabUrl);
+  const copied =
+    mode === 'htmllink'
+      ? await copyMultiMimeInPopup(formattedLink, formattedLink)
+      : await copyTextInPopup(formattedLink);
+
   if (!copied) {
     feedback.value = {
       severity: 'error',
@@ -751,13 +819,16 @@ const executeMdlinkInPopup = async (item: PaletteItem): Promise<void> => {
   );
 
   const copiedMsg =
-    t('presetMdlinkCopiedToast', [markdownLink]) || `Copied: ${markdownLink}`;
+    t('presetMdlinkCopiedToast', [formattedLink]) || `Copied: ${formattedLink}`;
+  const toastElementId =
+    mode === 'htmllink' ? 'nickmark-htmllink-toast' : 'nickmark-mdlink-toast';
+
   if (tab.id !== undefined && !isRestrictedTabUrl(tabUrl)) {
     const toastShown = await showInPageToastOnly(
       tab.id,
       copiedMsg,
       2200,
-      'nickmark-mdlink-toast'
+      toastElementId
     );
     if (toastShown) {
       closePopup();
@@ -823,7 +894,11 @@ const executeItem = async (item: PaletteItem, disposition: TabDisposition): Prom
 
     if (item.kind === 'bookmarklet') {
       if (isPresetMdlinkUrl(item.executeValue)) {
-        await executeMdlinkInPopup(item);
+        await executeClipboardPresetInPopup(item, 'mdlink');
+        return;
+      }
+      if (isPresetHtmllinkUrl(item.executeValue)) {
+        await executeClipboardPresetInPopup(item, 'htmllink');
         return;
       }
 

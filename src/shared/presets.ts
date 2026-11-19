@@ -11,6 +11,14 @@ const MDLINK_BOOKMARKLET_URL =
   "javascript:(()=>{const t=(document.title||location.href).replace(/([\\[\\]])/g,'\\\\$1');const m=`[${t}](${location.href})`;const notify=(msg,err)=>{const id='nickmark-mdlink-toast';const old=document.getElementById(id);if(old)old.remove();const el=document.createElement('div');el.id=id;el.textContent=msg;Object.assign(el.style,{position:'fixed',top:'20px',left:'50%',transform:'translateX(-50%)',backgroundColor:err?'#7f1d1d':'#1e293b',color:'#f8fafc',padding:'10px 18px',borderRadius:'8px',fontSize:'13px',zIndex:'2147483647',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.4)',border:err?'1px solid #ef4444':'1px solid #334155',maxWidth:'80vw',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'});const root=document.body||document.documentElement;if(root){root.appendChild(el);setTimeout(()=>el.remove(),2600);}};const fallback=()=>{const a=document.createElement('textarea');a.value=m;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';const root=document.body||document.documentElement;if(!root){return;}root.appendChild(a);a.focus({preventScroll:true});a.select();let ok=false;try{ok=document.execCommand('copy');}catch{ok=false;}a.remove();if(ok){notify('Copied: '+m,false);}else{notify('Copy failed. Please run mdlink from the Nickmark popup.',true);}};if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(m).then(()=>notify('Copied: '+m,false)).catch(fallback);}else{fallback();}})();";
 
 /**
+ * HTML リンクコピー（`htmllink`）用のブックマークレットコード
+ * 現在のページの `<a href="URL">タイトル</a>` を `text/html` と `text/plain` のマルチ MIME でクリップボードへコピーし、
+ * 画面上部に控えめな完了通知を表示します。
+ */
+const HTMLLINK_BOOKMARKLET_URL =
+  "javascript:(()=>{const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/'/g,'&#39;');const t=esc(document.title||location.href);const u=esc(location.href);const h=`<a href=\"${u}\">${t}</a>`;const notify=(msg,err)=>{const id='nickmark-htmllink-toast';const old=document.getElementById(id);if(old)old.remove();const el=document.createElement('div');el.id=id;el.textContent=msg;Object.assign(el.style,{position:'fixed',top:'20px',left:'50%',transform:'translateX(-50%)',backgroundColor:err?'#7f1d1d':'#1e293b',color:'#f8fafc',padding:'10px 18px',borderRadius:'8px',fontSize:'13px',zIndex:'2147483647',boxShadow:'0 10px 15px -3px rgba(0,0,0,0.4)',border:err?'1px solid #ef4444':'1px solid #334155',maxWidth:'80vw',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',fontFamily:'-apple-system,BlinkMacSystemFont,sans-serif'});const root=document.body||document.documentElement;if(root){root.appendChild(el);setTimeout(()=>el.remove(),2600);}};const fallback=()=>{const onCopy=e=>{e.preventDefault();if(e.clipboardData){e.clipboardData.setData('text/html',h);e.clipboardData.setData('text/plain',h);}};const a=document.createElement('textarea');a.value=h;a.setAttribute('readonly','');a.style.position='fixed';a.style.opacity='0';const root=document.body||document.documentElement;if(!root){return;}root.appendChild(a);a.focus({preventScroll:true});a.select();document.addEventListener('copy',onCopy,true);let ok=false;try{ok=document.execCommand('copy');}catch{ok=false;}finally{document.removeEventListener('copy',onCopy,true);a.remove();}if(ok){notify('Copied: '+h,false);}else{notify('Copy failed. Please run htmllink from the Nickmark popup.',true);}};if(navigator.clipboard&&navigator.clipboard.write&&typeof ClipboardItem!=='undefined'){const item=new ClipboardItem({'text/html':new Blob([h],{type:'text/html'}),'text/plain':new Blob([h],{type:'text/plain'})});navigator.clipboard.write([item]).then(()=>notify('Copied: '+h,false)).catch(fallback);}else{fallback();}})();";
+
+/**
  * Wayback Machine 表示（`wayback`）用のブックマークレットコード
  * 現在のページの URL を Internet Archive Wayback Machine で開きます。
  */
@@ -18,7 +26,7 @@ const WAYBACK_BOOKMARKLET_URL =
   "javascript:(()=>{location.href='https://web.archive.org/web/*/'+location.href;})();";
 
 /**
- * 標準収録される全 12 件のプリセット定義カタログ（動的 URL 10 件、ブックマークレット 2 件）
+ * 標準収録される全 13 件のプリセット定義カタログ（動的 URL 10 件、ブックマークレット 3 件）
  */
 export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
   {
@@ -99,6 +107,14 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     titleKey: 'presetTitleMdlink',
     descriptionKey: 'presetDescMdlink',
     urlJa: MDLINK_BOOKMARKLET_URL
+  },
+  {
+    id: 'htmllink',
+    nickname: 'htmllink',
+    category: 'bookmarklet',
+    titleKey: 'presetTitleHtmllink',
+    descriptionKey: 'presetDescHtmllink',
+    urlJa: HTMLLINK_BOOKMARKLET_URL
   },
   {
     id: 'wayback',
@@ -242,6 +258,16 @@ export function isPresetMdlinkUrl(url: string): boolean {
 }
 
 /**
+ * 指定された URL 文字列が標準プリセット `htmllink` のブックマークレットコードと一致するかを判定します。
+ * @param url - 判定対象の URL またはブックマークレット文字列
+ * @returns `htmllink` プリセットと一致する場合は true、それ以外は false
+ */
+export function isPresetHtmllinkUrl(url: string): boolean {
+  if (!url) return false;
+  return isSameUrl(url.trim(), HTMLLINK_BOOKMARKLET_URL);
+}
+
+/**
  * ページタイトルと URL から Markdown 形式のリンク文字列 `[タイトル](URL)` を生成します。
  * タイトル内の角括弧（`[` / `]`）はリンク構文の崩れを防ぐためバックスラッシュでエスケープし、
  * タイトルが空または空白のみの場合は URL 文字列をタイトルとして使用します。
@@ -254,4 +280,32 @@ export function formatMarkdownLink(title: string | undefined, url: string): stri
   const rawTitle = (title || '').trim() || trimmedUrl;
   const escapedTitle = rawTitle.replace(/([\[\]])/g, '\\$1');
   return `[${escapedTitle}](${trimmedUrl})`;
+}
+
+/**
+ * HTML テキストおよび属性値向けに特殊文字（`&`, `<`, `>`, `"`, `'`）をエスケープします。
+ * @param text - エスケープ対象の生文字列
+ * @returns HTML エスケープ済み文字列
+ */
+export function escapeHtml(text: string): string {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * ページタイトルと URL から HTML 形式のリンク文字列 `<a href="URL">タイトル</a>` を生成します。
+ * URL およびタイトルに含まれる HTML 特殊文字をエスケープし、
+ * タイトルが空または空白のみの場合は URL 文字列をタイトルとして使用します。
+ * @param title - 対象ページのタイトル（未取得時は undefined）
+ * @param url - 対象ページの URL
+ * @returns HTML 形式のアンカータグ文字列
+ */
+export function formatHtmlLink(title: string | undefined, url: string): string {
+  const trimmedUrl = (url || '').trim();
+  const rawTitle = (title || '').trim() || trimmedUrl;
+  return `<a href="${escapeHtml(trimmedUrl)}">${escapeHtml(rawTitle)}</a>`;
 }
