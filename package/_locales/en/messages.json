@@ -665,6 +665,12 @@
   "openInNewTabDescription": {
     "message": "When enabled, opening a bookmark or browser history item from the popup without modifier keys opens it in a new foreground tab (Shift+Enter still opens in a background tab)."
   },
+  "openInCurrentIfNewTabLabel": {
+    "message": "Open in the current tab when on a New Tab"
+  },
+  "openInCurrentIfNewTabDescription": {
+    "message": "When enabled, if the active tab is a New Tab page, opening a bookmark or history item without modifier keys opens it in that tab (Cmd/Ctrl/Alt+Enter still opens in a new tab)."
+  },
   "presetMdlinkCopiedToast": {
     "message": "Copied: $1",
     "placeholders": {

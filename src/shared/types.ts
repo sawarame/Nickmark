@@ -250,6 +250,11 @@ export const ENABLED_PRESETS_STORAGE_KEY = 'enabledPresets';
 export const OPEN_IN_NEW_TAB_STORAGE_KEY = 'openInNewTab';
 
 /**
+ * 「デフォルトで別タブで開く」有効時、現在のタブが新しいタブならそのタブで開く設定を保存するストレージキー
+ */
+export const OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY = 'openInCurrentIfNewTab';
+
+/**
  * 標準プリセットの種別
  */
 export type PresetCategory = 'dynamic_url' | 'bookmarklet';

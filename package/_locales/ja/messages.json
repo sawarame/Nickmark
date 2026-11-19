@@ -665,6 +665,12 @@
   "openInNewTabDescription": {
     "message": "有効にすると、ポップアップからブックマークやブラウザ履歴を開く際に、修飾キーなしでも新しいフォアグラウンドタブで開きます（Shift+Enter でバックグラウンドタブに開く操作は引き続き有効です）。"
   },
+  "openInCurrentIfNewTabLabel": {
+    "message": "“新しいタブ”のときはそのタブで開く"
+  },
+  "openInCurrentIfNewTabDescription": {
+    "message": "有効にすると、現在開いているページが“新しいタブ”の場合は、修飾キーなしで開くときにそのタブで開きます（Cmd/Ctrl/Alt+Enter 等では設定にかかわらず新規タブで開きます）。"
+  },
   "presetMdlinkCopiedToast": {
     "message": "コピーしました: $1",
     "placeholders": {

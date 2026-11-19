@@ -136,20 +136,28 @@ export async function executeBookmarklet(params: {
 }
 
 /**
- * 修飾キーの押下状態および「デフォルトで別タブで開く」設定から、ポップアップ遷移時のタブの開き方を決定します。
- * 設定が有効な場合、修飾キーなしおよび Cmd/Ctrl/Alt 併用時は新しいフォアグラウンドタブで開き、
- * Shift キー併用時は設定の有効/無効にかかわらず新しいバックグラウンドタブで開きます。
+ * 修飾キーの押下状態および設定値・現在タブ状態から、ポップアップ遷移時のタブの開き方を決定します。
+ * - Shift キー併用時: 設定や現在タブにかかわらず新しいバックグラウンドタブで開きます。
+ * - Cmd/Ctrl/Alt キー併用時: 設定や現在タブにかかわらず新しいフォアグラウンドタブで開きます。
+ * - 修飾キーなし: 「デフォルトで別タブで開く」が有効でも、「“新しいタブ”のときはそのタブで開く」が有効かつ
+ *   現在のタブが新しいタブである場合は現在のタブ（currentTab）で開きます。
  * @param modifiers - キーボードまたはマウスイベントの修飾キー押下状態
  * @param openInNewTabByDefault - デフォルトで別タブで開く設定が有効かどうか
+ * @param openInCurrentIfNewTab - 新しいタブのときはそのタブで開く設定が有効かどうか（省略時は false）
+ * @param isCurrentTabNewTab - 現在のアクティブタブが新しいタブページかどうか（省略時は false）
  * @returns 決定されたタブの開き方（TabDisposition）
  */
 export function resolvePopupTabDisposition(
   modifiers: { shiftKey?: boolean; metaKey?: boolean; ctrlKey?: boolean; altKey?: boolean },
-  openInNewTabByDefault: boolean
+  openInNewTabByDefault: boolean,
+  openInCurrentIfNewTab: boolean = false,
+  isCurrentTabNewTab: boolean = false
 ): TabDisposition {
   if (modifiers.shiftKey) return 'newBackgroundTab';
   if (modifiers.metaKey || modifiers.ctrlKey || modifiers.altKey) return 'newForegroundTab';
-  return openInNewTabByDefault ? 'newForegroundTab' : 'currentTab';
+  if (!openInNewTabByDefault) return 'currentTab';
+  if (openInCurrentIfNewTab && isCurrentTabNewTab) return 'currentTab';
+  return 'newForegroundTab';
 }
 
 /**

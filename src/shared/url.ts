@@ -145,6 +145,43 @@ export function isRestrictedTabUrl(url?: string): boolean {
 }
 
 /**
+ * ブラウザの「新しいタブ」ページと判定する URL プレフィックス一覧
+ */
+const NEW_TAB_URLS = new Set([
+  'chrome://newtab',
+  'chrome://new-tab-page',
+  'edge://newtab',
+  'brave://newtab',
+  'about:newtab'
+]);
+
+/**
+ * 指定された URL がブラウザの「新しいタブ」ページであるかを判定します。
+ * 末尾スラッシュやクエリ／ハッシュ、大文字・小文字の差異を吸収して判定します。
+ * @param url - 判定対象の URL 文字列
+ * @returns 新しいタブページの場合は true、それ以外は false
+ */
+export function isNewTabUrl(url?: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim().toLowerCase();
+  if (!trimmed) return false;
+  const withoutQueryOrHash = trimmed.split(/[?#]/)[0];
+  const normalized = withoutQueryOrHash.replace(/\/+$/, '');
+  return NEW_TAB_URLS.has(normalized);
+}
+
+/**
+ * タブ情報がブラウザの「新しいタブ」ページを開いている状態かを判定します。
+ * 遷移開始直後など `pendingUrl` が存在する場合は `pendingUrl` を優先して参照します。
+ * @param tab - 判定対象のタブ情報（`url` / `pendingUrl` を持つオブジェクト）
+ * @returns 新しいタブページの場合は true、それ以外は false
+ */
+export function isChromeNewTab(tab?: { url?: string; pendingUrl?: string }): boolean {
+  if (!tab) return false;
+  return isNewTabUrl(tab.pendingUrl || tab.url);
+}
+
+/**
  * URL 文字列に動的パラメータのプレースホルダー（%s）が含まれているかを判定します。
  * ブックマークレット（`javascript:`）内の `%s` はコード破損を防ぐため動的 URL として扱いません。
  * @param url - 判定対象の URL 文字列
