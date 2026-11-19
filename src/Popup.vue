@@ -214,6 +214,7 @@ import {
   BookmarkEntry,
   BookmarkletExecutionResult,
   ENABLED_PRESETS_STORAGE_KEY,
+  OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   PaletteItem,
   PresetId,
@@ -240,6 +241,7 @@ import {
 import { buildPaletteSuggestions } from './shared/search';
 import {
   getEnabledPresetIds,
+  getOpenInCurrentIfNewTab,
   getOpenInNewTab,
   loadBookmarksData,
   openFolderUrls,
@@ -247,7 +249,7 @@ import {
 } from './shared/storage';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 import { showInPageToastOnly } from './shared/toast';
-import { isRestrictedTabUrl } from './shared/url';
+import { isChromeNewTab, isRestrictedTabUrl } from './shared/url';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
 const HISTORY_SEARCH_DEBOUNCE_MS = 80;
@@ -268,6 +270,7 @@ const enabledPresetIds = ref<PresetId[]>([]);
 const currentTab = ref<chrome.tabs.Tab | undefined>(undefined);
 const isHistorySearchActive = ref(false);
 const openInNewTabByDefault = ref(false);
+const openInCurrentIfNewTab = ref(false);
 const historyItems = ref<PaletteItem[]>([]);
 const isHistorySearchPending = ref(false);
 
@@ -605,7 +608,12 @@ const applyTabCompletion = (): void => {
  * @returns タブの開き方
  */
 const getDispositionFromEvent = (event: KeyboardEvent | MouseEvent): TabDisposition => {
-  return resolvePopupTabDisposition(event, openInNewTabByDefault.value);
+  return resolvePopupTabDisposition(
+    event,
+    openInNewTabByDefault.value,
+    openInCurrentIfNewTab.value,
+    isChromeNewTab(currentTab.value)
+  );
 };
 
 /**
@@ -1021,6 +1029,9 @@ const handlePopupStorageChanged = async (
   if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY] || changes.isSyncEnabled) {
     openInNewTabByDefault.value = await getOpenInNewTab(true);
   }
+  if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY] || changes.isSyncEnabled) {
+    openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
+  }
 };
 
 /**
@@ -1035,12 +1046,20 @@ onMounted(async (): Promise<void> => {
   await initI18n();
   i18nVersion.value += 1;
 
-  const [bookmarksResult, presetsResult, tabsResult, historyEnabledResult, openInNewTabResult] = await Promise.allSettled([
+  const [
+    bookmarksResult,
+    presetsResult,
+    tabsResult,
+    historyEnabledResult,
+    openInNewTabResult,
+    openInCurrentIfNewTabResult
+  ] = await Promise.allSettled([
     loadBookmarksData(),
     getEnabledPresetIds(),
     chrome.tabs.query({ active: true, currentWindow: true }),
     getEffectiveHistorySearchEnabled(),
-    getOpenInNewTab()
+    getOpenInNewTab(),
+    getOpenInCurrentIfNewTab()
   ]);
 
   if (bookmarksResult.status === 'fulfilled') {
@@ -1071,6 +1090,12 @@ onMounted(async (): Promise<void> => {
     openInNewTabByDefault.value = openInNewTabResult.value;
   } else {
     openInNewTabByDefault.value = false;
+  }
+
+  if (openInCurrentIfNewTabResult.status === 'fulfilled') {
+    openInCurrentIfNewTab.value = openInCurrentIfNewTabResult.value;
+  } else {
+    openInCurrentIfNewTab.value = false;
   }
 
   await focusSearchInput();

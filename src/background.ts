@@ -3,6 +3,7 @@ import {
   BookmarkEntry,
   ENABLED_PRESETS_STORAGE_KEY,
   OMNIBOX_MIGRATION_HINT_CONTENT,
+  OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   RuntimeMessage,
   SuggestedMatchTarget,
@@ -21,6 +22,7 @@ import { openOrReuseListTab, renderToastInDocument, showToast } from './shared/t
 import {
   clearBookmarksCache,
   clearEnabledPresetsCache,
+  clearOpenInCurrentIfNewTabCache,
   clearOpenInNewTabCache,
   extractFolders,
   getMaxBatchOpenTabs,
@@ -32,6 +34,7 @@ import {
   updateHistorySearchEnabledCache,
   updateListSortOrderCache,
   updateMaxBatchOpenTabsCache,
+  updateOpenInCurrentIfNewTabCache,
   updateOpenInNewTabCache,
   updateSyncEnabledCache
 } from './shared/storage';
@@ -471,6 +474,7 @@ if (typeof window === 'undefined') {
         clearBookmarksCache();
         clearEnabledPresetsCache();
         clearOpenInNewTabCache();
+        clearOpenInCurrentIfNewTabCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -493,6 +497,9 @@ if (typeof window === 'undefined') {
       }
       if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY]) {
         updateOpenInNewTabCache(changes[OPEN_IN_NEW_TAB_STORAGE_KEY].newValue);
+      }
+      if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]) {
+        updateOpenInCurrentIfNewTabCache(changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY].newValue);
       }
     }
   });

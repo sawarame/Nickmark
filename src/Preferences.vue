@@ -100,6 +100,28 @@
               />
             </div>
           </div>
+
+          <div v-if="openInNewTab" class="sync-row sub-setting-row">
+            <div class="sync-info">
+              <div class="sync-label">
+                {{ t('openInCurrentIfNewTabLabel') || 'Open in the current tab when on a New Tab' }}
+              </div>
+              <div class="sync-desc">
+                {{
+                  t('openInCurrentIfNewTabDescription') ||
+                  'When enabled, if the active tab is a New Tab page, opening a bookmark or history item without modifier keys opens it in that tab (Cmd/Ctrl/Alt+Enter still opens in a new tab).'
+                }}
+              </div>
+            </div>
+            <div class="toggle-container">
+              <ToggleSwitch
+                :modelValue="openInCurrentIfNewTab"
+                :disabled="isSavingOpenInCurrentIfNewTab"
+                :aria-label="t('openInCurrentIfNewTabLabel') || 'Open in the current tab when on a New Tab'"
+                @update:modelValue="handleOpenInCurrentIfNewTabChange"
+              />
+            </div>
+          </div>
         </template>
       </Card>
 
@@ -261,7 +283,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, Ref } from 'vue';
 import { useToast } from 'primevue/usetoast';
 import Card from 'primevue/card';
 import Select from 'primevue/select';
@@ -277,6 +299,7 @@ import {
   BookmarkEntry,
   DEFAULT_MAX_BATCH_OPEN_TABS,
   ENABLED_PRESETS_STORAGE_KEY,
+  OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   PresetDefinition,
   PresetId
@@ -289,19 +312,23 @@ import {
 import {
   getEnabledPresetIds,
   getMaxBatchOpenTabs,
+  getOpenInCurrentIfNewTab,
   getOpenInNewTab,
   getSaveErrorMessage,
   getStorageDataWithTimestamp,
   getSyncEnabled,
   isOverQuota,
   loadEnabledPresetsFromStorage,
+  loadOpenInCurrentIfNewTabFromStorage,
   loadOpenInNewTabFromStorage,
   saveBookmarksData,
   saveEnabledPresetsToStorage,
+  saveOpenInCurrentIfNewTabToStorage,
   saveOpenInNewTabToStorage,
   setEnabledPresetIds,
   setHistorySearchEnabled,
   setMaxBatchOpenTabs,
+  setOpenInCurrentIfNewTab,
   setOpenInNewTab,
   setSyncEnabled
 } from './shared/storage';
@@ -313,6 +340,8 @@ const syncEnabled = ref(false);
 const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
 const openInNewTab = ref(false);
 const isSavingOpenInNewTab = ref(false);
+const openInCurrentIfNewTab = ref(false);
+const isSavingOpenInCurrentIfNewTab = ref(false);
 const historySearchEnabled = ref(false);
 const isRequestingHistoryPermission = ref(false);
 const enabledPresetIds = ref<PresetId[]>([]);
@@ -378,8 +407,8 @@ let pendingSaveMaxBatchPromise: Promise<void> | null = null;
 const showMigrationDialog = ref(false);
 const migrationType = ref<'enable' | 'disable'>('enable');
 const migrationMessage = ref('');
-const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean } | null>(null);
-const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean } | null>(null);
+const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean } | null>(null);
+const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean } | null>(null);
 
 const languageOptions = ref([
   { label: 'English', value: 'en' },
@@ -398,6 +427,7 @@ const loadSettings = async (): Promise<void> => {
   maxBatchOpenTabs.value = loadedLimit;
   lastSavedMaxBatchOpenTabs = loadedLimit;
   openInNewTab.value = await getOpenInNewTab(true);
+  openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
   historySearchEnabled.value = await getEffectiveHistorySearchEnabled();
   enabledPresetIds.value = await getEnabledPresetIds(true);
   isLoaded.value = true;
@@ -505,23 +535,33 @@ const handleStorageChanged = (
   if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY]) {
     openInNewTab.value = Boolean(changes[OPEN_IN_NEW_TAB_STORAGE_KEY].newValue);
   }
+  if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]) {
+    openInCurrentIfNewTab.value = Boolean(changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY].newValue);
+  }
 };
 
 /**
- * 「デフォルトで別タブで開く」トグルの変更を捕捉し、ストレージへ保存します。
- * 保存失敗時は元の設定値へロールバックしてエラーを通知します。
+ * ブーリアン設定トグルの変更を楽観的更新付きで保存し、失敗時は元の値へロールバックしてエラーを通知します。
+ * @param stateRef - 表示用のリアクティブ参照
+ * @param savingRef - 保存中フラグのリアクティブ参照
  * @param nextValue - 切り替え後の設定値
+ * @param persist - 永続化を実行する非同期関数
  * @returns 処理完了を示す Promise
  */
-const handleOpenInNewTabChange = async (nextValue: boolean): Promise<void> => {
-  if (isSavingOpenInNewTab.value) return;
-  const previousValue = openInNewTab.value;
-  openInNewTab.value = nextValue;
-  isSavingOpenInNewTab.value = true;
+const saveBooleanSettingToggle = async (
+  stateRef: Ref<boolean>,
+  savingRef: Ref<boolean>,
+  nextValue: boolean,
+  persist: (value: boolean) => Promise<boolean>
+): Promise<void> => {
+  if (savingRef.value) return;
+  const previousValue = stateRef.value;
+  stateRef.value = nextValue;
+  savingRef.value = true;
 
   try {
-    const saved = await setOpenInNewTab(nextValue);
-    openInNewTab.value = saved;
+    const saved = await persist(nextValue);
+    stateRef.value = saved;
     addUniqueToast({
       severity: 'success',
       summary: t('saveSuccess') || 'Saved',
@@ -529,7 +569,7 @@ const handleOpenInNewTabChange = async (nextValue: boolean): Promise<void> => {
       life: 2000
     });
   } catch (err: unknown) {
-    openInNewTab.value = previousValue;
+    stateRef.value = previousValue;
     addUniqueToast({
       severity: 'error',
       summary: 'Error',
@@ -537,8 +577,31 @@ const handleOpenInNewTabChange = async (nextValue: boolean): Promise<void> => {
       life: 4000
     });
   } finally {
-    isSavingOpenInNewTab.value = false;
+    savingRef.value = false;
   }
+};
+
+/**
+ * 「デフォルトで別タブで開く」トグルの変更を捕捉し、ストレージへ保存します。
+ * @param nextValue - 切り替え後の設定値
+ * @returns 処理完了を示す Promise
+ */
+const handleOpenInNewTabChange = async (nextValue: boolean): Promise<void> => {
+  await saveBooleanSettingToggle(openInNewTab, isSavingOpenInNewTab, nextValue, setOpenInNewTab);
+};
+
+/**
+ * 「“新しいタブ”のときはそのタブで開く」トグルの変更を捕捉し、ストレージへ保存します。
+ * @param nextValue - 切り替え後の設定値
+ * @returns 処理完了を示す Promise
+ */
+const handleOpenInCurrentIfNewTabChange = async (nextValue: boolean): Promise<void> => {
+  await saveBooleanSettingToggle(
+    openInCurrentIfNewTab,
+    isSavingOpenInCurrentIfNewTab,
+    nextValue,
+    setOpenInCurrentIfNewTab
+  );
 };
 
 /**
@@ -779,6 +842,7 @@ const saveLanguage = async (): Promise<void> => {
  * @param bookmarksToSave - 切り替え先にコピー保存するブックマークデータ（省略時は設定変更のみ）
  * @param presetsToSave - 切り替え先にコピー保存するプリセット ID 配列（省略時は移行先既存値を維持）
  * @param openInNewTabToSave - 切り替え先にコピー保存する「デフォルトで別タブで開く」設定（省略時は移行先既存値を維持）
+ * @param openInCurrentIfNewTabToSave - 切り替え先にコピー保存する「“新しいタブ”のときはそのタブで開く」設定（省略時は移行先既存値を維持）
  * @param successNotice - 成功時のトースト通知設定
  * @param errorSummary - 失敗時のトースト見出し
  * @param fallbackError - 不明エラー時のフォールバック文言
@@ -789,6 +853,7 @@ const applySyncTransition = async (
   bookmarksToSave: Record<string, BookmarkEntry[]> | null,
   presetsToSave: PresetId[] | null,
   openInNewTabToSave: boolean | null,
+  openInCurrentIfNewTabToSave: boolean | null,
   successNotice: { severity: 'success' | 'info'; summary: string; detail: string },
   errorSummary: string,
   fallbackError: string
@@ -812,15 +877,24 @@ const applySyncTransition = async (
       const cloudOpenInNewTab = await loadOpenInNewTabFromStorage('sync');
       await saveOpenInNewTabToStorage('local', cloudOpenInNewTab);
     }
+    if (openInCurrentIfNewTabToSave !== null) {
+      await setOpenInCurrentIfNewTab(openInCurrentIfNewTabToSave);
+    } else if (targetEnabled) {
+      // クラウド側の既存データを採用して同期を有効化した場合は、新しいタブ時の現在タブ開き方設定もローカルへミラーする
+      const cloudOpenInCurrentIfNewTab = await loadOpenInCurrentIfNewTabFromStorage('sync');
+      await saveOpenInCurrentIfNewTabToStorage('local', cloudOpenInCurrentIfNewTab);
+    }
     syncEnabled.value = targetEnabled;
     enabledPresetIds.value = await getEnabledPresetIds(true);
     openInNewTab.value = await getOpenInNewTab(true);
+    openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
     addUniqueToast({ ...successNotice, life: 3000 });
     return true;
   } catch (err: unknown) {
     await setSyncEnabled(!targetEnabled);
     enabledPresetIds.value = await getEnabledPresetIds(true);
     openInNewTab.value = await getOpenInNewTab(true);
+    openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
     addUniqueToast({
       severity: 'error',
       summary: errorSummary,
@@ -847,10 +921,11 @@ const handleToggleRequest = (): void => {
  * @returns 処理完了を示す Promise
  */
 const handleSyncToggle = async (newValue: boolean): Promise<void> => {
-  const [local, localPresets, localOpenInNewTab] = await Promise.all([
+  const [local, localPresets, localOpenInNewTab, localOpenInCurrentIfNewTab] = await Promise.all([
     getStorageDataWithTimestamp('local'),
     loadEnabledPresetsFromStorage('local'),
-    loadOpenInNewTabFromStorage('local')
+    loadOpenInNewTabFromStorage('local'),
+    loadOpenInCurrentIfNewTabFromStorage('local')
   ]);
 
   if (newValue) {
@@ -866,18 +941,34 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       return;
     }
 
-    const [sync, syncPresets, syncOpenInNewTab] = await Promise.all([
+    const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab] = await Promise.all([
       getStorageDataWithTimestamp('sync'),
       loadEnabledPresetsFromStorage('sync'),
-      loadOpenInNewTabFromStorage('sync')
+      loadOpenInNewTabFromStorage('sync'),
+      loadOpenInCurrentIfNewTabFromStorage('sync')
     ]);
-    if (Object.keys(sync.bookmarks).length > 0 || syncPresets.length > 0 || syncOpenInNewTab) {
+    if (
+      Object.keys(sync.bookmarks).length > 0 ||
+      syncPresets.length > 0 ||
+      syncOpenInNewTab ||
+      syncOpenInCurrentIfNewTab
+    ) {
       migrationType.value = 'enable';
       migrationMessage.value =
         t('confirmEnableSyncWithData') ||
         'Existing cloud data found. Which data do you want to use?';
-      localInfo.value = { ...local, presets: localPresets, openInNewTab: localOpenInNewTab };
-      syncInfo.value = { ...sync, presets: syncPresets, openInNewTab: syncOpenInNewTab };
+      localInfo.value = {
+        ...local,
+        presets: localPresets,
+        openInNewTab: localOpenInNewTab,
+        openInCurrentIfNewTab: localOpenInCurrentIfNewTab
+      };
+      syncInfo.value = {
+        ...sync,
+        presets: syncPresets,
+        openInNewTab: syncOpenInNewTab,
+        openInCurrentIfNewTab: syncOpenInCurrentIfNewTab
+      };
       showMigrationDialog.value = true;
       return;
     }
@@ -887,6 +978,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       local.bookmarks,
       localPresets,
       localOpenInNewTab,
+      localOpenInCurrentIfNewTab,
       {
         severity: 'success',
         summary: 'Sync Enabled',
@@ -898,18 +990,34 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     return;
   }
 
-  const [sync, syncPresets, syncOpenInNewTab] = await Promise.all([
+  const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab] = await Promise.all([
     getStorageDataWithTimestamp('sync'),
     loadEnabledPresetsFromStorage('sync'),
-    loadOpenInNewTabFromStorage('sync')
+    loadOpenInNewTabFromStorage('sync'),
+    loadOpenInCurrentIfNewTabFromStorage('sync')
   ]);
-  if (Object.keys(local.bookmarks).length > 0 || localPresets.length > 0 || localOpenInNewTab) {
+  if (
+    Object.keys(local.bookmarks).length > 0 ||
+    localPresets.length > 0 ||
+    localOpenInNewTab ||
+    localOpenInCurrentIfNewTab
+  ) {
     migrationType.value = 'disable';
     migrationMessage.value =
       t('confirmDisableSyncWithData') ||
       'Local data already exists. Which data do you want to keep?';
-    localInfo.value = { ...local, presets: localPresets, openInNewTab: localOpenInNewTab };
-    syncInfo.value = { ...sync, presets: syncPresets, openInNewTab: syncOpenInNewTab };
+    localInfo.value = {
+      ...local,
+      presets: localPresets,
+      openInNewTab: localOpenInNewTab,
+      openInCurrentIfNewTab: localOpenInCurrentIfNewTab
+    };
+    syncInfo.value = {
+      ...sync,
+      presets: syncPresets,
+      openInNewTab: syncOpenInNewTab,
+      openInCurrentIfNewTab: syncOpenInCurrentIfNewTab
+    };
     showMigrationDialog.value = true;
     return;
   }
@@ -919,6 +1027,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     sync.bookmarks,
     syncPresets,
     syncOpenInNewTab,
+    syncOpenInCurrentIfNewTab,
     {
       severity: 'info',
       summary: 'Sync Disabled',
@@ -944,12 +1053,16 @@ const performMigration = async (): Promise<void> => {
   const sourceOpenInNewTab = isEnabling
     ? localInfo.value?.openInNewTab ?? null
     : syncInfo.value?.openInNewTab ?? null;
+  const sourceOpenInCurrentIfNewTab = isEnabling
+    ? localInfo.value?.openInCurrentIfNewTab ?? null
+    : syncInfo.value?.openInCurrentIfNewTab ?? null;
 
   const ok = await applySyncTransition(
     isEnabling,
     sourceBookmarks,
     sourcePresets,
     sourceOpenInNewTab,
+    sourceOpenInCurrentIfNewTab,
     {
       severity: 'success',
       summary: 'Success',
@@ -974,6 +1087,7 @@ const useExistingSyncData = async (): Promise<void> => {
     null,
     null,
     null,
+    null,
     {
       severity: 'success',
       summary: 'Sync Enabled',
@@ -992,6 +1106,7 @@ const useExistingSyncData = async (): Promise<void> => {
 const keepExistingLocalData = async (): Promise<void> => {
   await applySyncTransition(
     false,
+    null,
     null,
     null,
     null,
@@ -1121,6 +1236,14 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+.sub-setting-row {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  padding-left: 1rem;
+  border-top: 1px solid var(--p-content-border-color);
+  border-left: 2px solid color-mix(in srgb, var(--p-primary-color) 40%, var(--p-content-border-color));
 }
 
 .sync-info {

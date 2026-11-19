@@ -5,6 +5,7 @@ import {
   ENABLED_PRESETS_STORAGE_KEY,
   FolderInfo,
   ListSortOption,
+  OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   PresetId,
   SYNC_KEY_PREFIX
@@ -37,10 +38,8 @@ let isSyncEnabledCache: boolean | null = null;
 let historySearchEnabledCache: boolean | null = null;
 let listSortOrderCache: ListSortOption | null = null;
 let enabledPresetsCache: PresetId[] | null = null;
-let openInNewTabCache: boolean | null = null;
 let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
 let loadEnabledPresetsPromise: Promise<PresetId[]> | null = null;
-let loadOpenInNewTabPromise: Promise<boolean> | null = null;
 
 /**
  * Google アカウント同期が有効かどうかを取得します。
@@ -278,12 +277,90 @@ export async function setEnabledPresetIds(
 }
 
 /**
+ * Google アカウント同期対象の boolean 設定を管理するコントローラを生成します。
+ * @param storageKey - ストレージ上のキー名
+ * @returns キャッシュ制御・読込・保存を行うメソッド群
+ */
+function createSyncedBooleanSetting(storageKey: string) {
+  let cache: boolean | null = null;
+  let loadPromise: Promise<boolean> | null = null;
+
+  const clearCache = (): void => {
+    cache = null;
+    loadPromise = null;
+  };
+
+  const updateCache = (value: unknown): void => {
+    cache = Boolean(value);
+    loadPromise = null;
+  };
+
+  const loadFromStorage = async (area: 'local' | 'sync'): Promise<boolean> => {
+    const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+    const data = await storageArea.get(storageKey);
+    return Boolean(data[storageKey]);
+  };
+
+  const saveToStorage = async (area: 'local' | 'sync', enabled: boolean): Promise<boolean> => {
+    const normalized = Boolean(enabled);
+    const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+    await storageArea.set({ [storageKey]: normalized });
+    return normalized;
+  };
+
+  const get = async (forceRefresh: boolean = false): Promise<boolean> => {
+    if (forceRefresh) {
+      clearCache();
+    }
+    if (cache !== null) return cache;
+    if (loadPromise) return loadPromise;
+
+    loadPromise = (async () => {
+      try {
+        const isSync = await getSyncEnabled();
+        const loaded = await loadFromStorage(isSync ? 'sync' : 'local');
+        cache = loaded;
+        return loaded;
+      } finally {
+        loadPromise = null;
+      }
+    })();
+
+    return loadPromise;
+  };
+
+  const set = async (enabled: boolean): Promise<boolean> => {
+    const normalized = Boolean(enabled);
+    const isSync = await getSyncEnabled();
+    if (isSync) {
+      await saveToStorage('sync', normalized);
+    }
+    await saveToStorage('local', normalized);
+    cache = normalized;
+    loadPromise = null;
+    return normalized;
+  };
+
+  return {
+    storageKey,
+    clearCache,
+    updateCache,
+    loadFromStorage,
+    saveToStorage,
+    get,
+    set
+  };
+}
+
+const openInNewTabSetting = createSyncedBooleanSetting(OPEN_IN_NEW_TAB_STORAGE_KEY);
+const openInCurrentIfNewTabSetting = createSyncedBooleanSetting(OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY);
+
+/**
  * メモリ上に保持されている「デフォルトで別タブで開く」設定キャッシュおよび読み込みプロミスを破棄します。
  * @returns なし
  */
 export function clearOpenInNewTabCache(): void {
-  openInNewTabCache = null;
-  loadOpenInNewTabPromise = null;
+  openInNewTabSetting.clearCache();
 }
 
 /**
@@ -292,8 +369,7 @@ export function clearOpenInNewTabCache(): void {
  * @returns なし
  */
 export function updateOpenInNewTabCache(value: unknown): void {
-  openInNewTabCache = Boolean(value);
-  loadOpenInNewTabPromise = null;
+  openInNewTabSetting.updateCache(value);
 }
 
 /**
@@ -304,9 +380,7 @@ export function updateOpenInNewTabCache(value: unknown): void {
 export async function loadOpenInNewTabFromStorage(
   area: 'local' | 'sync'
 ): Promise<boolean> {
-  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
-  const data = await storageArea.get(OPEN_IN_NEW_TAB_STORAGE_KEY);
-  return Boolean(data[OPEN_IN_NEW_TAB_STORAGE_KEY]);
+  return openInNewTabSetting.loadFromStorage(area);
 }
 
 /**
@@ -319,10 +393,7 @@ export async function saveOpenInNewTabToStorage(
   area: 'local' | 'sync',
   enabled: boolean
 ): Promise<boolean> {
-  const normalized = Boolean(enabled);
-  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
-  await storageArea.set({ [OPEN_IN_NEW_TAB_STORAGE_KEY]: normalized });
-  return normalized;
+  return openInNewTabSetting.saveToStorage(area, enabled);
 }
 
 /**
@@ -334,24 +405,7 @@ export async function saveOpenInNewTabToStorage(
 export async function getOpenInNewTab(
   forceRefresh: boolean = false
 ): Promise<boolean> {
-  if (forceRefresh) {
-    clearOpenInNewTabCache();
-  }
-  if (openInNewTabCache !== null) return openInNewTabCache;
-  if (loadOpenInNewTabPromise) return loadOpenInNewTabPromise;
-
-  loadOpenInNewTabPromise = (async () => {
-    try {
-      const isSync = await getSyncEnabled();
-      const loaded = await loadOpenInNewTabFromStorage(isSync ? 'sync' : 'local');
-      openInNewTabCache = loaded;
-      return loaded;
-    } finally {
-      loadOpenInNewTabPromise = null;
-    }
-  })();
-
-  return loadOpenInNewTabPromise;
+  return openInNewTabSetting.get(forceRefresh);
 }
 
 /**
@@ -361,15 +415,70 @@ export async function getOpenInNewTab(
  * @returns 正規化されて保存された設定値
  */
 export async function setOpenInNewTab(enabled: boolean): Promise<boolean> {
-  const normalized = Boolean(enabled);
-  const isSync = await getSyncEnabled();
-  if (isSync) {
-    await saveOpenInNewTabToStorage('sync', normalized);
-  }
-  await saveOpenInNewTabToStorage('local', normalized);
-  openInNewTabCache = normalized;
-  loadOpenInNewTabPromise = null;
-  return normalized;
+  return openInNewTabSetting.set(enabled);
+}
+
+/**
+ * メモリ上に保持されている「“新しいタブ”のときはそのタブで開く」設定キャッシュおよび読み込みプロミスを破棄します。
+ * @returns なし
+ */
+export function clearOpenInCurrentIfNewTabCache(): void {
+  openInCurrentIfNewTabSetting.clearCache();
+}
+
+/**
+ * 「“新しいタブ”のときはそのタブで開く」設定のメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param value - 更新後の設定値
+ * @returns なし
+ */
+export function updateOpenInCurrentIfNewTabCache(value: unknown): void {
+  openInCurrentIfNewTabSetting.updateCache(value);
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）から「“新しいタブ”のときはそのタブで開く」設定を読み込みます。
+ * @param area - 読み込み元のストレージ領域（'local' または 'sync'）
+ * @returns 有効な場合は true、未設定または無効な場合は false
+ */
+export async function loadOpenInCurrentIfNewTabFromStorage(
+  area: 'local' | 'sync'
+): Promise<boolean> {
+  return openInCurrentIfNewTabSetting.loadFromStorage(area);
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）に「“新しいタブ”のときはそのタブで開く」設定を保存します。
+ * @param area - 保存先のストレージ領域（'local' または 'sync'）
+ * @param enabled - 有効にする場合は true、無効にする場合は false
+ * @returns 正規化されて保存された設定値
+ */
+export async function saveOpenInCurrentIfNewTabToStorage(
+  area: 'local' | 'sync',
+  enabled: boolean
+): Promise<boolean> {
+  return openInCurrentIfNewTabSetting.saveToStorage(area, enabled);
+}
+
+/**
+ * 「“新しいタブ”のときはそのタブで開く」設定を取得します。
+ * Google アカウント同期が ON の場合は sync ストレージ、OFF の場合は local ストレージから取得し、メモリにキャッシュします。
+ * @param forceRefresh - true の場合、キャッシュを破棄してストレージから再読み込みします
+ * @returns 有効な場合は true、無効または未設定の場合は false
+ */
+export async function getOpenInCurrentIfNewTab(
+  forceRefresh: boolean = false
+): Promise<boolean> {
+  return openInCurrentIfNewTabSetting.get(forceRefresh);
+}
+
+/**
+ * 「“新しいタブ”のときはそのタブで開く」設定を保存します。
+ * Google アカウント同期が ON の場合は sync と local の双方に保存し、OFF の場合は local に保存します。
+ * @param enabled - 有効にする場合は true、無効にする場合は false
+ * @returns 正規化されて保存された設定値
+ */
+export async function setOpenInCurrentIfNewTab(enabled: boolean): Promise<boolean> {
+  return openInCurrentIfNewTabSetting.set(enabled);
 }
 
 /**
@@ -914,6 +1023,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         updateSyncEnabledCache(!!changes.isSyncEnabled.newValue);
         clearEnabledPresetsCache();
         clearOpenInNewTabCache();
+        clearOpenInCurrentIfNewTabCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -930,12 +1040,14 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         updateEnabledPresetsCache(changes[ENABLED_PRESETS_STORAGE_KEY].newValue);
       }
     }
-    if (changes[OPEN_IN_NEW_TAB_STORAGE_KEY]) {
-      if (
-        (isSyncEnabledCache === true && area === 'sync') ||
-        (isSyncEnabledCache !== true && area === 'local')
-      ) {
-        updateOpenInNewTabCache(changes[OPEN_IN_NEW_TAB_STORAGE_KEY].newValue);
+    for (const setting of [openInNewTabSetting, openInCurrentIfNewTabSetting]) {
+      if (changes[setting.storageKey]) {
+        if (
+          (isSyncEnabledCache === true && area === 'sync') ||
+          (isSyncEnabledCache !== true && area === 'local')
+        ) {
+          setting.updateCache(changes[setting.storageKey].newValue);
+        }
       }
     }
   });
