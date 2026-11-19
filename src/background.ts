@@ -37,6 +37,7 @@ import {
 } from './shared/storage';
 import {
   buildRegularSearchSuggestions,
+  findMatchingFolders,
   formatSearchMatchDescription,
   resolveCommandMatches,
   resolveMatchFromZeroWidthMarker,
@@ -328,6 +329,12 @@ function handleRegularSearchSuggestions(
   const isExplicitFolderInput = trimmed.endsWith('/');
   const normalizedFolderQuery = normalizeNicknamePath(trimmed);
   const matchedFolder = normalizedFolderQuery ? folders.get(normalizedFolderQuery) : undefined;
+  const matchedFolders = normalizedFolderQuery
+    ? findMatchingFolders(folders, normalizedFolderQuery, {
+        exactSuffix: isExplicitFolderInput,
+        limit: isExplicitFolderInput ? 10 : 5
+      })
+    : [];
 
   if (isExplicitFolderInput && matchedFolder && matchedFolder.openableUrlCount > 0) {
     const desc =
@@ -335,6 +342,14 @@ function handleRegularSearchSuggestions(
       `📁 フォルダ「${matchedFolder.path}」の全ブックマークを一括オープン (${matchedFolder.openableUrlCount}タブ)`;
     chrome.omnibox.setDefaultSuggestion({
       description: `<match>${escapeXml(matchedFolder.path)}/</match> - ${escapeXml(desc)}`
+    });
+  } else if (isExplicitFolderInput && matchedFolders.length > 0) {
+    const topFolder = matchedFolders[0];
+    const summaryDesc =
+      t('openFolderSummary', [topFolder.path, String(topFolder.openableUrlCount)]) ||
+      `📁 ${topFolder.path} (${topFolder.openableUrlCount}タブを一括オープン)`;
+    chrome.omnibox.setDefaultSuggestion({
+      description: `Select folder for <match>${escapeXml(trimmed)}</match> <dim>- ${escapeXml(summaryDesc)}</dim>`
     });
   } else if (allMatches.length === 1) {
     const actionLabel = isBookmarkletUrl(allMatches[0].resolvedUrl) ? 'Run' : 'Go to';
@@ -348,6 +363,14 @@ function handleRegularSearchSuggestions(
     chrome.omnibox.setDefaultSuggestion({
       description: `Search for: <match>${escapeXml(trimmed)}</match> <dim>- ${topTitle} (${topUrl})</dim>`
     });
+  } else if (matchedFolders.length > 0) {
+    const topFolder = matchedFolders[0];
+    const summaryDesc =
+      t('openFolderSummary', [topFolder.path, String(topFolder.openableUrlCount)]) ||
+      `📁 ${topFolder.path} (${topFolder.openableUrlCount}タブを一括オープン)`;
+    chrome.omnibox.setDefaultSuggestion({
+      description: `<match>${escapeXml(topFolder.path)}/</match> <dim>- ${escapeXml(summaryDesc)}</dim>`
+    });
   } else {
     chrome.omnibox.setDefaultSuggestion({
       description: `No matches found for: <match>${escapeXml(trimmed)}</match>`
@@ -356,23 +379,23 @@ function handleRegularSearchSuggestions(
 
   const { suggestions, matchMap } = buildRegularSearchSuggestions(text, allMatches, bookmarks);
 
-  // 末尾スラッシュでない通常入力時でも、該当フォルダが存在する場合はサジェスト内に一括オープン候補を提示する
-  if (!isExplicitFolderInput && normalizedFolderQuery) {
-    const lowerTrimmed = normalizedFolderQuery.toLowerCase();
-    for (const folder of folders.values()) {
-      if (
-        folder.openableUrlCount > 0 &&
-        (folder.path.toLowerCase() === lowerTrimmed || folder.path.toLowerCase().startsWith(lowerTrimmed))
-      ) {
-        const summaryDesc =
-          t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
-          `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`;
-        suggestions.unshift({
-          content: `${folder.path}/`,
-          description: `<match>${escapeXml(folder.path)}/</match> <dim>- ${escapeXml(summaryDesc)}</dim>`
-        });
-        break;
+  // 該当フォルダが存在する場合はアルファベット順で一括オープン候補をサジェストへ追加する
+  if (matchedFolders.length > 0) {
+    const folderSuggestions: chrome.omnibox.SuggestResult[] = [];
+    for (const folder of matchedFolders) {
+      if (isExplicitFolderInput && matchedFolder && folder.path === matchedFolder.path) {
+        continue;
       }
+      const summaryDesc =
+        t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
+        `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`;
+      folderSuggestions.push({
+        content: `${folder.path}/`,
+        description: `<match>${escapeXml(folder.path)}/</match> <dim>- ${escapeXml(summaryDesc)}</dim>`
+      });
+    }
+    if (folderSuggestions.length > 0) {
+      suggestions.unshift(...folderSuggestions);
     }
   }
 
