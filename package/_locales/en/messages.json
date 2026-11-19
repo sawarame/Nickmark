@@ -632,6 +632,12 @@
   "presetDescMdlink": {
     "message": "Copy the current page's [Title](URL) to the clipboard"
   },
+  "presetTitleHtmllink": {
+    "message": "Copy HTML Link"
+  },
+  "presetDescHtmllink": {
+    "message": "Copy the current page's <a href=\"URL\">Title</a> to the clipboard (multi-MIME for Teams, etc.)"
+  },
   "presetTitleWayback": {
     "message": "Open in Wayback Machine"
   },
@@ -682,6 +688,12 @@
   },
   "errorMdlinkUsePopup": {
     "message": "Please run mdlink from the Nickmark popup ($1) to copy to the clipboard.",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorHtmllinkUsePopup": {
+    "message": "Please run htmllink from the Nickmark popup ($1) to copy to the clipboard.",
     "placeholders": {
       "1": { "content": "$1" }
     }

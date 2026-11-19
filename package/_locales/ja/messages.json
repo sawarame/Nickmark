@@ -632,6 +632,12 @@
   "presetDescMdlink": {
     "message": "現在のページの [タイトル](URL) をクリップボードへコピー"
   },
+  "presetTitleHtmllink": {
+    "message": "HTML リンクをコピー"
+  },
+  "presetDescHtmllink": {
+    "message": "現在のページの <a href=\"URL\">タイトル</a> をクリップボードへコピー（Teams 等対応）"
+  },
   "presetTitleWayback": {
     "message": "Wayback Machine で表示"
   },
@@ -681,6 +687,12 @@
     "message": "クリップボードへのコピーに失敗しました。"
   },
   "errorMdlinkUsePopup": {
+    "message": "クリップボードへのコピーはポップアップ（$1）から実行してください。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorHtmllinkUsePopup": {
     "message": "クリップボードへのコピーはポップアップ（$1）から実行してください。",
     "placeholders": {
       "1": { "content": "$1" }
