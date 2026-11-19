@@ -21,6 +21,16 @@ export function normalizeNicknamePath(rawPath: string): string {
 }
 
 /**
+ * ニックネームまたはフォルダ名の入力値から半角・全角スペースを含むすべての空白文字を除去します。
+ * @param value - 除去対象の入力文字列
+ * @returns 空白文字を除去した文字列
+ */
+export function stripNicknameWhitespace(value: string): string {
+  if (!value || typeof value !== 'string') return '';
+  return value.replace(/\s+/g, '');
+}
+
+/**
  * 2つの URL が同一のものか比較します。
  * @param u1 - 比較対象の URL 1
  * @param u2 - 比較対象の URL 2
