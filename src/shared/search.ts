@@ -1,6 +1,7 @@
 import {
   AddPreviewMeta,
   BookmarkEntry,
+  FolderInfo,
   PaletteItem,
   ResolvedSearchMatch,
   SuggestedMatchTarget
@@ -119,6 +120,96 @@ export function resolveMatchFromZeroWidthMarker(
   }
 
   return null;
+}
+
+/**
+ * フォルダ検索用のオプション設定
+ */
+export interface FindMatchingFoldersOptions {
+  /** 末尾スラッシュ明示時など、セグメント境界のサフィックス完全一致のみに限定する場合は true（既定: false） */
+  exactSuffix?: boolean;
+  /** 返却する最大件数（未指定時は全件） */
+  limit?: number;
+}
+
+/**
+ * フォルダパスを大文字・小文字を区別しないアルファベット順で比較します。
+ * @param a - 比較対象のフォルダパス 1
+ * @param b - 比較対象のフォルダパス 2
+ * @returns 並び順を示す比較値（負・0・正）
+ */
+export function compareFolderPaths(a: string, b: string): number {
+  const lowerCompare = a.toLowerCase().localeCompare(b.toLowerCase());
+  return lowerCompare !== 0 ? lowerCompare : a.localeCompare(b);
+}
+
+/**
+ * フォルダパスがクエリ文字列にセグメント境界（`/` 区切り）起点で一致するか判定します。
+ * - `exactSuffix === false`: いずれかの階層セグメントから始まるサフィックスパスがクエリで前方一致する場合に true
+ * - `exactSuffix === true`: いずれかの階層セグメントから始まるサフィックスパスがクエリと完全一致する場合に true
+ * @param folderPath - 正規化済みのフォルダパス
+ * @param lowerNormQuery - 小文字化・正規化済みのクエリ文字列
+ * @param exactSuffix - サフィックス完全一致のみを許容する場合は true
+ * @returns 一致する場合は true
+ */
+function matchesFolderBySegment(
+  folderPath: string,
+  lowerNormQuery: string,
+  exactSuffix: boolean
+): boolean {
+  const lowerPath = folderPath.toLowerCase();
+  if (exactSuffix) {
+    return lowerPath === lowerNormQuery || lowerPath.endsWith(`/${lowerNormQuery}`);
+  }
+  if (lowerPath.startsWith(lowerNormQuery)) {
+    return true;
+  }
+
+  let searchFrom = 0;
+  while (true) {
+    const slashIndex = lowerPath.indexOf('/', searchFrom);
+    if (slashIndex === -1) return false;
+    if (lowerPath.startsWith(lowerNormQuery, slashIndex + 1)) {
+      return true;
+    }
+    searchFrom = slashIndex + 1;
+  }
+}
+
+/**
+ * 抽出済みフォルダ群からクエリに一致する開く対象ありのフォルダを抽出し、アルファベット順で返します。
+ * クエリが空の場合は開く対象ありの全フォルダをアルファベット順で返します。
+ * @param folders - `extractFolders` で抽出したフォルダ情報マップ
+ * @param rawQuery - ユーザーが入力したクエリ文字列
+ * @param options - マッチ条件および取得上限オプション
+ * @returns アルファベット順にソートされた一致フォルダ情報配列
+ */
+export function findMatchingFolders(
+  folders: Map<string, FolderInfo>,
+  rawQuery: string,
+  options: FindMatchingFoldersOptions = {}
+): FolderInfo[] {
+  const { exactSuffix = false, limit } = options;
+  const normQuery = normalizeNicknamePath(rawQuery);
+  const lowerNormQuery = normQuery.toLowerCase();
+
+  // スラッシュのみ（例: "/" や "///"）の場合は全件誤ヒットを防ぐため空配列を返す
+  if (!lowerNormQuery && rawQuery.includes('/')) {
+    return [];
+  }
+
+  const matched = Array.from(folders.values()).filter(folder => {
+    if (folder.openableUrlCount <= 0) return false;
+    if (!lowerNormQuery) return true;
+    return matchesFolderBySegment(folder.path, lowerNormQuery, exactSuffix);
+  });
+
+  matched.sort((a, b) => compareFolderPaths(a.path, b.path));
+
+  if (limit !== undefined && limit >= 0) {
+    return matched.slice(0, limit);
+  }
+  return matched;
 }
 
 /**
@@ -440,13 +531,11 @@ export function resolveCommandMatches(
         description: '<match>:open</match> [nickname or folder/] - Open all URLs in new tabs'
       });
       if (cmd === ':open' || cmd === ':o') {
-        for (const f of Array.from(folders.values()).slice(0, 4)) {
-          if (f.openableUrlCount > 0) {
-            commandMatches.push({
-              content: `:open ${f.path}/`,
-              description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
-            });
-          }
+        for (const f of findMatchingFolders(folders, '', { limit: 4 })) {
+          commandMatches.push({
+            content: `:open ${f.path}/`,
+            description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
+          });
         }
         for (const n of sortedNicknames.slice(0, 6)) {
           commandMatches.push({
@@ -458,18 +547,15 @@ export function resolveCommandMatches(
     } else {
       const lowerInput = restTrimmed.toLowerCase();
       const lowerNormInput = normalizeNicknamePath(restTrimmed).toLowerCase();
+      const matchedFolders = findMatchingFolders(folders, restTrimmed, {
+        exactSuffix: restTrimmed.endsWith('/')
+      });
 
-      for (const f of folders.values()) {
-        const matchesFolder =
-          startsWithInputOrNormalized(f.path, lowerInput, lowerNormInput) ||
-          startsWithInputOrNormalized(`${f.path}/`, lowerInput, lowerNormInput);
-
-        if (f.openableUrlCount > 0 && matchesFolder) {
-          commandMatches.push({
-            content: `:open ${f.path}/`,
-            description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
-          });
-        }
+      for (const f of matchedFolders) {
+        commandMatches.push({
+          content: `:open ${f.path}/`,
+          description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
+        });
       }
 
       const matches = sortedNicknames.filter(n =>
@@ -660,6 +746,36 @@ export function buildRegularSearchSuggestions(
   return { suggestions, matchMap };
 }
 
+// 通常検索時のフォルダ候補表示上限
+const MAX_EXPLICIT_FOLDER_PALETTE_ITEMS = 30;
+const MAX_INLINE_FOLDER_PALETTE_ITEMS = 10;
+
+/**
+ * フォルダ情報から通常検索パレット表示用の `PaletteItem` を生成します。
+ * @param folder - 対象のフォルダ情報
+ * @param explicit - 末尾 `/` による明示的フォルダ指定時の表示形式とする場合は true
+ * @returns 生成されたフォルダ一括オープン候補アイテム
+ */
+function createRegularFolderPaletteItem(folder: FolderInfo, explicit: boolean): PaletteItem {
+  const title = explicit
+    ? t('openAllInFolder', [folder.path, String(folder.openableUrlCount)]) ||
+      `📁 フォルダ「${folder.path}」の全ブックマークを一括オープン (${folder.openableUrlCount}タブ)`
+    : t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
+      `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`;
+
+  return {
+    id: `folder:${folder.path}`,
+    kind: 'folder',
+    title,
+    subtitle: `${folder.path}/`,
+    badge: `${folder.path}/`,
+    typeTag: `📁 ${folder.openableUrlCount}`,
+    fillText: `${folder.path}/`,
+    executeValue: `${folder.path}/`,
+    folderPath: folder.path
+  };
+}
+
 /**
  * 通常検索モード入力からコマンドパレット表示用の候補リスト（`PaletteItem[]`）を構築します。
  * フォルダ一括オープン候補、通常 URL、動的 URL、ブックマークレットを構造化して返します。
@@ -683,25 +799,18 @@ export function buildRegularPaletteItems(
   const allMatches = resolveRegularSearchMatches(trimmed, bookmarks);
   const folders = extractFolders(bookmarks);
   const isExplicitFolderInput = trimmed.endsWith('/');
-  const matchedFolder = normQuery ? folders.get(normQuery) : undefined;
 
   const items: PaletteItem[] = [];
 
-  // 末尾スラッシュ明示時は対象フォルダ一括オープン候補を最上位に配置する
-  if (isExplicitFolderInput && matchedFolder && matchedFolder.openableUrlCount > 0) {
-    items.push({
-      id: `folder:${matchedFolder.path}`,
-      kind: 'folder',
-      title:
-        t('openAllInFolder', [matchedFolder.path, String(matchedFolder.openableUrlCount)]) ||
-        `📁 フォルダ「${matchedFolder.path}」の全ブックマークを一括オープン (${matchedFolder.openableUrlCount}タブ)`,
-      subtitle: `${matchedFolder.path}/`,
-      badge: `${matchedFolder.path}/`,
-      typeTag: `📁 ${matchedFolder.openableUrlCount}`,
-      fillText: `${matchedFolder.path}/`,
-      executeValue: `${matchedFolder.path}/`,
-      folderPath: matchedFolder.path
+  // 末尾スラッシュ明示時はサフィックス完全一致するフォルダ一括オープン候補をアルファベット順で最上位に配置する
+  if (isExplicitFolderInput && normQuery) {
+    const matchedFolders = findMatchingFolders(folders, normQuery, {
+      exactSuffix: true,
+      limit: MAX_EXPLICIT_FOLDER_PALETTE_ITEMS
     });
+    for (const folder of matchedFolders) {
+      items.push(createRegularFolderPaletteItem(folder, true));
+    }
   }
 
   // 一致したブックマーク・動的 URL・ブックマークレットを変換する
@@ -739,38 +848,22 @@ export function buildRegularPaletteItems(
     });
   }
 
-  // 末尾スラッシュでない場合でも一致するフォルダがあればサジェスト内に一括オープン候補を追加する
+  // 末尾スラッシュでない場合でもセグメント境界前方一致するフォルダがあればアルファベット順で一括オープン候補を追加する
   if (!isExplicitFolderInput && normQuery) {
-    const lowerNorm = normQuery.toLowerCase();
-    const matchedFolders = Array.from(folders.values()).filter(
-      folder =>
-        folder.openableUrlCount > 0 &&
-        (folder.path.toLowerCase() === lowerNorm || folder.path.toLowerCase().startsWith(lowerNorm))
-    );
+    const matchedFolders = findMatchingFolders(folders, normQuery, {
+      exactSuffix: false,
+      limit: MAX_INLINE_FOLDER_PALETTE_ITEMS
+    });
 
     if (matchedFolders.length > 0) {
-      const topFolder = matchedFolders[0];
-      const folderItem: PaletteItem = {
-        id: `folder:${topFolder.path}`,
-        kind: 'folder',
-        title:
-          t('openFolderSummary', [topFolder.path, String(topFolder.openableUrlCount)]) ||
-          `📁 ${topFolder.path} (${topFolder.openableUrlCount}タブを一括オープン)`,
-        subtitle: `${topFolder.path}/`,
-        badge: `${topFolder.path}/`,
-        typeTag: `📁 ${topFolder.openableUrlCount}`,
-        fillText: `${topFolder.path}/`,
-        executeValue: `${topFolder.path}/`,
-        folderPath: topFolder.path
-      };
+      const folderItems = matchedFolders.map(folder =>
+        createRegularFolderPaletteItem(folder, false)
+      );
 
-      // 同名の単体ニックネーム完全一致がない場合は最上位、ある場合はその直下に配置する
-      const hasExactSingleMatch = allMatches.length > 0 && allMatches[0].tier === 1;
-      if (hasExactSingleMatch) {
-        items.splice(1, 0, folderItem);
-      } else {
-        items.unshift(folderItem);
-      }
+      // 同名の単体ニックネーム完全一致（tier === 1）がない場合は最上位、ある場合はその直下に配置する
+      const firstNonExactIndex = items.findIndex((_, idx) => allMatches[idx]?.tier !== 1);
+      const insertIndex = firstNonExactIndex === -1 ? items.length : firstNonExactIndex;
+      items.splice(insertIndex, 0, ...folderItems);
     }
   }
 
@@ -996,6 +1089,24 @@ export function buildCommandPaletteItems(
     });
   }
 
+  /**
+   * `:open` コマンド用のフォルダ一括オープン候補アイテムを生成します。
+   * @param folder - 対象のフォルダ情報
+   * @returns `:open` コマンド候補の `PaletteItem`
+   */
+  const createOpenCommandFolderItem = (folder: FolderInfo): PaletteItem => ({
+    id: `cmd:open:folder:${folder.path}`,
+    kind: 'command',
+    title: `📁 ${folder.path}/`,
+    subtitle:
+      t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
+      `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`,
+    badge: ':open',
+    typeTag: `📁 ${folder.openableUrlCount}`,
+    fillText: `:open ${folder.path}/`,
+    executeValue: `:open ${folder.path}/`
+  });
+
   // :open / :o コマンド
   if (isCmdMatch([':open', ':o'])) {
     if (!restTrimmed) {
@@ -1010,21 +1121,8 @@ export function buildCommandPaletteItems(
       });
 
       if (cmd === ':open' || cmd === ':o') {
-        for (const f of Array.from(folders.values()).slice(0, 4)) {
-          if (f.openableUrlCount > 0) {
-            items.push({
-              id: `cmd:open:folder:${f.path}`,
-              kind: 'command',
-              title: `📁 ${f.path}/`,
-              subtitle:
-                t('openFolderSummary', [f.path, String(f.openableUrlCount)]) ||
-                `📁 ${f.path} (${f.openableUrlCount}タブを一括オープン)`,
-              badge: ':open',
-              typeTag: `📁 ${f.openableUrlCount}`,
-              fillText: `:open ${f.path}/`,
-              executeValue: `:open ${f.path}/`
-            });
-          }
+        for (const f of findMatchingFolders(folders, '', { limit: 4 })) {
+          items.push(createOpenCommandFolderItem(f));
         }
         for (const n of sortedNicknames.slice(0, 6)) {
           const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
@@ -1043,26 +1141,12 @@ export function buildCommandPaletteItems(
     } else {
       const lowerInput = restTrimmed.toLowerCase();
       const lowerNormInput = normalizeNicknamePath(restTrimmed).toLowerCase();
+      const matchedFolders = findMatchingFolders(folders, restTrimmed, {
+        exactSuffix: restTrimmed.endsWith('/')
+      });
 
-      for (const f of folders.values()) {
-        const matchesFolder =
-          startsWithInputOrNormalized(f.path, lowerInput, lowerNormInput) ||
-          startsWithInputOrNormalized(`${f.path}/`, lowerInput, lowerNormInput);
-
-        if (f.openableUrlCount > 0 && matchesFolder) {
-          items.push({
-            id: `cmd:open:folder:${f.path}`,
-            kind: 'command',
-            title: `📁 ${f.path}/`,
-            subtitle:
-              t('openFolderSummary', [f.path, String(f.openableUrlCount)]) ||
-              `📁 ${f.path} (${f.openableUrlCount}タブを一括オープン)`,
-            badge: ':open',
-            typeTag: `📁 ${f.openableUrlCount}`,
-            fillText: `:open ${f.path}/`,
-            executeValue: `:open ${f.path}/`
-          });
-        }
+      for (const f of matchedFolders) {
+        items.push(createOpenCommandFolderItem(f));
       }
 
       const matches = sortedNicknames.filter(n =>
