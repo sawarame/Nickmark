@@ -3,7 +3,12 @@ import {
   ParsedImportResult
 } from './types';
 import { normalizeBookmarksDictionary } from './storage';
-import { isDynamicUrl, normalizeNicknamePath } from './url';
+import {
+  FORBIDDEN_NICKNAME_CHAR_WITH_SLASH_GLOBAL_REGEX,
+  hasForbiddenNicknameChars,
+  isDynamicUrl,
+  normalizeNicknamePath
+} from './url';
 
 /**
  * インポート解析・検証処理で発生するエラー種別コード
@@ -13,6 +18,7 @@ export type BookmarkImportErrorCode =
   | 'INVALID_JSON_FORMAT'
   | 'INVALID_JSON_STRUCTURE'
   | 'INVALID_BOOKMARK_ENTRY'
+  | 'FORBIDDEN_NICKNAME_CHARS'
   | 'INVALID_HTML_BOOKMARKS'
   | 'NO_VALID_BOOKMARKS';
 
@@ -196,6 +202,13 @@ export function parseNickmarkBookmarksJson(
         rawNickname
       );
     }
+    if (hasForbiddenNicknameChars(normalizedNick)) {
+      throw new BookmarkImportError(
+        'FORBIDDEN_NICKNAME_CHARS',
+        `Nickname "${normalizedNick}" contains forbidden characters.`,
+        normalizedNick
+      );
+    }
 
     if (!Array.isArray(entries)) {
       throw new BookmarkImportError(
@@ -292,7 +305,7 @@ export function parseNickmarkBookmarksJson(
 
 /**
  * Chrome ブックマーク HTML のフォルダ名やタイトル文字列を Nickmark のニックネーム用単一セグメントへサニタイズします。
- * フォルダ区切り記号（`/`）および空白文字の連続を `-` に置換し、前後の余分なハイフンを除去します。
+ * フォルダ区切り記号（`/`）、空白文字、およびニックネーム使用不可記号（`:`, `;`, `\`, `%`, `?`, `#`, `&`, `=`, `*`, `"`, `'`, `` ` ``, `<`, `>`, `|`、制御・ゼロ幅文字）の連続を `-` に置換し、前後の余分なハイフンを除去します。
  * @param rawText - サニタイズ元のフォルダ名またはタイトル文字列
  * @returns サニタイズ済みの単一セグメント文字列（有効文字がない場合は空文字）
  */
@@ -300,8 +313,7 @@ export function sanitizeBookmarkNicknameSegment(rawText: string): string {
   if (!rawText || typeof rawText !== 'string') return '';
   return rawText
     .trim()
-    .replace(/[/\\]+/g, '-')
-    .replace(/\s+/g, '-')
+    .replace(FORBIDDEN_NICKNAME_CHAR_WITH_SLASH_GLOBAL_REGEX, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
 }

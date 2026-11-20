@@ -5,10 +5,11 @@ import {
   formatUrlForDisplay,
   getFaviconUrl,
   isBookmarkletUrl,
+  isCommandPrefixQuery,
   normalizeNicknamePath,
-  normalizeUrlForComparison
+  normalizeUrlForComparison,
+  stripZeroWidthChars
 } from './url';
-import { stripZeroWidthChars } from './search';
 
 // ブックマーク候補との重複除外後に上限件数を確保するため、余裕を持って多めに取得する
 const HISTORY_FETCH_BUFFER_LIMIT = 30;
@@ -62,14 +63,14 @@ export async function getEffectiveHistorySearchEnabled(): Promise<boolean> {
 
 /**
  * 検索入力文字列がブラウザ履歴検索の対象となる通常クエリかどうかを判定します。
- * 空文字、空白のみ、スラッシュのみ、`:` コマンド入力、および末尾 `/` のフォルダ一括指定時は `false` を返します。
+ * 空文字、空白のみ、スラッシュのみ、`:` / `;` コマンド入力、および末尾 `/` のフォルダ一括指定時は `false` を返します。
  * @param rawQuery - 検索欄の入力文字列
  * @returns 履歴検索を実行すべき場合は true、除外すべき場合は false
  */
 export function shouldSearchHistoryForQuery(rawQuery: string): boolean {
   const trimmed = stripZeroWidthChars(rawQuery).trim();
   if (!trimmed) return false;
-  if (trimmed.startsWith(':')) return false;
+  if (isCommandPrefixQuery(trimmed)) return false;
   if (trimmed.endsWith('/')) return false;
   if (trimmed.includes('/') && !normalizeNicknamePath(trimmed)) return false;
   return true;

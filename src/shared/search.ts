@@ -10,27 +10,20 @@ import {
   formatUrlForDisplay,
   getFaviconUrl,
   isBookmarkletUrl,
+  isCommandPrefixQuery,
   isDynamicUrl,
   isSameUrl,
+  normalizeCommandPrefix,
   normalizeNicknamePath,
   normalizeUrlForComparison,
-  resolveFallbackUrl
+  resolveFallbackUrl,
+  stripZeroWidthChars
 } from './url';
 import { extractFolders } from './storage';
 import { t } from '../i18n';
 
-// 入力文字列のサニタイズ用に除去する不可視のゼロ幅文字パターン
-const ZERO_WIDTH_ALL_REGEX = /[\u200B-\u200D\uFEFF]/g;
-
-/**
- * 文字列に含まれるゼロ幅文字（不可視文字）をすべて除去します。
- * @param text - 対象の文字列
- * @returns ゼロ幅文字を除去したクリーンな文字列
- */
-export function stripZeroWidthChars(text: string): string {
-  if (!text) return '';
-  return text.replace(ZERO_WIDTH_ALL_REGEX, '');
-}
+// 既存呼び出し元の互換性維持のため url.ts から再エクスポートする
+export { stripZeroWidthChars };
 
 /**
  * フォルダ検索用のオプション設定
@@ -483,9 +476,10 @@ function summarizeNicknameForPalette(
 }
 
 /**
- * コマンドモード（`:` プレフィックス）入力からコマンドパレット表示用の候補リストを構築します。
+ * コマンドモード（`:` または `;` プレフィックス）入力からコマンドパレット表示用の候補リストを構築します。
+ * 先頭の `;` は内部的に `:` へ正規化し、表示や補完表記は標準の `:コマンド` 形式に統一します。
  * `:add` / `:a` 入力時はフォルダプレフィックス補完と登録対象タブ/URL プレビューを付与します。
- * @param rawQuery - 検索欄の入力文字列（先頭が `:`）
+ * @param rawQuery - 検索欄の入力文字列（先頭が `:` または `;`）
  * @param bookmarks - 現在のブックマーク辞書
  * @param currentTab - 登録プレビュー用の現在アクティブタブ情報（任意）
  * @returns コマンドパレット候補アイテムの配列
@@ -495,13 +489,13 @@ export function buildCommandPaletteItems(
   bookmarks: Record<string, BookmarkEntry[]>,
   currentTab?: { url?: string; title?: string }
 ): PaletteItem[] {
-  const trimmedStart = stripZeroWidthChars(rawQuery).trimStart();
-  if (!trimmedStart.startsWith(':')) return [];
+  if (!isCommandPrefixQuery(rawQuery)) return [];
+  const normalizedStart = normalizeCommandPrefix(rawQuery);
 
-  const firstSpaceIndex = trimmedStart.indexOf(' ');
+  const firstSpaceIndex = normalizedStart.indexOf(' ');
   const hasSpace = firstSpaceIndex !== -1;
-  const cmd = !hasSpace ? trimmedStart : trimmedStart.substring(0, firstSpaceIndex);
-  const rawRest = !hasSpace ? '' : trimmedStart.substring(firstSpaceIndex + 1);
+  const cmd = !hasSpace ? normalizedStart : normalizedStart.substring(0, firstSpaceIndex);
+  const rawRest = !hasSpace ? '' : normalizedStart.substring(firstSpaceIndex + 1);
   const restTrimmed = rawRest.trim();
 
   const items: PaletteItem[] = [];
@@ -568,7 +562,7 @@ export function buildCommandPaletteItems(
     const isBookmarkletArg = restParts.length >= 2 && isBookmarkletUrl(secondArg);
     const isDirectHttpUrl = restParts.length >= 2 && /^https?:\/\/\S+$/i.test(secondArg);
 
-    const rawAfterNicknameMatch = trimmedStart.match(/^:(?:add|a)\s+\S+\s+([\s\S]+)$/);
+    const rawAfterNicknameMatch = normalizedStart.match(/^:(?:add|a)\s+\S+\s+([\s\S]+)$/);
     const targetUrl = isBookmarkletArg
       ? (rawAfterNicknameMatch ? rawAfterNicknameMatch[1].trim() : secondArg)
       : isDirectHttpUrl
@@ -607,7 +601,7 @@ export function buildCommandPaletteItems(
       badge: ':add',
       typeTag: isBookmarkletArg ? '[JS]' : undefined,
       faviconUrl: !isBookmarkletArg && targetUrl ? getFaviconUrl(targetUrl) : '',
-      fillText: hasSpace ? trimmedStart : ':add ',
+      fillText: hasSpace ? normalizedStart : ':add ',
       executeValue: restTrimmed ? `:add ${restTrimmed}` : ':add',
       previewMeta: {
         mode,
@@ -629,7 +623,7 @@ export function buildCommandPaletteItems(
       title: restTrimmed ? `:addall ${restTrimmed}` : `:addall [${t('nicknameLabel') || 'ニックネーム'}]`,
       subtitle: t('popupCommandAddallHint') || '現在のウィンドウの全タブを一括登録',
       badge: ':addall',
-      fillText: hasSpace ? trimmedStart : ':addall ',
+      fillText: hasSpace ? normalizedStart : ':addall ',
       executeValue: restTrimmed ? `:addall ${restTrimmed}` : ':addall'
     });
     appendRegisterCompletions(':addall', restParts);
@@ -781,7 +775,7 @@ export function buildPaletteSuggestions(
 ): PaletteItem[] {
   const clean = stripZeroWidthChars(rawQuery);
   if (!clean.trim()) return [];
-  if (clean.trimStart().startsWith(':')) {
+  if (isCommandPrefixQuery(clean)) {
     return buildCommandPaletteItems(clean, bookmarks, currentTab);
   }
   return buildRegularPaletteItems(clean, bookmarks);

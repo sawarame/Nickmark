@@ -8,10 +8,12 @@ import {
 import {
   extractBookmarkletCode,
   getHelpUrl,
+  hasForbiddenNicknameChars,
   isBookmarkletUrl,
   isRestrictedTabUrl,
   isSameUrl,
   isUserScriptsAvailable,
+  normalizeCommandPrefix,
   normalizeNicknamePath
 } from './url';
 import {
@@ -215,7 +217,18 @@ async function saveBookmarksResult(
 }
 
 /**
- * Nickmark のコマンド（`:add`, `:addall`, `:rm`, `:ls`, `:prefs`, `:help`）を実行します。
+ * ニックネーム使用不可文字エラー用のローカライズ済みメッセージを返します。
+ * @returns エラーメッセージ文字列
+ */
+function getForbiddenNicknameMessage(): string {
+  return (
+    t('errorNicknameForbiddenChars') ||
+    'ニックネームに使用できない文字（空白、: ; \\ % ? # & = * " \' ` < > | など）が含まれています。'
+  );
+}
+
+/**
+ * Nickmark のコマンド（`:add`, `:addall`, `:rm`, `:ls`, `:prefs`, `:help`、および `;` 起動）を実行します。
  * UI への副作用（ポップアップ内フィードバック、確認ダイアログ等）は直接行わず、
  * 呼び出し元が解釈できる `CommandExecutionResult` を返します。
  * @param resolvedContent - 実行するコマンド文字列
@@ -226,7 +239,7 @@ export async function executeNickmarkCommand(
   resolvedContent: string,
   currentTab: chrome.tabs.Tab | undefined
 ): Promise<CommandExecutionResult> {
-  const trimmed = resolvedContent.trim();
+  const trimmed = normalizeCommandPrefix(resolvedContent.trim());
   const parts = trimmed.split(/\s+/);
   const cmd = parts[0];
 
@@ -255,6 +268,12 @@ export async function executeNickmarkCommand(
       return {
         outcome: 'error',
         message: t('errorNicknameRequired') || 'ニックネームを指定してください。'
+      };
+    }
+    if (hasForbiddenNicknameChars(nickname)) {
+      return {
+        outcome: 'error',
+        message: getForbiddenNicknameMessage()
       };
     }
 
@@ -297,6 +316,12 @@ export async function executeNickmarkCommand(
           t('popupAddEnterPrompt') ||
           'ニックネームを入力して Enter で登録してください（例: :add gh）',
         suggestedInput: ':add '
+      };
+    }
+    if (hasForbiddenNicknameChars(nickname)) {
+      return {
+        outcome: 'error',
+        message: getForbiddenNicknameMessage()
       };
     }
 

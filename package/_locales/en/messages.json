@@ -677,5 +677,14 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "errorNicknameForbiddenChars": {
+    "message": "Nickname contains forbidden characters (spaces, : ; \\ % ? # & = * \" ' ` < > |, etc.)."
+  },
+  "errorImportForbiddenNicknameChars": {
+    "message": "Nickname '$1' contains forbidden characters (spaces, : ; \\ % ? # & = * \" ' ` < > |, etc.).",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }

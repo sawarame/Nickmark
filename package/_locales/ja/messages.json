@@ -677,5 +677,14 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "errorNicknameForbiddenChars": {
+    "message": "ニックネームに使用できない文字（空白、: ; \\ % ? # & = * \" ' ` < > | など）が含まれています。"
+  },
+  "errorImportForbiddenNicknameChars": {
+    "message": "ニックネーム「$1」に使用できない文字（空白、: ; \\ % ? # & = * \" ' ` < > | など）が含まれています。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }
