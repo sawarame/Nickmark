@@ -686,5 +686,11 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "popupAddAlreadyBookmarkedNotice": {
+    "message": "このページはすでにブックマークに登録されています（ニックネーム: $1）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }

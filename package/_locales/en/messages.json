@@ -686,5 +686,11 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "popupAddAlreadyBookmarkedNotice": {
+    "message": "This page is already bookmarked (Nickname: $1)",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
   }
 }

@@ -62,6 +62,13 @@
       </Message>
     </div>
 
+    <!-- :add 入力時に現在のページがすでに登録済みであることを知らせるバナー -->
+    <div v-if="alreadyBookmarkedNotice" class="palette-feedback">
+      <Message severity="info" :closable="false">
+        {{ alreadyBookmarkedNotice }}
+      </Message>
+    </div>
+
     <!-- フォルダ一括オープン安全上限超過時の確認 UI -->
     <div v-if="pendingBatchConfirm" class="batch-confirm-box" role="alertdialog" aria-modal="true">
       <div class="batch-confirm-header">
@@ -240,7 +247,7 @@ import {
   isPresetHtmllinkUrl,
   isPresetMdlinkUrl
 } from './shared/presets';
-import { buildPaletteSuggestions } from './shared/search';
+import { buildPaletteSuggestions, findNicknamesForUrl } from './shared/search';
 import {
   getEnabledPresetIds,
   getMaxBatchOpenTabs,
@@ -358,6 +365,36 @@ const items = computed((): PaletteItem[] => {
  */
 const shouldShowList = computed((): boolean => {
   return query.value.trim().length > 0 && !pendingBatchConfirm.value;
+});
+
+/**
+ * `:add` / `:a` コマンド入力時に現在開いているタブがすでにブックマーク登録済みである場合、
+ * その登録済みニックネーム一覧を含むお知らせメッセージを算出します。
+ * 単独の `:` 入力時や直接 URL／ブックマークレット指定時、または別コマンド入力時は null を返します。
+ * @returns 既登録通知メッセージ文字列（未該当時は null）
+ */
+const alreadyBookmarkedNotice = computed((): string | null => {
+  if (!shouldShowList.value) return null;
+
+  const firstToken = query.value.trimStart().split(/\s+/)[0] || '';
+  if (firstToken.length < 2) return null;
+
+  const addExecItem = bookmarkItems.value.find(item => item.id === 'cmd:add:exec');
+  if (!addExecItem?.previewMeta || addExecItem.previewMeta.mode !== 'currentTab') {
+    return null;
+  }
+
+  const targetUrl = addExecItem.previewMeta.targetUrl;
+  if (!targetUrl) return null;
+
+  const existingNicknames = findNicknamesForUrl(targetUrl, bookmarksSnapshot.value);
+  if (existingNicknames.length === 0) return null;
+
+  const joinedNicknames = existingNicknames.join(', ');
+  return (
+    tr('popupAddAlreadyBookmarkedNotice', [joinedNicknames]) ||
+    `このページはすでにブックマークに登録されています（ニックネーム: ${joinedNicknames}）`
+  );
 });
 
 /**
