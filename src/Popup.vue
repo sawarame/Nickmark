@@ -17,6 +17,7 @@
         v-model="query"
         class="palette-input"
         :placeholder="tr('popupPlaceholder') || 'ニックネーム検索 または :add / :rm ...'"
+        autofocus
         autocomplete="off"
         spellcheck="false"
         role="combobox"
@@ -215,7 +216,7 @@ import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
 import Message from 'primevue/message';
 import CommandPromptIcon from './components/CommandPromptIcon.vue';
-import { getCurrentLocale, initI18n, t } from './i18n';
+import { getCurrentLocale, hasI18nMessagesReady, initI18n, t } from './i18n';
 import {
   BatchOpenConfirmationData,
   BookmarkEntry,
@@ -236,7 +237,7 @@ import {
   resolvePopupTabDisposition
 } from './shared/commands';
 import {
-  getEffectiveHistorySearchEnabled,
+  hasHistoryPermission,
   searchHistoryPaletteItems,
   shouldSearchHistoryForQuery
 } from './shared/history';
@@ -254,6 +255,7 @@ import {
   getOpenInCurrentIfNewTab,
   getOpenInNewTab,
   loadBookmarksData,
+  loadPopupInitialData,
   openFolderUrls,
   updateScore
 } from './shared/storage';
@@ -286,6 +288,7 @@ const isHistorySearchPending = ref(false);
 
 // UI 状態
 const i18nVersion = ref(0);
+const i18nReady = ref<boolean>(hasI18nMessagesReady());
 const isExecuting = ref(false);
 const feedback = ref<FeedbackState | null>(null);
 const pendingBatchConfirm = ref<BatchOpenConfirmationData | null>(null);
@@ -424,7 +427,7 @@ const shouldShowTips = computed((): boolean => {
     query.value.trim().length === 0 &&
     !pendingBatchConfirm.value &&
     !feedback.value &&
-    i18nVersion.value > 0 &&
+    i18nReady.value &&
     currentTip.value !== null
   );
 });
@@ -544,15 +547,36 @@ const closePopup = (): void => {
 
 /**
  * 検索入力欄へフォーカスを移動します。
+ * 既に DOM 要素が存在する場合は nextTick を待たずに同期的にフォーカスを適用します。
  * @returns フォーカス適用後の Promise
  */
 const focusSearchInput = async (): Promise<void> => {
+  const getInputEl = (): HTMLInputElement | null => {
+    const rootEl = searchInputRef.value?.$el ?? searchInputRef.value;
+    return rootEl?.tagName === 'INPUT' ? rootEl : rootEl?.querySelector?.('input') ?? null;
+  };
+
+  const tryFocus = (): boolean => {
+    const inputEl = getInputEl();
+    if (inputEl && typeof inputEl.focus === 'function') {
+      inputEl.focus();
+      return document.activeElement === inputEl;
+    }
+    return false;
+  };
+
+  if (tryFocus()) return;
   await nextTick();
-  const rootEl = searchInputRef.value?.$el ?? searchInputRef.value;
-  const inputEl: HTMLInputElement | null =
-    rootEl?.tagName === 'INPUT' ? rootEl : rootEl?.querySelector?.('input') ?? null;
-  if (inputEl && typeof inputEl.focus === 'function') {
-    inputEl.focus();
+  if (tryFocus()) return;
+
+  // Chrome ポップアップ生成直後で初回フレーム前に focus() が効かない場合に備え、次フレームで未フォーカス時のみ補完する
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (!active || active === document.body || active === document.documentElement) {
+        tryFocus();
+      }
+    });
   }
 };
 
@@ -1166,7 +1190,8 @@ const handlePopupStorageChanged = async (
   changes: { [key: string]: chrome.storage.StorageChange }
 ): Promise<void> => {
   if (changes.language) {
-    await initI18n();
+    await initI18n(changes.language.newValue ?? null);
+    i18nReady.value = true;
     i18nVersion.value += 1;
   }
   if (changes[ENABLED_PRESETS_STORAGE_KEY] || changes.isSyncEnabled) {
@@ -1181,7 +1206,8 @@ const handlePopupStorageChanged = async (
 };
 
 /**
- * 初期化処理: 多言語設定、ブックマークデータ、プリセット設定、およびアクティブタブ情報を読み込み入力欄へフォーカスします。
+ * 初期化処理: 即時入力フォーカスを行ったうえで、ストレージデータ・アクティブタブ情報・多言語設定を
+ * 最小限の IPC で並列読み込みして反映します。
  * @returns 初期化完了を示す Promise
  */
 onMounted(async (): Promise<void> => {
@@ -1189,62 +1215,55 @@ onMounted(async (): Promise<void> => {
     chrome.storage.onChanged.addListener(handlePopupStorageChanged);
   }
 
-  await initI18n();
-  i18nVersion.value += 1;
+  // 非同期データの到着を待たず、ポップアップ起動直後に検索欄へフォーカスを適用する
+  void focusSearchInput();
 
-  const [
-    bookmarksResult,
-    presetsResult,
-    tabsResult,
-    historyEnabledResult,
-    openInNewTabResult,
-    openInCurrentIfNewTabResult
-  ] = await Promise.allSettled([
-    loadBookmarksData(),
-    getEnabledPresetIds(),
-    chrome.tabs.query({ active: true, currentWindow: true }),
-    getEffectiveHistorySearchEnabled(),
-    getOpenInNewTab(),
-    getOpenInCurrentIfNewTab()
-  ]);
+  // ストレージ＋i18n 初期化とアクティブタブ取得を互いにブロックせず独立して並列実行する
+  const initStorageAndI18n = async (): Promise<void> => {
+    try {
+      const initial = await loadPopupInitialData();
+      bookmarksSnapshot.value = initial.bookmarks;
+      if (initial.bookmarksError) {
+        console.warn('ブックマークデータの読み込みに失敗しました:', initial.bookmarksError);
+      }
+      enabledPresetIds.value = initial.enabledPresetIds;
+      openInNewTabByDefault.value = initial.openInNewTab;
+      openInCurrentIfNewTab.value = initial.openInCurrentIfNewTab;
 
-  if (bookmarksResult.status === 'fulfilled') {
-    bookmarksSnapshot.value = bookmarksResult.value;
-  } else {
-    console.warn('ブックマークデータの読み込みに失敗しました:', bookmarksResult.reason);
-  }
+      // 取得済みの言語設定と同期キャッシュを突き合わせ、必要な場合のみ辞書読込と再描画を行う
+      // 履歴検索が OFF の場合は permissions.contains の呼び出し自体を省く
+      const [i18nUpdatedResult, historyPermissionResult] = await Promise.allSettled([
+        initI18n(initial.language ?? null),
+        initial.historySearchEnabled ? hasHistoryPermission() : Promise.resolve(false)
+      ]);
 
-  if (presetsResult.status === 'fulfilled') {
-    enabledPresetIds.value = presetsResult.value;
-  } else {
-    console.warn('プリセット設定の読み込みに失敗しました:', presetsResult.reason);
-  }
+      i18nReady.value = true;
+      if (i18nUpdatedResult.status === 'fulfilled' && i18nUpdatedResult.value) {
+        i18nVersion.value += 1;
+      }
 
-  if (tabsResult.status === 'fulfilled' && tabsResult.value.length > 0) {
-    currentTab.value = tabsResult.value[0];
-  } else if (tabsResult.status === 'rejected') {
-    console.warn('アクティブタブ情報の取得に失敗しました:', tabsResult.reason);
-  }
+      isHistorySearchActive.value =
+        historyPermissionResult.status === 'fulfilled' && historyPermissionResult.value;
+    } catch (err: unknown) {
+      console.warn('初期ストレージデータの読み込みに失敗しました:', err);
+      await initI18n().catch(() => false);
+      i18nReady.value = true;
+      i18nVersion.value += 1;
+    }
+  };
 
-  if (historyEnabledResult.status === 'fulfilled') {
-    isHistorySearchActive.value = historyEnabledResult.value;
-  } else {
-    isHistorySearchActive.value = false;
-  }
+  const initCurrentTab = async (): Promise<void> => {
+    try {
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tabs.length > 0) {
+        currentTab.value = tabs[0];
+      }
+    } catch (err: unknown) {
+      console.warn('アクティブタブ情報の取得に失敗しました:', err);
+    }
+  };
 
-  if (openInNewTabResult.status === 'fulfilled') {
-    openInNewTabByDefault.value = openInNewTabResult.value;
-  } else {
-    openInNewTabByDefault.value = false;
-  }
-
-  if (openInCurrentIfNewTabResult.status === 'fulfilled') {
-    openInCurrentIfNewTab.value = openInCurrentIfNewTabResult.value;
-  } else {
-    openInCurrentIfNewTab.value = false;
-  }
-
-  await focusSearchInput();
+  await Promise.all([initStorageAndI18n(), initCurrentTab()]);
 });
 
 onUnmounted(() => {

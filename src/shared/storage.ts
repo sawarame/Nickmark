@@ -7,6 +7,7 @@ import {
   ListSortOption,
   OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
+  PopupInitialStorageData,
   PresetId,
   SYNC_KEY_PREFIX
 } from './types';
@@ -38,18 +39,30 @@ let isSyncEnabledCache: boolean | null = null;
 let historySearchEnabledCache: boolean | null = null;
 let listSortOrderCache: ListSortOption | null = null;
 let enabledPresetsCache: PresetId[] | null = null;
+let loadSyncEnabledPromise: Promise<boolean> | null = null;
 let loadBookmarksPromise: Promise<Record<string, BookmarkEntry[]>> | null = null;
 let loadEnabledPresetsPromise: Promise<PresetId[]> | null = null;
 
 /**
  * Google アカウント同期が有効かどうかを取得します。
+ * 同時呼び出し時は同一の Promise を共有し、重複したストレージアクセスを防止します。
  * @returns 同期が有効な場合は true、無効な場合は false
  */
 export async function getSyncEnabled(): Promise<boolean> {
   if (isSyncEnabledCache !== null) return isSyncEnabledCache;
-  const data = await chrome.storage.local.get('isSyncEnabled');
-  isSyncEnabledCache = !!data.isSyncEnabled;
-  return isSyncEnabledCache;
+  if (loadSyncEnabledPromise) return loadSyncEnabledPromise;
+
+  loadSyncEnabledPromise = (async () => {
+    try {
+      const data = await chrome.storage.local.get('isSyncEnabled');
+      isSyncEnabledCache = !!data.isSyncEnabled;
+      return isSyncEnabledCache;
+    } finally {
+      loadSyncEnabledPromise = null;
+    }
+  })();
+
+  return loadSyncEnabledPromise;
 }
 
 /**
@@ -59,6 +72,7 @@ export async function getSyncEnabled(): Promise<boolean> {
  */
 export async function setSyncEnabled(enabled: boolean): Promise<void> {
   isSyncEnabledCache = enabled;
+  loadSyncEnabledPromise = null;
   await chrome.storage.local.set({ isSyncEnabled: enabled });
 }
 
@@ -69,6 +83,7 @@ export async function setSyncEnabled(enabled: boolean): Promise<void> {
  */
 export function updateSyncEnabledCache(enabled: boolean): void {
   isSyncEnabledCache = enabled;
+  loadSyncEnabledPromise = null;
 }
 
 /**
@@ -570,6 +585,35 @@ export function normalizeBookmarksDictionary(
 }
 
 /**
+ * `chrome.storage.sync` から取得した生データマップ内のチャンクキー（`sync_data_*`）を結合し、
+ * ブックマーク辞書へパースして返します。
+ * @param allSyncData - `chrome.storage.sync.get(null)` で取得した全キー・値マップ
+ * @returns パースされたブックマーク辞書（チャンク未存在時は空オブジェクト）
+ */
+function parseBookmarksFromSyncData(
+  allSyncData: Record<string, unknown>
+): Record<string, BookmarkEntry[]> {
+  const keys = Object.keys(allSyncData)
+    .filter(k => k.startsWith(SYNC_KEY_PREFIX))
+    .sort((a, b) => {
+      const idxA = parseInt(a.replace(SYNC_KEY_PREFIX, ''), 10);
+      const idxB = parseInt(b.replace(SYNC_KEY_PREFIX, ''), 10);
+      return idxA - idxB;
+    });
+
+  if (keys.length === 0) return {};
+
+  const jsonStr = keys.map(k => String(allSyncData[k] ?? '')).join('');
+  try {
+    return JSON.parse(jsonStr);
+  } catch (e) {
+    console.error('Failed to parse sync data:', e);
+    // パース失敗時に空データを返すと呼び出し元で上書き消失する恐れがあるためエラーを送出する
+    throw new Error('CORRUPTED_SYNC_DATA');
+  }
+}
+
+/**
  * 指定したストレージから生データを読み込み、チャンク化を解除します。
  * @param area - 読み込み元のストレージ領域（'local' または 'sync'）
  * @returns 読み込まれたブックマーク辞書
@@ -581,24 +625,7 @@ async function loadFromStorage(area: 'local' | 'sync'): Promise<Record<string, B
   }
 
   const allSyncData = await chrome.storage.sync.get(null);
-  const keys = Object.keys(allSyncData)
-    .filter(k => k.startsWith(SYNC_KEY_PREFIX))
-    .sort((a, b) => {
-      const idxA = parseInt(a.replace(SYNC_KEY_PREFIX, ''), 10);
-      const idxB = parseInt(b.replace(SYNC_KEY_PREFIX, ''), 10);
-      return idxA - idxB;
-    });
-
-  if (keys.length === 0) return {};
-
-  const jsonStr = keys.map(k => allSyncData[k]).join('');
-  try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    console.error('Failed to parse sync data:', e);
-    // パース失敗時に空データを返すと呼び出し元で上書き消失する恐れがあるためエラーを送出する
-    throw new Error('CORRUPTED_SYNC_DATA');
-  }
+  return parseBookmarksFromSyncData(allSyncData);
 }
 
 /**
@@ -694,6 +721,69 @@ export async function loadSearchableBookmarksData(
     getEnabledPresetIds(forceRefresh)
   ]);
   return mergeBookmarksWithPresets(bookmarks, enabledPresetIds, getCurrentLocale());
+}
+
+/**
+ * ポップアップ起動時に必要なローカル／同期ストレージデータを最小限の IPC 回数で一括読み込みし、
+ * 各メモリキャッシュを同時に初期化します。
+ * ローカル保存時は `chrome.storage.local.get` 1 回のみ、同期有効時はそれに加えて `chrome.storage.sync.get(null)` 1 回のみを発行します。
+ * @returns ポップアップ初期化用の言語・ブックマーク・各種設定データ
+ */
+export async function loadPopupInitialData(): Promise<PopupInitialStorageData> {
+  const localData = await chrome.storage.local.get([
+    'language',
+    'isSyncEnabled',
+    'historySearchEnabled',
+    'bookmarks',
+    ENABLED_PRESETS_STORAGE_KEY,
+    OPEN_IN_NEW_TAB_STORAGE_KEY,
+    OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY
+  ]);
+
+  const isSync = !!localData.isSyncEnabled;
+  updateSyncEnabledCache(isSync);
+
+  const historySearchEnabled = !!localData.historySearchEnabled;
+  updateHistorySearchEnabledCache(historySearchEnabled);
+
+  const sourceAreaData: Record<string, unknown> = isSync
+    ? await chrome.storage.sync.get(null)
+    : localData;
+
+  let bookmarks: Record<string, BookmarkEntry[]> = {};
+  let bookmarksError: unknown;
+  try {
+    const rawBookmarks = isSync
+      ? parseBookmarksFromSyncData(sourceAreaData)
+      : (sourceAreaData.bookmarks as Record<string, BookmarkEntry[]>) || {};
+    bookmarks = normalizeBookmarksDictionary(rawBookmarks);
+    bookmarksCache = bookmarks;
+    loadBookmarksPromise = null;
+  } catch (err: unknown) {
+    bookmarksError = err;
+  }
+
+  const enabledPresetIds = normalizeEnabledPresetIds(
+    sourceAreaData[ENABLED_PRESETS_STORAGE_KEY]
+  );
+  enabledPresetsCache = enabledPresetIds;
+  loadEnabledPresetsPromise = null;
+
+  const openInNewTab = Boolean(sourceAreaData[OPEN_IN_NEW_TAB_STORAGE_KEY]);
+  openInNewTabSetting.updateCache(openInNewTab);
+
+  const openInCurrentIfNewTab = Boolean(sourceAreaData[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]);
+  openInCurrentIfNewTabSetting.updateCache(openInCurrentIfNewTab);
+
+  return {
+    language: typeof localData.language === 'string' ? localData.language : undefined,
+    bookmarks,
+    bookmarksError,
+    enabledPresetIds,
+    historySearchEnabled,
+    openInNewTab,
+    openInCurrentIfNewTab
+  };
 }
 
 /**

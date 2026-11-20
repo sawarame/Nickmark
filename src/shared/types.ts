@@ -360,3 +360,23 @@ export interface ParsedImportResult {
   /** 無効スキーム等によりスキップされた件数 */
   skippedCount: number;
 }
+
+/**
+ * コマンドパレット型ポップアップの初期化時に一括取得するストレージデータの型定義
+ */
+export interface PopupInitialStorageData {
+  /** 保存されている明示的な言語設定（未設定時は undefined） */
+  language?: string;
+  /** 正規化・重複排除済みのブックマーク辞書 */
+  bookmarks: Record<string, BookmarkEntry[]>;
+  /** 同期データパース失敗時などブックマーク読込のみ失敗した場合のエラー情報 */
+  bookmarksError?: unknown;
+  /** 有効化されている定番プリセット ID 配列 */
+  enabledPresetIds: PresetId[];
+  /** ブラウザ履歴検索設定の有効／無効フラグ */
+  historySearchEnabled: boolean;
+  /** デフォルトで別タブで開く設定の有効／無効フラグ */
+  openInNewTab: boolean;
+  /** 新しいタブのときはそのタブで開く設定の有効／無効フラグ */
+  openInCurrentIfNewTab: boolean;
+}
