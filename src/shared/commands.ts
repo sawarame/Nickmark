@@ -23,14 +23,6 @@ import {
 } from './storage';
 
 /**
- * コマンド実行時の呼び出し元コンテキストオプション
- */
-export interface CommandExecutionOptions {
-  /** コマンドの起動元（ポップアップまたはオムニボックス） */
-  source?: 'popup' | 'omnibox';
-}
-
-/**
  * ブックマークレット実行時のエラー種別に応じた通知メッセージを返します。
  * @param kind - エラー種別（'restricted' | 'not_allowed' | 'empty' | 'failed'）
  * @param detail - 実行エラー詳細文字列（'failed' 時のみ使用）
@@ -224,19 +216,16 @@ async function saveBookmarksResult(
 
 /**
  * Nickmark のコマンド（`:add`, `:addall`, `:rm`, `:ls`, `:prefs`, `:help`）を実行します。
- * UI への副作用（ページ内トースト、ポップアップ内フィードバック、確認ダイアログ等）は直接行わず、
+ * UI への副作用（ポップアップ内フィードバック、確認ダイアログ等）は直接行わず、
  * 呼び出し元が解釈できる `CommandExecutionResult` を返します。
  * @param resolvedContent - 実行するコマンド文字列
  * @param currentTab - 現在アクティブなタブ情報
- * @param options - 呼び出し元コンテキスト設定
  * @returns コマンドの実行結果オブジェクト
  */
 export async function executeNickmarkCommand(
   resolvedContent: string,
-  currentTab: chrome.tabs.Tab | undefined,
-  options: CommandExecutionOptions = {}
+  currentTab: chrome.tabs.Tab | undefined
 ): Promise<CommandExecutionResult> {
-  const source = options.source ?? 'popup';
   const trimmed = resolvedContent.trim();
   const parts = trimmed.split(/\s+/);
   const cmd = parts[0];
@@ -302,12 +291,6 @@ export async function executeNickmarkCommand(
   if (cmd === ':add' || cmd === ':a') {
     const nickname = normalizeNicknamePath(parts[1] || '');
     if (!nickname) {
-      if (source === 'omnibox') {
-        return {
-          outcome: 'info_prompt',
-          legacyFallbackAction: 'open_list_with_tab'
-        };
-      }
       return {
         outcome: 'info_prompt',
         message:
@@ -420,13 +403,6 @@ export async function executeNickmarkCommand(
       const message =
         t('errorMultipleUrlsFound') ||
         '複数の URL が登録されています。候補から選択してください。';
-      if (source === 'omnibox') {
-        return {
-          outcome: 'info_prompt',
-          message,
-          legacyFallbackAction: 'open_list_with_msg'
-        };
-      }
       return {
         outcome: 'info_prompt',
         message,

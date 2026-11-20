@@ -4,7 +4,7 @@
 ![Chrome Web Store](https://img.shields.io/chrome-web-store/v/bicojpjoabhecikokcohbjgaiojggpno.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
-A keyboard-first Chrome extension for lightning-fast bookmark, dynamic search, folder, and bookmarklet access via a command palette and the address bar.
+A keyboard-first Chrome extension for lightning-fast bookmark, dynamic search, folder, and bookmarklet access via a command palette.
 
 [English](#english) | [日本語](#japanese)
 
@@ -62,9 +62,6 @@ Manage everything without leaving the keyboard (`:` prefix):
 - **Privacy First**: No external servers, telemetry, or tracking. Browser history permission is optional and requested only if you explicitly enable Browser History Search.
 - **Bilingual UI**: Instant switching between English and Japanese without reloading.
 
-#### Omnibox Support (Backward Compatible)
-Type `nm` followed by a space and your nickname or command directly in Chrome's address bar. *(Maintained for backward compatibility while transitioning to the Command Palette launcher.)*
-
 ### 💡 Quick Start
 
 1. Open any page you visit often.
@@ -104,7 +101,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ### 概要
 
-**Nickmark** は、マウス移動を最小限にしたいエンジニアやパワーユーザーのために設計された、キーボード操作特化型の Chrome 拡張機能です。よく使う Web ページや検索テンプレート（`%s`）、フォルダグループ、`javascript:` ブックマークレットに短いニックネームを割り当てることで、コマンドパレットやアドレスバーから素早くアクセス・管理できます。
+**Nickmark** は、マウス移動を最小限にしたいエンジニアやパワーユーザーのために設計された、キーボード操作特化型の Chrome 拡張機能です。よく使う Web ページや検索テンプレート（`%s`）、フォルダグループ、`javascript:` ブックマークレットに短いニックネームを割り当てることで、コマンドパレットから素早くアクセス・管理できます。
 
 ### 🚀 主な機能
 
@@ -149,9 +146,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - **ローカル保存と Google アカウント同期**: 大容量ローカルストレージ（`chrome.storage.local`）と、デバイス間で共有できる Chrome 同期ストレージ（`chrome.storage.sync`、上限 100KB・自動チャンク分割・移行時の競合解決ダイアログ付き）を切り替えて利用できます。
 - **プライバシー重視**: 外部サーバーへのデータ送信やトラッキングは一切行いません。ブラウザ履歴権限もユーザーが明示的に有効化しない限り要求されません。
 - **日英多言語対応**: 設定画面から英語・日本語を即座に切り替えられます。
-
-#### アドレスバー（オムニボックス）連携（後方互換）
-アドレスバーに `nm` + スペース + ニックネーム（またはコマンド）を入力して直接検索・実行することも可能です。（※ コマンドパレット型ランチャーへの移行期間中として後方互換のために維持されています）
 
 ### 💡 クイックスタート
 

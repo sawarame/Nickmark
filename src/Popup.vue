@@ -676,7 +676,7 @@ const showSuccessFeedback = (message: string): void => {
  * @returns 処理完了を示す Promise
  */
 const runCommandInPopup = async (commandText: string): Promise<void> => {
-  const result = await executeNickmarkCommand(commandText, currentTab.value, { source: 'popup' });
+  const result = await executeNickmarkCommand(commandText, currentTab.value);
 
   switch (result.outcome) {
     case 'executed_close':

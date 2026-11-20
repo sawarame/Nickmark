@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { getHistorySearchEnabled } from './storage';
 import { MAX_HISTORY_SUGGESTIONS, PaletteItem } from './types';
 import {
-  formatUrlForOmniboxDisplay,
+  formatUrlForDisplay,
   getFaviconUrl,
   isBookmarkletUrl,
   normalizeNicknamePath,
@@ -125,7 +125,7 @@ export async function searchHistoryPaletteItems(
       }
 
       seenSet.add(normalized);
-      const displayUrl = formatUrlForOmniboxDisplay(url);
+      const displayUrl = formatUrlForDisplay(url);
       const title = entry.title?.trim() || displayUrl;
 
       items.push({

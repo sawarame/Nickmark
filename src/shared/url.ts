@@ -296,41 +296,18 @@ export function matchesDynamicEntry(entry: BookmarkEntry, targetUrl: string): bo
 }
 
 /**
- * オムニボックスのサジェスト表示用に URL 文字列を整形します。
+ * パレットおよび履歴候補の表示用に URL 文字列を整形します。
  * 長大なワンライナーになりやすいブックマークレットの場合は連続空白を圧縮し、一定文字数で省略します。
  * @param url - 表示対象の URL またはブックマークレット文字列
  * @param maxLength - ブックマークレット省略時の最大文字数（デフォルト: 100）
- * @returns サジェスト表示用に整形された文字列
+ * @returns 表示用に整形された文字列
  */
-export function formatUrlForOmniboxDisplay(url: string, maxLength: number = 100): string {
+export function formatUrlForDisplay(url: string, maxLength: number = 100): string {
   if (!url) return '';
   if (!isBookmarkletUrl(url)) return url;
   const normalized = url.replace(/\s+/g, ' ').trim();
   if (normalized.length <= maxLength) return normalized;
   return normalized.slice(0, maxLength) + '...';
-}
-
-/**
- * オムニボックスの XML 記述用にテキストを安全にエスケープします。
- * 改行や XML で無効な制御文字も除去・空白化してパースエラーを防ぎます。
- * @param unsafe - エスケープ対象の任意の値
- * @returns XML エスケープ済みの安全な文字列
- */
-export function escapeXml(unsafe: unknown): string {
-  if (!unsafe) return '';
-  return String(unsafe)
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '')
-    .replace(/[\r\n\t]+/g, ' ')
-    .replace(/[<>&'"]/g, (c) => {
-      switch (c) {
-        case '<': return '&lt;';
-        case '>': return '&gt;';
-        case '&': return '＆'; // Chrome の XML パーサーのバグを回避するため全角アンパサンドを使用
-        case '\'': return '&apos;';
-        case '"': return '&quot;';
-        default: return c;
-      }
-    });
 }
 
 /**
@@ -386,13 +363,4 @@ export function isMacPlatform(): boolean {
  */
 export function getPrimaryModifierLabel(): 'Cmd' | 'Ctrl' {
   return isMacPlatform() ? 'Cmd' : 'Ctrl';
-}
-
-/**
- * 実行環境の OS に応じたポップアップ起動ショートカットキー表記を返します。
- * macOS では `Option+Shift+D`、Windows / Linux 等では `Alt+Shift+D` を返します。
- * @returns OS に合わせたショートカットキー表記文字列
- */
-export function getShortcutLabel(): string {
-  return isMacPlatform() ? 'Option+Shift+D' : 'Alt+Shift+D';
 }

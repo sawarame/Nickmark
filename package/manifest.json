@@ -6,7 +6,6 @@
   "default_locale": "en",
   "minimum_chrome_version": "135",
   "permissions": [
-    "omnibox",
     "storage",
     "unlimitedStorage",
     "tabs",
@@ -21,9 +20,6 @@
   ],
   "background": {
     "service_worker": "js/background.js"
-  },
-  "omnibox": {
-    "keyword": "nm"
   },
   "options_ui": {
     "page": "list.html",
