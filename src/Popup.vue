@@ -16,7 +16,7 @@
         ref="searchInputRef"
         v-model="query"
         class="palette-input"
-        :placeholder="tr('popupPlaceholder') || 'ニックネーム検索 または :add / :open / :rm ...'"
+        :placeholder="tr('popupPlaceholder') || 'ニックネーム検索 または :add / :rm ...'"
         autocomplete="off"
         spellcheck="false"
         role="combobox"
@@ -243,6 +243,7 @@ import {
 import { buildPaletteSuggestions } from './shared/search';
 import {
   getEnabledPresetIds,
+  getMaxBatchOpenTabs,
   getOpenInCurrentIfNewTab,
   getOpenInNewTab,
   loadBookmarksData,
@@ -679,6 +680,39 @@ const runCommandInPopup = async (commandText: string): Promise<void> => {
 };
 
 /**
+ * 指定されたフォルダパスのブックマークを一括で開き、安全上限超過時は確認ダイアログを表示します。
+ * @param folderPath - 開く対象のフォルダパス
+ * @returns 処理完了を示す Promise
+ */
+const executeFolderBatchOpenInPopup = async (folderPath: string): Promise<void> => {
+  const result = await openFolderUrls(folderPath, false, undefined);
+  if (result.requiresConfirmation && result.folderPath && result.urls) {
+    const maxLimit = await getMaxBatchOpenTabs();
+    pendingBatchConfirm.value = {
+      folderPath: result.folderPath,
+      urls: result.urls,
+      nicknames: result.nicknames || [],
+      maxLimit
+    };
+    return;
+  }
+
+  if (!result.success) {
+    feedback.value = {
+      severity: 'error',
+      message:
+        result.error === 'NO_OPENABLE_URLS'
+          ? t('errorBatchOpenZeroUrls', [folderPath]) ||
+            `フォルダ「${folderPath}」には開く対象のURLがありません。`
+          : t('errorNicknameNotFound', [folderPath]) ||
+            `フォルダ「${folderPath}」が見つかりませんでした。`
+    };
+  }
+
+  await focusSearchInput();
+};
+
+/**
  * 一時 `textarea` と `document.execCommand('copy')` を用いたフォールバックコピーを実行します。
  * `onCopy` を指定すると `copy` イベント経由で複数 MIME タイプ（`text/html` 等）を書き込めます。
  * @param plainText - 選択用テキストエリアに設定するプレーンテキスト
@@ -940,7 +974,7 @@ const executeItem = async (item: PaletteItem, disposition: TabDisposition): Prom
     }
 
     if (item.kind === 'folder' && item.folderPath) {
-      await runCommandInPopup(`:open ${item.folderPath}/`);
+      await executeFolderBatchOpenInPopup(item.folderPath);
       return;
     }
 

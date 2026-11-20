@@ -522,60 +522,6 @@ export function resolveCommandMatches(
     commandMatches.push({ content: ':help', description: '<match>:help</match> - Open Help / Documentation' });
   }
 
-  // :open / :o コマンド
-  if (isCmdMatch([':open', ':o'])) {
-    const folders = extractFolders(bookmarks);
-    if (!restTrimmed) {
-      commandMatches.push({
-        content: ':open ',
-        description: '<match>:open</match> [nickname or folder/] - Open all URLs in new tabs'
-      });
-      if (cmd === ':open' || cmd === ':o') {
-        for (const f of findMatchingFolders(folders, '', { limit: 4 })) {
-          commandMatches.push({
-            content: `:open ${f.path}/`,
-            description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
-          });
-        }
-        for (const n of sortedNicknames.slice(0, 6)) {
-          commandMatches.push({
-            content: `:open ${n}`,
-            description: `<match>:open</match> ${getNicknameSummary(n)}`
-          });
-        }
-      }
-    } else {
-      const lowerInput = restTrimmed.toLowerCase();
-      const lowerNormInput = normalizeNicknamePath(restTrimmed).toLowerCase();
-      const matchedFolders = findMatchingFolders(folders, restTrimmed, {
-        exactSuffix: restTrimmed.endsWith('/')
-      });
-
-      for (const f of matchedFolders) {
-        commandMatches.push({
-          content: `:open ${f.path}/`,
-          description: `<match>:open</match> 📁 ${escapeXml(f.path)}/ <dim>(${f.openableUrlCount} tabs)</dim>`
-        });
-      }
-
-      const matches = sortedNicknames.filter(n =>
-        startsWithInputOrNormalized(n, lowerInput, lowerNormInput)
-      );
-      for (const n of matches) {
-        commandMatches.push({
-          content: `:open ${n}`,
-          description: `<match>:open</match> ${getNicknameSummary(n)}`
-        });
-      }
-      if (commandMatches.length === 0) {
-        commandMatches.push({
-          content: text,
-          description: `<match>:open</match> No nicknames or folders match "${escapeXml(restTrimmed)}"`
-        });
-      }
-    }
-  }
-
   // :rm コマンド
   if (isCmdMatch([':rm'])) {
     if (!restTrimmed) {
@@ -924,7 +870,6 @@ export function buildCommandPaletteItems(
 
   const items: PaletteItem[] = [];
   const sortedNicknames = getSortedNicknames(bookmarks);
-  const folders = extractFolders(bookmarks);
 
   const isCmdMatch = (targetCmds: string[]): boolean =>
     hasSpace ? targetCmds.includes(cmd) : targetCmds.some(target => target.startsWith(cmd));
@@ -1087,85 +1032,6 @@ export function buildCommandPaletteItems(
       fillText: ':help',
       executeValue: ':help'
     });
-  }
-
-  /**
-   * `:open` コマンド用のフォルダ一括オープン候補アイテムを生成します。
-   * @param folder - 対象のフォルダ情報
-   * @returns `:open` コマンド候補の `PaletteItem`
-   */
-  const createOpenCommandFolderItem = (folder: FolderInfo): PaletteItem => ({
-    id: `cmd:open:folder:${folder.path}`,
-    kind: 'command',
-    title: `📁 ${folder.path}/`,
-    subtitle:
-      t('openFolderSummary', [folder.path, String(folder.openableUrlCount)]) ||
-      `📁 ${folder.path} (${folder.openableUrlCount}タブを一括オープン)`,
-    badge: ':open',
-    typeTag: `📁 ${folder.openableUrlCount}`,
-    fillText: `:open ${folder.path}/`,
-    executeValue: `:open ${folder.path}/`
-  });
-
-  // :open / :o コマンド
-  if (isCmdMatch([':open', ':o'])) {
-    if (!restTrimmed) {
-      items.push({
-        id: 'cmd:open:prompt',
-        kind: 'completion',
-        title: ':open [nickname or folder/]',
-        subtitle: t('popupCommandOpenHint') || 'ニックネームまたはフォルダを一括オープン',
-        badge: ':open',
-        fillText: ':open ',
-        executeValue: ':open'
-      });
-
-      if (cmd === ':open' || cmd === ':o') {
-        for (const f of findMatchingFolders(folders, '', { limit: 4 })) {
-          items.push(createOpenCommandFolderItem(f));
-        }
-        for (const n of sortedNicknames.slice(0, 6)) {
-          const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
-          items.push({
-            id: `cmd:open:nick:${n}`,
-            kind: 'command',
-            title: n,
-            subtitle: summary,
-            badge: ':open',
-            faviconUrl,
-            fillText: `:open ${n}`,
-            executeValue: `:open ${n}`
-          });
-        }
-      }
-    } else {
-      const lowerInput = restTrimmed.toLowerCase();
-      const lowerNormInput = normalizeNicknamePath(restTrimmed).toLowerCase();
-      const matchedFolders = findMatchingFolders(folders, restTrimmed, {
-        exactSuffix: restTrimmed.endsWith('/')
-      });
-
-      for (const f of matchedFolders) {
-        items.push(createOpenCommandFolderItem(f));
-      }
-
-      const matches = sortedNicknames.filter(n =>
-        startsWithInputOrNormalized(n, lowerInput, lowerNormInput)
-      );
-      for (const n of matches.slice(0, 15)) {
-        const { summary, faviconUrl } = summarizeNicknameForPalette(n, bookmarks);
-        items.push({
-          id: `cmd:open:nick:${n}`,
-          kind: 'command',
-          title: n,
-          subtitle: summary,
-          badge: ':open',
-          faviconUrl,
-          fillText: `:open ${n}`,
-          executeValue: `:open ${n}`
-        });
-      }
-    }
   }
 
   // :rm コマンド

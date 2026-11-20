@@ -36,7 +36,7 @@ A keyboard-first Chrome extension for lightning-fast bookmark, dynamic search, f
 
 #### Folder Organization & Batch Open
 - Organize bookmarks into folders using slash-separated nicknames (e.g., `work/mail`, `work/docs`).
-- Open all openable URLs under a folder at once by typing `work/` or `:open work/` (protected by a configurable safety limit of 1–100 tabs, default `20`).
+- Open all openable URLs under a folder at once by typing `work/` (protected by a configurable safety limit of 1–100 tabs, default `20`).
 - Filter, batch-open, rename, or delete entire folders from the management dashboard.
 
 #### Built-in Command Line
@@ -46,7 +46,6 @@ Manage everything without leaving the keyboard (`:` prefix):
 | :--- | :--- | :--- |
 | `:add [nickname] [url] [title]` | `:a` | Save the active tab, a custom URL, or a bookmarklet |
 | `:addall [nickname]` | `:aa` | Save all open tabs in the current window |
-| `:open [nickname or folder/]` | `:o` | Open all associated URLs or folder bookmarks in background tabs |
 | `:rm [nickname] [url]` | — | Remove a nickname or a specific URL entry |
 | `:ls` | — | Open the bookmark management dashboard |
 | `:prefs` | — | Open Preferences (sync, language, history search, batch limit) |
@@ -125,7 +124,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 #### フォルダ管理と一括オープン
 - `work/mail`、`work/docs` のようにスラッシュ区切りでニックネームを登録すると、自動的にフォルダとして整理されます。
-- `work/` または `:open work/` と入力して実行すると、配下の開ける URL をバックグラウンドタブで一括オープンできます（1〜100件で変更可能な安全上限付き、デフォルト `20` 件）。
+- `work/` と入力して実行すると、配下の開ける URL をバックグラウンドタブで一括オープンできます（1〜100件で変更可能な安全上限付き、デフォルト `20` 件）。
 - 管理画面からフォルダ単位での絞り込み、一括オープン、フォルダ名のリネーム、一括削除が可能です。
 
 #### 組み込みコマンドライン（`:` プレフィックス）
@@ -135,7 +134,6 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 | :--- | :--- | :--- |
 | `:add [ニックネーム] [URL] [タイトル]` | `:a` | 現在のタブ、指定 URL、またはブックマークレットを登録 |
 | `:addall [ニックネーム]` | `:aa` | 現在のウィンドウで開いているすべてのタブを一括登録 |
-| `:open [ニックネーム または フォルダ/]` | `:o` | 紐づく URL やフォルダ配下をバックグラウンドタブで一括オープン |
 | `:rm [ニックネーム] [URL]` | — | ニックネームまたは特定の URL エントリを削除 |
 | `:ls` | — | ブックマーク管理画面を開く |
 | `:prefs` | — | 設定画面（同期・言語・履歴検索・一括オープン上限）を開く |
