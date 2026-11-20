@@ -1,7 +1,7 @@
 /**
- * ブックマーク登録ポップアップ（popup.html）のエントリーポイント
+ * コマンドパレット型ポップアップ（popup.html）のエントリーポイント
  */
 import Popup from './Popup.vue';
-import { mountNickmarkApp } from './shared/appBootstrap';
+import { mountNickmarkPopupApp } from './shared/popupBootstrap';
 
-mountNickmarkApp(Popup);
+mountNickmarkPopupApp(Popup);

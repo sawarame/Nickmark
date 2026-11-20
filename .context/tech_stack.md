@@ -40,7 +40,9 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
     - `listSort.ts`: 管理画面一覧の「最終使用日時」「スコア」並び替えおよび設定値正規化の純粋ロジック。
     - `bookmarkImport.ts`: Nickmark JSON・Chrome ブックマーク HTML の解析、バリデーション、ニックネームサニタイズ、ベースフォルダ付与、マージ統合ロジック。
     - `presets.ts`: 定番検索サービス・ブックマークレットのプリセットカタログ定義、正規化、および通常検索時の仮想エントリ合成ロジック。
-    - `appBootstrap.ts`: Vue 3 + PrimeVue アプリケーションの共通初期化ヘルパー。
+    - `appBootstrap.ts`: Vue 3 + PrimeVue アプリケーションの共通初期化ヘルパー（一覧・設定画面向けのフル構成）。
+    - `primeVueBootstrap.ts`: テーマプリセット拡張（`createNickmarkPreset`）と PrimeVue マウントの共通コアヘルパー。
+    - `popupBootstrap.ts`: ポップアップランチャー専用の軽量 Aura サブセット初期化ヘルパー。
 - `package/`: 拡張機能としてブラウザに読み込ませる（配布する）ディレクトリ。
   - `manifest.json`: 拡張機能の定義ファイル。
   - `list.html` / `preferences.html` / `popup.html`: 各画面のベース HTML。

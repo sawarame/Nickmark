@@ -9,4 +9,9 @@ declare module '@primeuix/themes/aura' {
   export default Aura;
 }
 
+declare module '@primeuix/themes/aura/*' {
+  const AuraSubpath: any;
+  export default AuraSubpath;
+}
+
 declare module '*.css';
