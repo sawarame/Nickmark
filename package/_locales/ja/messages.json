@@ -570,6 +570,21 @@
   "presetTitleGoogle": {
     "message": "Google 検索"
   },
+  "presetTitleBing": {
+    "message": "Bing 検索"
+  },
+  "presetTitleYahoo": {
+    "message": "Yahoo! 検索"
+  },
+  "presetTitleNaver": {
+    "message": "Naver 検索"
+  },
+  "presetTitleBaidu": {
+    "message": "Baidu 検索"
+  },
+  "presetTitleDuckduckgo": {
+    "message": "DuckDuckGo 検索"
+  },
   "presetTitleYoutube": {
     "message": "YouTube 検索"
   },

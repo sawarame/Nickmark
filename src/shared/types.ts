@@ -249,10 +249,15 @@ export const OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY = 'openInCurrentIfNewTab';
 export type PresetCategory = 'dynamic_url' | 'bookmarklet';
 
 /**
- * 標準収録される全 13 件のプリセット ID リテラル型
+ * 標準収録される全 18 件のプリセット ID リテラル型
  */
 export type PresetId =
   | 'g'
+  | 'b'
+  | 'y'
+  | 'nv'
+  | 'bd'
+  | 'ddg'
   | 'yt'
   | 'gh'
   | 'map'
