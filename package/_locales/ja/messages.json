@@ -236,19 +236,11 @@
       }
     }
   },
-  "errorOpenSkippedAllBookmarklets": {
-    "message": "ニックネーム「$1」はブックマークレットのみのため、:open での別タブ起動をスキップしました。",
-    "placeholders": {
-      "1": {
-        "content": "$1"
-      }
-    }
-  },
   "popupTitle": {
     "message": "Nickmark コマンドパレット"
   },
   "popupPlaceholder": {
-    "message": "ニックネーム検索 または :add / :open / :rm ..."
+    "message": "ニックネーム検索 または :add / :rm ..."
   },
   "popupNoMatches": {
     "message": "一致する候補が見つかりませんでした。"
@@ -276,9 +268,6 @@
   },
   "popupCommandAddallHint": {
     "message": "現在のウィンドウの全タブを一括登録"
-  },
-  "popupCommandOpenHint": {
-    "message": "ニックネームまたはフォルダを一括オープン"
   },
   "popupCommandRmHint": {
     "message": "ニックネームまたは特定の URL を削除"
@@ -460,7 +449,7 @@
     "message": ":addall <名前>（短縮 :aa）で、現在のウィンドウの全タブを一括登録できます。"
   },
   "popupTipFolderOpen": {
-    "message": "フォルダ名/ または :open フォルダ名/ と入力して Enter を押すと、配下のブックマークを一括で開けます。"
+    "message": "フォルダ名/ と入力して Enter を押すと、配下のブックマークを一括で開けます。"
   },
   "popupTipDynamicUrl": {
     "message": "URL に %s を含めて登録すると、「ニックネーム 検索語」で引数を埋め込んで検索・遷移できます（省略時はデフォルト値またはトップページへ遷移）。"

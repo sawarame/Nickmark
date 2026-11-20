@@ -12,18 +12,12 @@ import {
   isRestrictedTabUrl,
   isSameUrl,
   isUserScriptsAvailable,
-  normalizeNicknamePath,
-  resolveNavigableUrl
+  normalizeNicknamePath
 } from './url';
 import {
   createBookmarkEntry,
-  extractFolders,
-  getMaxBatchOpenTabs,
   getSaveErrorMessage,
   loadBookmarksData,
-  loadSearchableBookmarksData,
-  openFolderUrls,
-  openTargetsAndUpdateScores,
   saveBookmarksData,
   updateScore
 } from './storage';
@@ -229,7 +223,7 @@ async function saveBookmarksResult(
 }
 
 /**
- * Nickmark のコマンド（`:add`, `:addall`, `:open`, `:rm`, `:ls`, `:prefs`, `:help`）を実行します。
+ * Nickmark のコマンド（`:add`, `:addall`, `:rm`, `:ls`, `:prefs`, `:help`）を実行します。
  * UI への副作用（ページ内トースト、ポップアップ内フィードバック、確認ダイアログ等）は直接行わず、
  * 呼び出し元が解釈できる `CommandExecutionResult` を返します。
  * @param resolvedContent - 実行するコマンド文字列
@@ -377,97 +371,6 @@ export async function executeNickmarkCommand(
       message:
         t('bookmarkAlreadyExistsMessage', [nickname]) ||
         `このURLはすでにニックネーム「${nickname}」に登録されています。`
-    };
-  }
-
-  if (cmd === ':open' || cmd === ':o') {
-    const rawTarget = parts[1];
-    if (!rawTarget) {
-      return {
-        outcome: 'error',
-        message: t('errorNicknameRequired') || 'ニックネームを指定してください。'
-      };
-    }
-
-    const searchableBookmarks = await loadSearchableBookmarksData();
-    const isExplicitFolder = rawTarget.endsWith('/');
-    const cleanTarget = normalizeNicknamePath(rawTarget);
-
-    if (!cleanTarget) {
-      return {
-        outcome: 'error',
-        message:
-          t('errorNicknameNotFound', [rawTarget]) ||
-          `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`
-      };
-    }
-
-    // 1. 明示的なフォルダ指定でなく単一ニックネーム（有効なプリセットを含む）が存在する場合は単一ニックネームを開く
-    if (!isExplicitFolder && (searchableBookmarks[cleanTarget] || searchableBookmarks[rawTarget])) {
-      const targetKey = searchableBookmarks[cleanTarget] ? cleanTarget : rawTarget;
-      const entries = searchableBookmarks[targetKey];
-      const openableTargets = entries
-        .filter(entry => !isBookmarkletUrl(entry.url))
-        .map(entry => ({
-          urlToOpen: resolveNavigableUrl(entry),
-          templateUrl: entry.url,
-          nickname: targetKey
-        }));
-      const skippedBookmarkletCount = entries.length - openableTargets.length;
-      const openedCount = await openTargetsAndUpdateScores(openableTargets);
-
-      if (openedCount === 0 && skippedBookmarkletCount > 0) {
-        return {
-          outcome: 'error',
-          message:
-            t('errorOpenSkippedAllBookmarklets', [targetKey]) ||
-            `ニックネーム「${targetKey}」はブックマークレットのみのため、:open での別タブ起動をスキップしました。`
-        };
-      }
-      return { outcome: 'executed_keep_open' };
-    }
-
-    // 2. フォルダとして一括オープン
-    const folders = extractFolders(searchableBookmarks);
-    if (folders.has(cleanTarget) || isExplicitFolder) {
-      const result = await openFolderUrls(cleanTarget, false, undefined);
-      if (result.requiresConfirmation && result.folderPath && result.urls) {
-        const maxLimit = await getMaxBatchOpenTabs();
-        return {
-          outcome: 'needs_confirmation',
-          confirmation: {
-            folderPath: result.folderPath,
-            urls: result.urls,
-            nicknames: result.nicknames || [],
-            maxLimit
-          }
-        };
-      }
-      if (!result.success) {
-        if (result.error === 'NO_OPENABLE_URLS') {
-          return {
-            outcome: 'error',
-            message:
-              t('errorBatchOpenZeroUrls', [cleanTarget]) ||
-              `フォルダ「${cleanTarget}」には開く対象のURLがありません。`
-          };
-        }
-        return {
-          outcome: 'error',
-          message:
-            t('errorNicknameNotFound', [cleanTarget]) ||
-            `フォルダ「${cleanTarget}」が見つかりませんでした。`
-        };
-      }
-      return { outcome: 'executed_keep_open' };
-    }
-
-    // 3. いずれも見つからない場合
-    return {
-      outcome: 'error',
-      message:
-        t('errorNicknameNotFound', [rawTarget]) ||
-        `ニックネームまたはフォルダ「${rawTarget}」が見つかりませんでした。`
     };
   }
 

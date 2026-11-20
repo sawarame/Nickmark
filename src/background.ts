@@ -409,7 +409,7 @@ function handleRegularSearchSuggestions(
 }
 
 /**
- * 確定したコマンド（:add, :addall, :open, :ls, :prefs, :help, :rm）を共有エンジン経由で実行し、
+ * 確定したコマンド（:add, :addall, :ls, :prefs, :help, :rm）を共有エンジン経由で実行し、
  * オムニボックス向けのトースト通知・確認プロンプト等のフィードバックを行います。
  * @param resolvedContent - 補完済みのコマンド文字列
  * @param currentTab - 現在アクティブなタブ
@@ -446,8 +446,7 @@ async function executeCommand(resolvedContent: string, currentTab: chrome.tabs.T
   }
 
   if ((result.outcome === 'success_toast' || result.outcome === 'error') && result.message && tabId !== undefined) {
-    const duration = resolvedContent.trim().startsWith(':open') || resolvedContent.trim().startsWith(':o') ? 4000 : 3000;
-    await showToast(tabId, result.message, duration);
+    await showToast(tabId, result.message, 3000);
   }
 }
 

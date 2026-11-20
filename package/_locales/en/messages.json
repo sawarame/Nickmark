@@ -236,19 +236,11 @@
       }
     }
   },
-  "errorOpenSkippedAllBookmarklets": {
-    "message": "Skipped opening '$1' in new tabs because it only contains bookmarklets.",
-    "placeholders": {
-      "1": {
-        "content": "$1"
-      }
-    }
-  },
   "popupTitle": {
     "message": "Nickmark Command Palette"
   },
   "popupPlaceholder": {
-    "message": "Search nickname or type :add / :open / :rm ..."
+    "message": "Search nickname or type :add / :rm ..."
   },
   "popupNoMatches": {
     "message": "No matching bookmarks or commands found."
@@ -276,9 +268,6 @@
   },
   "popupCommandAddallHint": {
     "message": "Register all tabs in current window"
-  },
-  "popupCommandOpenHint": {
-    "message": "Open bookmark or folder in new tabs"
   },
   "popupCommandRmHint": {
     "message": "Remove nickname or specific URL"
@@ -460,7 +449,7 @@
     "message": "Use :addall <name> (or :aa) to bookmark all tabs in the current window at once."
   },
   "popupTipFolderOpen": {
-    "message": "Type folder/ or :open folder/ and press Enter to open all bookmarks in that folder at once."
+    "message": "Type folder/ and press Enter to open all bookmarks in that folder at once."
   },
   "popupTipDynamicUrl": {
     "message": "Include %s in a URL to pass search terms via 'nickname query' (falls back to default value or homepage when omitted)."
