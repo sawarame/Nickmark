@@ -3,13 +3,11 @@ import {
   BookmarkEntry,
   FolderInfo,
   PaletteItem,
-  ResolvedSearchMatch,
-  SuggestedMatchTarget
+  ResolvedSearchMatch
 } from './types';
 import {
-  escapeXml,
   expandDynamicUrl,
-  formatUrlForOmniboxDisplay,
+  formatUrlForDisplay,
   getFaviconUrl,
   isBookmarkletUrl,
   isDynamicUrl,
@@ -21,107 +19,17 @@ import {
 import { extractFolders } from './storage';
 import { t } from '../i18n';
 
-// オムニボックス候補の一意化およびエントリ識別に使用する不可視文字（ゼロ幅文字）
-const ZW_BIT_ZERO = '\u200B';
-const ZW_BIT_ONE = '\u200C';
+// 入力文字列のサニタイズ用に除去する不可視のゼロ幅文字パターン
 const ZERO_WIDTH_ALL_REGEX = /[\u200B-\u200D\uFEFF]/g;
-const TRAILING_ZW_MARKER_REGEX = /^([^\u200B-\u200D\uFEFF]+)([\u200B\u200C]+)$/;
 
 /**
- * 文字列に含まれるゼロ幅文字（不可視マーカー）をすべて除去します。
+ * 文字列に含まれるゼロ幅文字（不可視文字）をすべて除去します。
  * @param text - 対象の文字列
  * @returns ゼロ幅文字を除去したクリーンな文字列
  */
 export function stripZeroWidthChars(text: string): string {
   if (!text) return '';
   return text.replace(ZERO_WIDTH_ALL_REGEX, '');
-}
-
-/**
- * 非負整数インデックスをゼロ幅文字（`\u200B` と `\u200C`）の2進数ビット列にエンコードします。
- * アドレスバー上の見た目をニックネームのまま維持しつつ、Chrome の重複候補フィルタリングを回避し、
- * 同一ニックネーム内の複数 URL エントリを一意に識別するために使用します。
- * @param index - エンコード対象の非負整数インデックス
- * @returns ゼロ幅文字のみで構成された識別マーカー文字列
- */
-export function encodeZeroWidthIndex(index: number): string {
-  const safeIndex = Math.max(0, Math.floor(index));
-  return safeIndex
-    .toString(2)
-    .split('')
-    .map(bit => (bit === '0' ? ZW_BIT_ZERO : ZW_BIT_ONE))
-    .join('');
-}
-
-/**
- * ゼロ幅文字で構成された識別マーカー文字列を元の非負整数インデックスにデコードします。
- * @param marker - `\u200B` および `\u200C` で構成されたマーカー文字列
- * @returns デコードされた非負整数インデックス。不正な形式の場合は null
- */
-export function decodeZeroWidthIndex(marker: string): number | null {
-  if (!marker || !/^[\u200B\u200C]+$/.test(marker)) return null;
-  // 2文字以上で先頭ビットが 0 のものは正規のエンコード値ではないため除外する
-  if (marker.length > 1 && marker[0] === ZW_BIT_ZERO) return null;
-
-  const binaryStr = marker
-    .split('')
-    .map(ch => (ch === ZW_BIT_ZERO ? '0' : '1'))
-    .join('');
-  const parsed = parseInt(binaryStr, 2);
-  return Number.isNaN(parsed) ? null : parsed;
-}
-
-/**
- * 末尾に付与されたゼロ幅文字マーカーから対象のブックマーク遷移先情報を復元します。
- * Service Worker が再起動してメモリ上のサジェストマップが失われた場合のフォールバックとして機能します。
- * @param rawText - オムニボックスから渡された生テキスト
- * @param bookmarks - 現在のブックマークデータ
- * @returns 復元された遷移先情報。マーカーが存在しない、または該当エントリがない場合は null
- */
-export function resolveMatchFromZeroWidthMarker(
-  rawText: string,
-  bookmarks: Record<string, BookmarkEntry[]>
-): SuggestedMatchTarget | null {
-  const markerMatch = rawText.match(TRAILING_ZW_MARKER_REGEX);
-  if (!markerMatch) return null;
-
-  const visibleText = markerMatch[1].trim();
-  const entryIndex = decodeZeroWidthIndex(markerMatch[2]);
-  if (entryIndex === null || entryIndex < 0) return null;
-
-  // 表示文字列全体がニックネームとして存在する場合
-  if (bookmarks[visibleText] && bookmarks[visibleText][entryIndex]) {
-    const entry = bookmarks[visibleText][entryIndex];
-    const resolvedUrl = isDynamicUrl(entry.url) ? resolveFallbackUrl(entry) : entry.url;
-    return {
-      nickname: visibleText,
-      resolvedUrl,
-      templateUrl: entry.url
-    };
-  }
-
-  // 「ニックネーム 動的URL引数」の形式である場合
-  const firstSpaceMatch = visibleText.match(/\s+/);
-  if (firstSpaceMatch && firstSpaceMatch.index !== undefined) {
-    const firstToken = visibleText.slice(0, firstSpaceMatch.index);
-    const restArg = visibleText.slice(firstSpaceMatch.index + firstSpaceMatch[0].length).trim();
-    if (bookmarks[firstToken] && bookmarks[firstToken][entryIndex]) {
-      const entry = bookmarks[firstToken][entryIndex];
-      const resolvedUrl =
-        isDynamicUrl(entry.url) && restArg
-          ? expandDynamicUrl(entry.url, restArg)
-          : isDynamicUrl(entry.url)
-            ? resolveFallbackUrl(entry)
-            : entry.url;
-      return {
-        nickname: firstToken,
-        resolvedUrl,
-        templateUrl: entry.url
-      };
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -307,7 +215,7 @@ function getSortedNicknames(bookmarks: Record<string, BookmarkEntry[]>): string[
 
 /**
  * 通常検索の入力テキストを解析し、マッチ度ティア・ピン留め・スコア順にソートされた候補リストを返します。
- * @param text - オムニボックスに入力された検索文字列
+ * @param text - 検索欄に入力された検索文字列
  * @param bookmarks - 現在のブックマークデータ
  * @returns ソート済みの検索マッチ結果配列
  */
@@ -420,280 +328,6 @@ export function resolveRegularSearchMatches(
   return allMatches;
 }
 
-/**
- * コマンド入力文字列を解析し、マッチするコマンド候補のリストを返します。
- * @param text - 入力されたコマンド文字列（例: ":add mynick"）
- * @param bookmarks - 現在のブックマークデータ
- * @returns マッチしたコマンド候補の配列
- */
-export function resolveCommandMatches(
-  text: string,
-  bookmarks: Record<string, BookmarkEntry[]>
-): { content: string; description: string }[] {
-  const firstSpaceIndex = text.indexOf(' ');
-  const hasSpace = firstSpaceIndex !== -1;
-  const cmd = !hasSpace ? text : text.substring(0, firstSpaceIndex);
-  const restTrimmed = (!hasSpace ? '' : text.substring(firstSpaceIndex + 1)).trim();
-  const rawRest = !hasSpace ? '' : text.substring(firstSpaceIndex + 1);
-
-  const commandMatches: { content: string; description: string }[] = [];
-  const sortedNicknames = getSortedNicknames(bookmarks);
-
-  const isCmdMatch = (targetCmds: string[]): boolean =>
-    hasSpace ? targetCmds.includes(cmd) : targetCmds.some(target => target.startsWith(cmd));
-
-  const getNicknameSummary = (n: string): string => {
-    const entries = bookmarks[n] || [];
-    const escapedN = escapeXml(n);
-    if (entries.length === 1) {
-      const title = escapeXml(entries[0].title) || 'No title';
-      const url = escapeXml(formatUrlForOmniboxDisplay(entries[0].url));
-      return `<match>${escapedN}</match> ${title} - <url>${url}</url>`;
-    }
-    if (entries.length > 1) {
-      return `<match>${escapedN}</match> - Multiple URLs (${entries.length})`;
-    }
-    return `<match>${escapedN}</match>`;
-  };
-
-  /**
-   * 登録系コマンド（:add / :addall）向けに既存ニックネーム補完候補を2行目以降に追加します。
-   * @param canonicalCmd - 展開するコマンド名（':add' または ':addall'）
-   * @param restParts - スペース分割済みの引数配列
-   */
-  const appendRegisterNicknameCandidates = (canonicalCmd: string, restParts: string[]): void => {
-    if (!hasSpace || restParts.length > 1) return;
-    const nicknameInput = restParts[0] || '';
-    const normNickInput = normalizeNicknamePath(nicknameInput);
-    const lowerNickInput = nicknameInput.toLowerCase();
-    const lowerNormNickInput = normNickInput.toLowerCase();
-
-    const nickCandidates = nicknameInput
-      ? sortedNicknames.filter(
-          n =>
-            startsWithInputOrNormalized(n, lowerNickInput, lowerNormNickInput) &&
-            n !== nicknameInput &&
-            (!normNickInput || n !== normNickInput)
-        )
-      : sortedNicknames;
-
-    for (const n of nickCandidates.slice(0, 8)) {
-      commandMatches.push({
-        content: `${canonicalCmd} ${n}`,
-        description: `<match>${canonicalCmd}</match> ${getNicknameSummary(n)}`
-      });
-    }
-  };
-
-  // :add / :a コマンド
-  if (isCmdMatch([':add', ':a'])) {
-    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
-    const isBookmarkletArg = restParts.length >= 2 && isBookmarkletUrl(restParts[1]);
-    const isDirectUrl = restParts.length >= 2 && /^https?:\/\/\S+$/i.test(restParts[1]);
-    const modeHint = isBookmarkletArg
-      ? 'Add bookmarklet'
-      : isDirectUrl
-        ? 'Add custom URL'
-        : 'Add current tab (or [nickname] [https://... | javascript:...] [title])';
-
-    commandMatches.push({
-      content: ':add ' + restTrimmed,
-      description: `<match>:add</match> ${escapeXml(rawRest) || '[nickname] [url(optional)] [title(optional)]'} - ${modeHint}`
-    });
-    appendRegisterNicknameCandidates(':add', restParts);
-  }
-
-  // :addall / :aa コマンド
-  if (isCmdMatch([':addall', ':aa'])) {
-    const restParts = restTrimmed ? restTrimmed.split(/\s+/) : [];
-    commandMatches.push({
-      content: ':addall ' + restTrimmed,
-      description: `<match>:addall</match> ${escapeXml(rawRest) || '[nickname]'} - Add all tabs in current window`
-    });
-    appendRegisterNicknameCandidates(':addall', restParts);
-  }
-
-  // 単体遷移系コマンド
-  if (isCmdMatch([':ls'])) {
-    commandMatches.push({ content: ':ls', description: '<match>:ls</match> - Open Options / Manage Nickmarks' });
-  }
-  if (isCmdMatch([':prefs'])) {
-    commandMatches.push({ content: ':prefs', description: '<match>:prefs</match> - Open Preferences / Language Settings' });
-  }
-  if (isCmdMatch([':help'])) {
-    commandMatches.push({ content: ':help', description: '<match>:help</match> - Open Help / Documentation' });
-  }
-
-  // :rm コマンド
-  if (isCmdMatch([':rm'])) {
-    if (!restTrimmed) {
-      commandMatches.push({
-        content: ':rm ',
-        description: '<match>:rm</match> [nickname] - Remove Nickmark'
-      });
-      if (cmd === ':rm') {
-        for (const n of sortedNicknames.slice(0, 8)) {
-          commandMatches.push({
-            content: `:rm ${n}`,
-            description: `<match>:rm</match> ${getNicknameSummary(n)}`
-          });
-        }
-      }
-    } else {
-      const nicknameParts = restTrimmed.split(/\s+/);
-      const nicknameInput = nicknameParts[0];
-      const normNickInput = normalizeNicknamePath(nicknameInput);
-      const urlInput = nicknameParts.slice(1).join(' ').trim();
-      const lowerNickInput = nicknameInput.toLowerCase();
-      const lowerNormNickInput = normNickInput.toLowerCase();
-
-      const matches = sortedNicknames.filter(n =>
-        startsWithInputOrNormalized(n, lowerNickInput, lowerNormNickInput)
-      );
-
-      if (matches.length === 0) {
-        commandMatches.push({
-          content: text,
-          description: `<match>:rm</match> No nicknames match "${escapeXml(restTrimmed)}"`
-        });
-      } else {
-        for (const n of matches) {
-          const entries = bookmarks[n];
-          const isExact =
-            n.toLowerCase() === lowerNickInput ||
-            (!!lowerNormNickInput && n.toLowerCase() === lowerNormNickInput);
-
-          if (isExact && entries.length > 1) {
-            if (!urlInput) {
-              const msg = t('errorMultipleUrlsFound') || 'Multiple URLs found. Select one below or Enter to manage.';
-              commandMatches.push({
-                content: `:rm ${n}`,
-                description: `⚠️ <match>${escapeXml(n)}</match> - ${msg}`
-              });
-            }
-
-            for (const entry of entries) {
-              if (!urlInput || entry.url.toLowerCase().includes(urlInput.toLowerCase())) {
-                const title = escapeXml(entry.title) || 'No title';
-                const url = escapeXml(formatUrlForOmniboxDisplay(entry.url));
-                commandMatches.push({
-                  content: `:rm ${n} ${entry.url}`,
-                  description: `<match>:rm ${escapeXml(n)}</match> ${title} - <url>${url}</url>`
-                });
-              }
-            }
-          } else {
-            commandMatches.push({
-              content: `:rm ${n}`,
-              description: `<match>:rm</match> ${getNicknameSummary(n)}`
-            });
-          }
-        }
-      }
-    }
-  }
-
-  return commandMatches;
-}
-
-/**
- * 検索マッチ結果からオムニボックス表示用の説明文（XML）を生成します。
- * @param match - 検索マッチ結果
- * @returns XML エスケープ済みのサジェスト説明文
- */
-export function formatSearchMatchDescription(match: ResolvedSearchMatch): string {
-  const mTitle = escapeXml(match.entry.title) || 'No title';
-  const isBookmarklet = isBookmarkletUrl(match.resolvedUrl);
-  const mUrl = escapeXml(formatUrlForOmniboxDisplay(match.resolvedUrl));
-  const typeBadge = isBookmarklet
-    ? ' <dim>[JS]</dim>'
-    : match.isDynamic
-      ? match.dynamicArg
-        ? ` <dim>(${escapeXml(match.dynamicArg)})</dim>`
-        : ' <dim>[%s]</dim>'
-      : '';
-  return `<match>${escapeXml(match.nickname)}</match>${typeBadge}: ${mTitle} - <url>${mUrl}</url>`;
-}
-
-/**
- * 通常検索のマッチ結果リストから、オムニボックスに渡すサジェスト候補配列と遷移先解決マップを構築します。
- * 同一ニックネーム内の複数 URL エントリ等を一意に識別するため、必要時に不可視のゼロ幅文字マーカーを付与します。
- * @param rawText - オムニボックスの現在の生入力テキスト
- * @param allMatches - ソート済みの検索マッチ結果配列
- * @param bookmarks - 現在のブックマークデータ
- * @returns サジェスト候補配列と content 文字列から遷移先への対応マップ
- */
-export function buildRegularSearchSuggestions(
-  rawText: string,
-  allMatches: ResolvedSearchMatch[],
-  bookmarks: Record<string, BookmarkEntry[]>
-): {
-  suggestions: chrome.omnibox.SuggestResult[];
-  matchMap: Map<string, SuggestedMatchTarget>;
-} {
-  const suggestions: chrome.omnibox.SuggestResult[] = [];
-  const matchMap = new Map<string, SuggestedMatchTarget>();
-  const usedContents = new Set<string>();
-  const defaultTopCache = new Map<string, ResolvedSearchMatch | null>();
-
-  const topMatches = allMatches.slice(0, 10);
-
-  for (let i = 0; i < topMatches.length; i++) {
-    const match = topMatches[i];
-    const baseContent =
-      match.isDynamic && match.dynamicArg
-        ? `${match.nickname} ${match.dynamicArg}`
-        : match.nickname;
-
-    if (!defaultTopCache.has(baseContent)) {
-      const resolved = resolveRegularSearchMatches(baseContent, bookmarks);
-      defaultTopCache.set(baseContent, resolved.length > 0 ? resolved[0] : null);
-    }
-    const defaultTop = defaultTopCache.get(baseContent) || null;
-
-    const resolvesToSameEntry =
-      !!defaultTop &&
-      defaultTop.nickname === match.nickname &&
-      defaultTop.entry.url === match.entry.url &&
-      defaultTop.resolvedUrl === match.resolvedUrl;
-
-    const conflictsWithRawInput = allMatches.length > 1 && baseContent === rawText;
-    const canUsePlainContent =
-      !usedContents.has(baseContent) &&
-      !conflictsWithRawInput &&
-      resolvesToSameEntry;
-
-    let finalContent: string;
-    if (canUsePlainContent) {
-      finalContent = baseContent;
-    } else {
-      const entriesForNick = bookmarks[match.nickname] || [];
-      const entryIndex = entriesForNick.indexOf(match.entry);
-      const markerSeed = entryIndex >= 0 ? entryIndex : i;
-      finalContent = baseContent + encodeZeroWidthIndex(markerSeed);
-
-      let fallbackSeed = entriesForNick.length + i + 1;
-      while (usedContents.has(finalContent) || (allMatches.length > 1 && finalContent === rawText)) {
-        finalContent = baseContent + encodeZeroWidthIndex(fallbackSeed++);
-      }
-    }
-
-    usedContents.add(finalContent);
-    matchMap.set(finalContent, {
-      nickname: match.nickname,
-      resolvedUrl: match.resolvedUrl,
-      templateUrl: match.entry.url
-    });
-
-    suggestions.push({
-      content: finalContent,
-      description: formatSearchMatchDescription(match)
-    });
-  }
-
-  return { suggestions, matchMap };
-}
-
 // 通常検索時のフォルダ候補表示上限
 const MAX_EXPLICIT_FOLDER_PALETTE_ITEMS = 30;
 const MAX_INLINE_FOLDER_PALETTE_ITEMS = 10;
@@ -781,7 +415,7 @@ export function buildRegularPaletteItems(
       id: `match:${i}:${match.nickname}:${match.entry.url}`,
       kind: isBookmarklet ? 'bookmarklet' : 'bookmark',
       title: match.entry.title || match.nickname,
-      subtitle: formatUrlForOmniboxDisplay(match.resolvedUrl),
+      subtitle: formatUrlForDisplay(match.resolvedUrl),
       badge: match.nickname,
       typeTag,
       isPinned: !!match.entry.is_pinned,
@@ -832,7 +466,7 @@ function summarizeNicknameForPalette(
   if (entries.length === 1) {
     const entry = entries[0];
     const title = entry.title || 'No title';
-    const url = formatUrlForOmniboxDisplay(entry.url);
+    const url = formatUrlForDisplay(entry.url);
     return {
       summary: `${title} — ${url}`,
       faviconUrl: isBookmarkletUrl(entry.url) ? '' : getFaviconUrl(entry.url)
@@ -961,8 +595,8 @@ export function buildCommandPaletteItems(
     const targetLabel = t('popupAddPreviewTargetLabel') || '登録対象';
     const previewBody = targetUrl
       ? targetTitle
-        ? `${targetTitle} — ${formatUrlForOmniboxDisplay(targetUrl)}`
-        : formatUrlForOmniboxDisplay(targetUrl)
+        ? `${targetTitle} — ${formatUrlForDisplay(targetUrl)}`
+        : formatUrlForDisplay(targetUrl)
       : (t('popupNoOpenableTabUrl') || '現在のタブから登録可能な URL を取得できませんでした。');
 
     items.push({
@@ -1103,7 +737,7 @@ export function buildCommandPaletteItems(
                 id: `cmd:rm:url:${n}:${idx}`,
                 kind: 'command',
                 title: entry.title || n,
-                subtitle: formatUrlForOmniboxDisplay(entry.url),
+                subtitle: formatUrlForDisplay(entry.url),
                 badge: `:rm ${n}`,
                 typeTag: isBml ? '[JS]' : undefined,
                 faviconUrl: isBml ? '' : getFaviconUrl(entry.url),

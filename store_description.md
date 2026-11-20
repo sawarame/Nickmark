@@ -8,20 +8,17 @@
 Nickmark - Keyboard-first Bookmark Access
 
 ### **Short Description**
-Access bookmarks via keyboard shortcuts, command palette, or address bar. Built for engineers and power users.
+Access bookmarks via keyboard shortcuts and a command palette. Built for engineers and power users.
 
 ### **Detailed Description**
-Nickmark is a keyboard-centric Chrome extension built for engineers and power users to reduce mouse movement. By assigning short nicknames to frequently visited pages, search engines, and bookmarklets, you can launch and manage your workflow from the command palette popup or Chrome's address bar.
+Nickmark is a keyboard-centric Chrome extension built for engineers and power users to reduce mouse movement. By assigning short nicknames to frequently visited pages, search engines, and bookmarklets, you can launch and manage your workflow from the command palette popup.
 
 [ 🚀 CORE FEATURES ]
 - Command Palette Launcher
 Launch the search and command palette from anywhere using Alt+Shift+D (Option+Shift+D on macOS). Navigate results with arrow keys or Ctrl+N / Ctrl+P, autocomplete with Tab, and choose how tabs open (Enter for current tab, Cmd/Ctrl/Alt+Enter for a new foreground tab, Shift+Enter for a background tab).
 
-- Omnibox Integration (Backward Compatible)
-Type 'nm' followed by a space and your nickname directly in Chrome's address bar to search and navigate.
-
 - Dynamic URLs (%s Placeholders)
-Embed '%s' in any URL to build instant search shortcuts (for example, 'nm gh my-repo' or 'gh my-repo' in the popup). Optional default values are used when no query is provided, or the site's origin is opened when omitted.
+Embed '%s' in any URL to build instant search shortcuts (for example, 'gh my-repo' in the popup). Optional default values are used when no query is provided, or the site's origin is opened when omitted.
 
 - Folder Organization & Batch Open
 Organize nicknames into hierarchical folders using slashes (such as 'work/dashboard'). Open all openable URLs under a folder at once with ':open work/' or from the management dashboard, protected by a configurable safety tab limit (1-100 tabs).
@@ -75,14 +72,11 @@ Nickmark (ニックマーク) - キーボード操作特化型ブックマーク
 ニックネームで素早く遷移できるキーボード特化型ブックマークランチャー。コマンドパレット、動的URL、フォルダ一括起動に対応。
 
 ### **詳細な説明**
-Nickmark は、マウス移動を最小限にしたいエンジニアやパワーユーザーのために設計された、キーボード操作中心の Chrome 拡張機能です。よく使う Web ページや検索 URL、ブックマークレットに短いニックネームを割り当てることで、コマンドパレット型のポップアップやアドレスバーから効率的にアクセス・管理できます。
+Nickmark は、マウス移動を最小限にしたいエンジニアやパワーユーザーのために設計された、キーボード操作中心の Chrome 拡張機能です。よく使う Web ページや検索 URL、ブックマークレットに短いニックネームを割り当てることで、コマンドパレット型のポップアップから効率的にアクセス・管理できます。
 
 【 🚀 主な機能 】
 ■ コマンドパレット型ポップアップランチャー
 キーボードショートカット（Windows/Linux: Alt+Shift+D、macOS: Option+Shift+D）でどこからでもランチャーを起動できます。上下キーや Ctrl+N / Ctrl+P で候補を選択し、Tab で補完できます。Enter で現在のタブに遷移し、Cmd/Ctrl/Alt+Enter で新規フォアグラウンドタブ、Shift+Enter でバックグラウンドタブとして開きます。
-
-■ アドレスバー（オムニボックス）連携
-後方互換機能として、アドレスバーに 'nm' + スペース + ニックネームを入力して直接検索・遷移することも可能です。
 
 ■ 動的 URL（%s プレースホルダー）とデフォルト値
 URL に '%s' を含めることで、検索クエリを引数として渡せる動的ショートカットを作成できます（例: 'gh 検索語'）。引数省略時に使用するデフォルト値の指定や、未設定時のトップページ遷移にも対応しています。
@@ -136,10 +130,6 @@ URL に '%s' を含めることで、検索クエリを引数として渡せる�
 
 ## 🔒 Permissions Justification / 権限の使用理由
 
-### **omnibox**
-- **EN**: Enables the 'nm' keyword in Chrome's address bar so users can search nicknames, expand dynamic URLs, and run Nickmark commands directly from the omnibox.
-- **JP**: Chrome のアドレスバーでキーワード 'nm' を使ったニックネーム検索、動的 URL 展開、およびコマンド実行を提供するために使用します。
-
 ### **storage & unlimitedStorage**
 - **EN**: Stores user bookmarks, exponential decay usage scores, and device preferences (language, sync toggle, batch open limit, history search toggle) locally in `chrome.storage.local` or synced via `chrome.storage.sync`. `unlimitedStorage` prevents capacity limits when managing large bookmark collections locally.
 - **JP**: ブックマークデータ、使用スコア、および各種設定（言語、同期設定、一括オープン上限、履歴検索設定）をローカルまたは Chrome 同期ストレージに保存するために使用します。`unlimitedStorage` はローカル環境で大量のブックマークを制限なく保持するために使用します。
@@ -149,8 +139,8 @@ URL に '%s' を含めることで、検索クエリを引数として渡せる�
 - **JP**: `:add` / `:addall` 実行時に現在のタブ情報を取得する処理、新規／バックグラウンドタブへのページ展開、および更新時に管理画面タブへフォーカス・最新反映を行うために使用します。
 
 ### **activeTab & scripting**
-- **EN**: Injects lightweight, non-intrusive toast notification banners into the currently active webpage when running omnibox commands (such as ':add' or ':rm') so users receive feedback without switching tabs.
-- **JP**: オムニボックスから `:add` や `:rm` 等を実行した際、タブを切り替えずに現在のページ上へ控えめなトースト通知を表示するために使用します。
+- **EN**: Injects lightweight, non-intrusive toast notification banners into the currently active webpage when running actions such as link-copy presets (`mdlink` / `htmllink`) or folder operations, providing immediate feedback without switching tabs.
+- **JP**: プリセットのリンクコピー（`mdlink` / `htmllink`）等を実行した際、タブを切り替えずに現在のページ上へ控えめなトースト通知を表示するために使用します。
 
 ### **userScripts**
 - **EN**: Executes user-registered 'javascript:' bookmarklets in the MAIN world of the active tab (Chrome 135+), providing safe script execution without page navigation.

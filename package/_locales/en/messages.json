@@ -3,7 +3,7 @@
     "message": "Nickmark"
   },
   "extensionDescription": {
-    "message": "Access bookmarks instantly from the address bar using nicknames. Designed for keyboard-focused power users."
+    "message": "Access bookmarks instantly from a keyboard-driven command palette using nicknames. Designed for keyboard-focused power users."
   },
   "bookmarkAddedMessage": {
     "message": "Registered as nickname '$1'!",
@@ -283,24 +283,6 @@
   },
   "popupNoOpenableTabUrl": {
     "message": "Could not retrieve a valid URL from the current tab."
-  },
-  "omniboxMigrationDefault": {
-    "message": "Nickmark — Try the popup launcher ($1) next time (Omnibox will be deprecated)",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "omniboxMigrationSuggestion": {
-    "message": "💡 Use shortcut $1 to open the popup launcher (Omnibox will be deprecated)",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "omniboxMigrationToast": {
-    "message": "Please use the popup launcher with $1 next time!",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
   },
   "registerBtn": {
     "message": "Save"
@@ -674,18 +656,6 @@
   },
   "errorMdlinkCopyFailed": {
     "message": "Failed to copy to the clipboard."
-  },
-  "errorMdlinkUsePopup": {
-    "message": "Please run mdlink from the Nickmark popup ($1) to copy to the clipboard.",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "errorHtmllinkUsePopup": {
-    "message": "Please run htmllink from the Nickmark popup ($1) to copy to the clipboard.",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
   },
   "popupAddAlreadyBookmarkedNotice": {
     "message": "This page is already bookmarked (Nickname: $1)",

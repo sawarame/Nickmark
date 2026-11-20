@@ -3,7 +3,7 @@
     "message": "Nickmark"
   },
   "extensionDescription": {
-    "message": "ニックネームを使ってアドレスバーからブックマークへ瞬時にアクセス。マウス移動を最小限にしたいパワーユーザー向けの拡張機能。"
+    "message": "ニックネームを使ってコマンドパレットからブックマークへ瞬時にアクセス。マウス移動を最小限にしたいパワーユーザー向けの拡張機能。"
   },
   "bookmarkAddedMessage": {
     "message": "ニックネーム「$1」として登録しました！",
@@ -283,24 +283,6 @@
   },
   "popupNoOpenableTabUrl": {
     "message": "現在のタブから登録可能な URL を取得できませんでした。"
-  },
-  "omniboxMigrationDefault": {
-    "message": "Nickmark — 次回からは $1 でポップアップ版をご利用ください（アドレスバー機能は将来廃止予定）",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "omniboxMigrationSuggestion": {
-    "message": "💡 ショートカット $1 でポップアップ版をご利用ください（アドレスバーは将来廃止予定）",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "omniboxMigrationToast": {
-    "message": "次回からはショートカット $1 でポップアップ版をご利用ください！",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
   },
   "registerBtn": {
     "message": "登録"
@@ -674,18 +656,6 @@
   },
   "errorMdlinkCopyFailed": {
     "message": "クリップボードへのコピーに失敗しました。"
-  },
-  "errorMdlinkUsePopup": {
-    "message": "クリップボードへのコピーはポップアップ（$1）から実行してください。",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
-  },
-  "errorHtmllinkUsePopup": {
-    "message": "クリップボードへのコピーはポップアップ（$1）から実行してください。",
-    "placeholders": {
-      "1": { "content": "$1" }
-    }
   },
   "popupAddAlreadyBookmarkedNotice": {
     "message": "このページはすでにブックマークに登録されています（ニックネーム: $1）",

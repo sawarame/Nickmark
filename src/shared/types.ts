@@ -69,7 +69,7 @@ export interface ResolvedSearchMatch {
 }
 
 /**
- * サジェスト候補の content 文字列から遷移先ブックマークを特定するためのターゲット情報
+ * サジェスト候補から遷移先ブックマークを特定するためのターゲット情報
  */
 export interface SuggestedMatchTarget {
   nickname: string;
@@ -176,8 +176,6 @@ export interface CommandExecutionResult {
   suggestedInput?: string;
   /** `needs_confirmation` 時の確認用データ（任意） */
   confirmation?: BatchOpenConfirmationData;
-  /** オムニボックス互換用のフォールバック種別（任意） */
-  legacyFallbackAction?: 'open_list_with_tab' | 'open_list_with_msg';
 }
 
 /**
@@ -195,25 +193,16 @@ export interface BookmarkletExecutionResult {
 /**
  * Service Worker と拡張機能 UI 間でやり取りするランタイムメッセージ型
  */
-export type RuntimeMessage =
-  | {
-      action: 'EXECUTE_BATCH_OPEN';
-      payload: {
-        folderPath: string;
-        urls: string[];
-        nicknames: string[];
-      };
-    }
-  | {
-      action: 'EXECUTE_BOOKMARKLET';
-      payload: {
-        tabId: number;
-        tabUrl?: string;
-        bookmarkletUrl: string;
-        matchedTemplateUrl?: string;
-        matchedNickname?: string;
-      };
-    };
+export type RuntimeMessage = {
+  action: 'EXECUTE_BOOKMARKLET';
+  payload: {
+    tabId: number;
+    tabUrl?: string;
+    bookmarkletUrl: string;
+    matchedTemplateUrl?: string;
+    matchedNickname?: string;
+  };
+};
 
 /**
  * ポップアップ起動直後の空白領域に表示する活用ヒント（Tip）の定義型
@@ -296,11 +285,6 @@ export interface PresetDefinition {
   /** 英語設定時の URL（言語により検索先ドメインが異なる `wiki` 等で指定） */
   urlEn?: string;
 }
-
-/**
- * オムニボックスで表示するポップアップ移行案内候補の識別 content 文字列
- */
-export const OMNIBOX_MIGRATION_HINT_CONTENT = '→ Nickmark Popup Launcher';
 
 /**
  * 管理画面一覧のツールバーで選択可能な並び替え基準の型定義
