@@ -2,6 +2,37 @@ import { BookmarkEntry } from './types';
 import { Locale } from '../i18n';
 
 /**
+ * 入力文字列のサニタイズ用に除去する不可視のゼロ幅文字パターンです。
+ */
+const ZERO_WIDTH_ALL_REGEX = /[\u200B-\u200D\uFEFF]/g;
+
+/**
+ * 文字列に含まれるゼロ幅文字（不可視文字）をすべて除去します。
+ * @param text - 対象の文字列
+ * @returns ゼロ幅文字を除去したクリーンな文字列
+ */
+export function stripZeroWidthChars(text: string): string {
+  if (!text) return '';
+  return text.replace(ZERO_WIDTH_ALL_REGEX, '');
+}
+
+/**
+ * ニックネームまたはフォルダ名に使用できない文字（ブラックリスト）の正規表現です。
+ * コマンド起動文字（`:`, `;`）、空白文字（`\s`）、バックスラッシュ（`\`）、
+ * URL・動的プレースホルダー・ワイルドカード／構文衝突の恐れがある記号（`%`, `?`, `#`, `&`, `=`, `*`, `"`, `'`, `` ` ``, `<`, `>`, `|`）、
+ * および制御文字・ゼロ幅文字を禁止対象とします（フォルダ区切り `/` は許可）。
+ */
+export const FORBIDDEN_NICKNAME_CHAR_REGEX =
+  /[:;\\\s%?#&=*"'`<>|\u0000-\u001F\u007F\u200B-\u200D\uFEFF]/;
+
+/**
+ * Chrome ブックマーク HTML インポート等のセグメントサニタイズ用正規表現です。
+ * フォルダ区切り記号（`/`）およびニックネーム使用不可文字の連続を `-` へ置換するために使用します。
+ */
+export const FORBIDDEN_NICKNAME_CHAR_WITH_SLASH_GLOBAL_REGEX =
+  /[/\\:;\s%?#&=*"'`<>|\u0000-\u001F\u007F\u200B-\u200D\uFEFF]+/g;
+
+/**
  * ニックネームまたはフォルダパス文字列を正規化します。
  * - 前後の空白を除去
  * - 連続するスラッシュ（// など）を単一のスラッシュ（/）に統合
@@ -28,6 +59,43 @@ export function normalizeNicknamePath(rawPath: string): string {
 export function stripNicknameWhitespace(value: string): string {
   if (!value || typeof value !== 'string') return '';
   return value.replace(/\s+/g, '');
+}
+
+/**
+ * 指定されたニックネームまたはフォルダパス文字列に使用不可文字が含まれているかを判定します。
+ * @param value - 検証対象のニックネームまたはフォルダパス文字列
+ * @returns 使用不可文字が含まれている場合は true、問題ない場合は false
+ */
+export function hasForbiddenNicknameChars(value: string): boolean {
+  if (!value || typeof value !== 'string') return false;
+  return FORBIDDEN_NICKNAME_CHAR_REGEX.test(value);
+}
+
+/**
+ * コマンドパレットの入力文字列がコマンドモード（`:` または `;` で開始）かどうかを判定します。
+ * 先頭の空白および不可視のゼロ幅文字は除去した上で判定します。
+ * @param rawQuery - 検索入力欄の文字列
+ * @returns コマンドモードの入力である場合は true、それ以外は false
+ */
+export function isCommandPrefixQuery(rawQuery: string): boolean {
+  if (!rawQuery || typeof rawQuery !== 'string') return false;
+  const trimmedStart = stripZeroWidthChars(rawQuery).trimStart();
+  return trimmedStart.startsWith(':') || trimmedStart.startsWith(';');
+}
+
+/**
+ * コマンド入力文字列の先頭プレフィックス（`;`）を標準の `:` へ正規化します。
+ * 先頭の空白および不可視のゼロ幅文字も取り除いた上で変換します。
+ * @param rawQuery - 検索入力欄またはコマンド実行文字列
+ * @returns 先頭プレフィックスが `:` に正規化されたコマンド文字列
+ */
+export function normalizeCommandPrefix(rawQuery: string): string {
+  if (!rawQuery || typeof rawQuery !== 'string') return '';
+  const trimmedStart = stripZeroWidthChars(rawQuery).trimStart();
+  if (trimmedStart.startsWith(';')) {
+    return `:${trimmedStart.slice(1)}`;
+  }
+  return trimmedStart;
 }
 
 /**

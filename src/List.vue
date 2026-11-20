@@ -693,6 +693,7 @@ import {
 } from './shared/bookmarkImport';
 import {
   getFaviconUrl,
+  hasForbiddenNicknameChars,
   isBookmarkletUrl,
   isDynamicUrl,
   isSameUrl,
@@ -1300,12 +1301,39 @@ const handleFolderRenameKeydown = (event: KeyboardEvent): void => {
 };
 
 /**
+ * ニックネームまたはフォルダ名に使用不可文字が含まれる場合のエラーメッセージを返します。
+ * @param nickname - 対象ニックネーム文字列（指定時は対象名入りの詳細メッセージを返します）
+ * @returns ローカライズ済みのエラーメッセージ文字列
+ */
+const getForbiddenNicknameErrorMessage = (nickname?: string): string => {
+  if (nickname) {
+    return (
+      t('errorImportForbiddenNicknameChars', [nickname]) ||
+      `ニックネーム「${nickname}」に使用できない文字（空白、: ; \\ % ? # & = * " ' \` < > | など）が含まれています。`
+    );
+  }
+  return (
+    t('errorNicknameForbiddenChars') ||
+    'ニックネームに使用できない文字（空白、: ; \\ % ? # & = * " \' ` < > | など）が含まれています。'
+  );
+};
+
+/**
  * フォルダ名の一括変更を実行します。
  * @returns 処理完了を示す Promise
  */
 const executeRenameFolder = async (): Promise<void> => {
   const oldPath = selectedFolder.value;
   const newPath = normalizeNicknamePath(stripNicknameWhitespace(newFolderName.value));
+  if (hasForbiddenNicknameChars(newPath)) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getForbiddenNicknameErrorMessage(),
+      life: 4000
+    });
+    return;
+  }
   if (!newPath || normalizeNicknamePath(oldPath) === newPath) {
     showRenameDialog.value = false;
     return;
@@ -1544,6 +1572,16 @@ const addBookmark = async (): Promise<void> => {
     return;
   }
 
+  if (hasForbiddenNicknameChars(trimmedNickname)) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getForbiddenNicknameErrorMessage(),
+      life: 4000
+    });
+    return;
+  }
+
   if (!bookmarksData.value[trimmedNickname]) {
     bookmarksData.value[trimmedNickname] = [];
   }
@@ -1672,6 +1710,8 @@ const getImportErrorMessage = (err: unknown): string => {
           t('errorImportInvalidEntry', [err.detailParam || '']) ||
           `Invalid bookmark entry data (${err.detailParam || ''}).`
         );
+      case 'FORBIDDEN_NICKNAME_CHARS':
+        return getForbiddenNicknameErrorMessage(err.detailParam);
     }
   }
   return getSaveErrorMessage(err);
@@ -1735,12 +1775,24 @@ const closeImportDialog = (): void => {
  */
 const executeImport = async (): Promise<void> => {
   if (!importPreview.value || isImporting.value) return;
+
+  const cleanedBaseFolder = normalizeNicknamePath(stripNicknameWhitespace(importBaseFolder.value));
+  if (hasForbiddenNicknameChars(cleanedBaseFolder)) {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getForbiddenNicknameErrorMessage(),
+      life: 4000
+    });
+    return;
+  }
+
   isImporting.value = true;
 
   try {
     const preparedIncoming = applyBaseFolderPrefix(
       importPreview.value.result.bookmarks,
-      stripNicknameWhitespace(importBaseFolder.value)
+      cleanedBaseFolder
     );
     const nextBookmarks =
       importMode.value === 'merge'
@@ -1797,11 +1849,21 @@ const executeImport = async (): Promise<void> => {
  * @returns 構造が妥当な場合は true、不正な場合は false
  */
 const validateBookmarksJson = (bookmarks: unknown): bookmarks is Record<string, BookmarkEntry[]> => {
-  if (!bookmarks || typeof bookmarks !== 'object') return false;
+  if (!bookmarks || typeof bookmarks !== 'object' || Array.isArray(bookmarks)) return false;
   const record = bookmarks as Record<string, unknown>;
   for (const nickname of Object.keys(record)) {
-    if (normalizeNicknamePath(nickname) === '') {
+    const normalizedNick = normalizeNicknamePath(nickname);
+    if (normalizedNick === '') {
       toast.add({ severity: 'error', summary: 'Error', detail: 'Nickname cannot be empty.', life: 3000 });
+      return false;
+    }
+    if (hasForbiddenNicknameChars(normalizedNick)) {
+      toast.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: getForbiddenNicknameErrorMessage(normalizedNick),
+        life: 4000
+      });
       return false;
     }
     const entries = record[nickname];
@@ -1965,6 +2027,20 @@ const commitInlineEdit = async (): Promise<void> => {
   const origEffectiveDefault = isDynamicUrl(current.originalUrl)
     ? (current.originalDefaultValue || '').trim()
     : '';
+
+  // ニックネーム編集時は変更の有無にかかわらず使用不可文字が含まれていないかを検証し、既存データのまま再登録されることを防ぐ
+  if (current.field === 'nickname' && hasForbiddenNicknameChars(newNickname)) {
+    inlineEdit.value = null;
+    inlineEditWrapperRef.value = null;
+    isClosingInlineEdit.value = false;
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: getForbiddenNicknameErrorMessage(),
+      life: 4000
+    });
+    return;
+  }
 
   // 実質的な変更がない場合はストレージ書き込みおよびトースト表示を行わずに編集を終了する
   const hasNoChange =

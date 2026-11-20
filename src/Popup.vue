@@ -261,7 +261,7 @@ import {
 } from './shared/storage';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 import { showInPageToastOnly } from './shared/toast';
-import { isChromeNewTab, isRestrictedTabUrl } from './shared/url';
+import { isChromeNewTab, isCommandPrefixQuery, isRestrictedTabUrl } from './shared/url';
 
 // 連続入力時の履歴検索過多を抑えるデバウンス待機時間（ミリ秒）
 const HISTORY_SEARCH_DEBOUNCE_MS = 80;
@@ -315,11 +315,11 @@ let historyDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 let historyRequestSeq = 0;
 
 /**
- * 現在の入力がコマンドモード（`:` 開始）かどうかを判定します。
+ * 現在の入力がコマンドモード（`:` または `;` 開始）かどうかを判定します。
  * @returns コマンド入力中の場合は true
  */
 const isCommandInput = computed((): boolean => {
-  return query.value.trimStart().startsWith(':');
+  return isCommandPrefixQuery(query.value);
 });
 
 /**
@@ -1069,7 +1069,7 @@ const executeSelectedOrQuery = async (event: KeyboardEvent): Promise<void> => {
   const trimmed = query.value.trim();
   if (!trimmed) return;
 
-  if (trimmed.startsWith(':')) {
+  if (isCommandPrefixQuery(trimmed)) {
     await runCommandInPopup(trimmed);
   } else {
     feedback.value = {
