@@ -13,7 +13,9 @@ import {
   getFaviconUrl,
   isBookmarkletUrl,
   isDynamicUrl,
+  isSameUrl,
   normalizeNicknamePath,
+  normalizeUrlForComparison,
   resolveFallbackUrl
 } from './url';
 import { extractFolders } from './storage';
@@ -1149,4 +1151,41 @@ export function buildPaletteSuggestions(
     return buildCommandPaletteItems(clean, bookmarks, currentTab);
   }
   return buildRegularPaletteItems(clean, bookmarks);
+}
+
+/**
+ * 指定された URL がすでに登録されているブックマークのニックネーム一覧を取得します。
+ * パーセントエンコードや末尾スラッシュ・スキーム／ホストの大文字小文字差異を吸収して判定し、
+ * ブックマークレット（`javascript:`）エントリは除外します。
+ * @param targetUrl - 判定対象の URL 文字列
+ * @param bookmarks - 現在のブックマーク辞書
+ * @returns 該当 URL が登録されているニックネームの配列（優先度順）
+ */
+export function findNicknamesForUrl(
+  targetUrl: string,
+  bookmarks: Record<string, BookmarkEntry[]>
+): string[] {
+  if (!targetUrl || isBookmarkletUrl(targetUrl)) return [];
+  const trimmedUrl = targetUrl.trim();
+  if (!trimmedUrl) return [];
+
+  const normTargetUrl = normalizeUrlForComparison(trimmedUrl);
+  const sortedNicknames = getSortedNicknames(bookmarks);
+  const matched: string[] = [];
+
+  for (const nickname of sortedNicknames) {
+    const entries = bookmarks[nickname] || [];
+    const hasMatch = entries.some(entry => {
+      if (!entry.url || isBookmarkletUrl(entry.url)) return false;
+      return (
+        isSameUrl(entry.url, trimmedUrl) ||
+        (normTargetUrl.length > 0 && normalizeUrlForComparison(entry.url) === normTargetUrl)
+      );
+    });
+    if (hasMatch) {
+      matched.push(nickname);
+    }
+  }
+
+  return matched;
 }
