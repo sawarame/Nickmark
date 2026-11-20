@@ -26,7 +26,7 @@ const WAYBACK_BOOKMARKLET_URL =
   "javascript:(()=>{location.href='https://web.archive.org/web/*/'+location.href;})();";
 
 /**
- * 標準収録される全 13 件のプリセット定義カタログ（動的 URL 10 件、ブックマークレット 3 件）
+ * 標準収録される全 18 件のプリセット定義カタログ（動的 URL 15 件、ブックマークレット 3 件）
  */
 export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
   {
@@ -35,6 +35,42 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     category: 'dynamic_url',
     titleKey: 'presetTitleGoogle',
     urlJa: 'https://www.google.com/search?q=%s'
+  },
+  {
+    id: 'b',
+    nickname: 'b',
+    category: 'dynamic_url',
+    titleKey: 'presetTitleBing',
+    urlJa: 'https://www.bing.com/search?q=%s'
+  },
+  {
+    id: 'y',
+    nickname: 'y',
+    category: 'dynamic_url',
+    titleKey: 'presetTitleYahoo',
+    urlJa: 'https://search.yahoo.co.jp/search?p=%s',
+    urlEn: 'https://search.yahoo.com/search?p=%s'
+  },
+  {
+    id: 'nv',
+    nickname: 'nv',
+    category: 'dynamic_url',
+    titleKey: 'presetTitleNaver',
+    urlJa: 'https://search.naver.com/search.naver?query=%s'
+  },
+  {
+    id: 'bd',
+    nickname: 'bd',
+    category: 'dynamic_url',
+    titleKey: 'presetTitleBaidu',
+    urlJa: 'https://www.baidu.com/s?wd=%s'
+  },
+  {
+    id: 'ddg',
+    nickname: 'ddg',
+    category: 'dynamic_url',
+    titleKey: 'presetTitleDuckduckgo',
+    urlJa: 'https://duckduckgo.com/?q=%s'
   },
   {
     id: 'yt',

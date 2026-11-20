@@ -570,6 +570,21 @@
   "presetTitleGoogle": {
     "message": "Google Search"
   },
+  "presetTitleBing": {
+    "message": "Bing Search"
+  },
+  "presetTitleYahoo": {
+    "message": "Yahoo Search"
+  },
+  "presetTitleNaver": {
+    "message": "Naver Search"
+  },
+  "presetTitleBaidu": {
+    "message": "Baidu Search"
+  },
+  "presetTitleDuckduckgo": {
+    "message": "DuckDuckGo Search"
+  },
   "presetTitleYoutube": {
     "message": "YouTube Search"
   },
