@@ -24,7 +24,7 @@ Embed '%s' in any URL to build instant search shortcuts (for example, 'gh my-rep
 Organize nicknames into hierarchical folders using slashes (such as 'work/dashboard'). Type 'work/' (or even a nested segment such as 'dashboard/') in the popup or open folders from the management dashboard to launch all openable URLs at once in background tabs, protected by a configurable safety tab limit (1-100 tabs).
 
 - Built-in Presets (Search Engines & Bookmarklets)
-Enable 15 popular search shortcuts (Google, Bing, Yahoo, DuckDuckGo, GitHub, YouTube, npm, MDN, and more) and 3 utility bookmarklets (copy Markdown link 'mdlink', copy HTML link 'htmllink', and open in Wayback Machine 'wayback') via checkboxes in Preferences. Only enabled preset IDs are saved, consuming virtually no storage space.
+Enable 15 built-in presets for major search engines and developer reference sites ('%s' dynamic URLs) and 3 utility bookmarklets (copy Markdown link 'mdlink', copy HTML link 'htmllink', and open web archive 'wayback') via checkboxes in Preferences. Only enabled preset IDs are saved, consuming virtually no storage space.
 
 - Bookmarklet Execution
 Register 'javascript:' bookmarklets and execute them safely on the active tab via Chrome's userScripts API without navigating away from the current page.
@@ -87,7 +87,7 @@ URL に '%s' を含めることで、検索クエリを引数として渡せる�
 スラッシュ区切り（例: 'work/dashboard'）でニックネームをフォルダ分類できます。ポップアップで 'work/'（または下位フォルダ名のみの 'dashboard/'）と入力して Enter を押すか、管理画面から配下のブックマークをバックグラウンドタブに一括展開できます。設定可能な安全上限件数（1〜100件）を超える場合は確認プロンプトが表示されます。
 
 ■ 定番プリセット（検索サービス・ブックマークレット）
-設定画面のチェックボックスひとつで、主要な検索サービス 15 種類（Google、Bing、Yahoo!、DuckDuckGo、GitHub、YouTube、npm、MDN などの '%s' 動的 URL）および実用ブックマークレット 3 種類（Markdown リンクコピー 'mdlink'、HTML リンクコピー 'htmllink'、Wayback Machine 表示 'wayback'）をすぐに有効化できます。有効化した ID のみを保存するため、ストレージ容量をほとんど消費しません。
+設定画面のチェックボックスひとつで、主要な検索エンジンや開発者向けサイトに対応した 15 種類の '%s' 動的 URL プリセット、および 3 種類の実用ブックマークレット（Markdown リンクコピー 'mdlink'、HTML リンクコピー 'htmllink'、Web アーカイブ表示 'wayback'）をすぐに有効化できます。有効化した ID のみを保存するため、ストレージ容量をほとんど消費しません。
 
 ■ ブックマークレット実行対応
 'javascript:' で始まるブックマークレットを登録し、ページ遷移を行わずに現在のアクティブタブ上で直接スクリプトを実行できます（Chrome 135 以降の userScripts API を利用）。
