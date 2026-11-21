@@ -15,13 +15,16 @@ Nickmark is a keyboard-centric Chrome extension built for engineers and power us
 
 [ 🚀 CORE FEATURES ]
 - Command Palette Launcher
-Launch the search and command palette from anywhere using Alt+Shift+D (Option+Shift+D on macOS). Navigate results with arrow keys or Ctrl+N / Ctrl+P, autocomplete with Tab, and choose how tabs open (Enter for current tab, Cmd/Ctrl/Alt+Enter for a new foreground tab, Shift+Enter for a background tab).
+Launch the search and command palette from anywhere using Alt+Shift+D (Option+Shift+D on macOS). Navigate results with arrow keys or Ctrl+N / Ctrl+P, autocomplete with Tab, and choose how tabs open (Enter for current tab, Cmd/Ctrl/Alt+Enter for a new foreground tab, Shift+Enter for a background tab). Default tab behavior can also be customized in Preferences.
 
 - Dynamic URLs (%s Placeholders)
 Embed '%s' in any URL to build instant search shortcuts (for example, 'gh my-repo' in the popup). Optional default values are used when no query is provided, or the site's origin is opened when omitted.
 
 - Folder Organization & Batch Open
-Organize nicknames into hierarchical folders using slashes (such as 'work/dashboard'). Open all openable URLs under a folder at once with ':open work/' or from the management dashboard, protected by a configurable safety tab limit (1-100 tabs).
+Organize nicknames into hierarchical folders using slashes (such as 'work/dashboard'). Type 'work/' (or even a nested segment such as 'dashboard/') in the popup or open folders from the management dashboard to launch all openable URLs at once in background tabs, protected by a configurable safety tab limit (1-100 tabs).
+
+- Built-in Presets (Search Engines & Bookmarklets)
+Enable 15 popular search shortcuts (Google, Bing, Yahoo, DuckDuckGo, GitHub, YouTube, npm, MDN, and more) and 3 utility bookmarklets (copy Markdown link 'mdlink', copy HTML link 'htmllink', and open in Wayback Machine 'wayback') via checkboxes in Preferences. Only enabled preset IDs are saved, consuming virtually no storage space.
 
 - Bookmarklet Execution
 Register 'javascript:' bookmarklets and execute them safely on the active tab via Chrome's userScripts API without navigating away from the current page.
@@ -35,27 +38,26 @@ Uses an exponential decay scoring algorithm combined with pinning support. Frequ
 - Google Account Sync & Local Storage
 Switch between fast unlimited local storage and Chrome account synchronization (up to 100KB with automatic chunk splitting and a conflict-resolution dialog).
 
-[ COMMAND LIST ]
-- :add [nickname] [url] [title] (alias: :a) : Register the current tab, a specific URL, or a bookmarklet.
+[ COMMAND LIST (prefix with ':' or ';') ]
+- :add [nickname] [url] [title] (alias: :a) : Register the current tab, a specific URL, or a bookmarklet. Notifies you if the current page is already bookmarked.
 - :addall [nickname] (alias: :aa) : Register all open tabs in the current window.
-- :open [nickname or folder/] (alias: :o) : Open all associated URLs or folder entries in background tabs.
 - :rm [nickname] [url] : Remove a nickname or a specific URL entry.
 - :ls : Open the bookmark management dashboard.
-- :prefs : Open preferences (sync, language, history search, batch open limit).
+- :prefs : Open preferences (sync, language, tab behavior, history search, presets, batch open limit).
 - :help : Open the online documentation.
 
 [ 💡 HOW TO USE ]
 1. Open a frequently visited site or web tool.
 2. Press Alt+Shift+D (Option+Shift+D on macOS) to open the Nickmark command palette.
-3. Type ':add gh' and press Enter to save the active tab under the nickname 'gh'.
+3. Type ':add gh' (or ';add gh') and press Enter to save the active tab under the nickname 'gh'.
 4. Open the palette again, type 'gh', and press Enter to navigate.
-5. For folder workflows, register entries like 'work/mail' and 'work/tasks', then run ':open work/' to launch the full workspace.
+5. For folder workflows, register entries like 'work/mail' and 'work/tasks', then type 'work/' and press Enter to launch the full workspace.
 
 [ DEVELOPER & POWER USER FEATURES ]
-- Inline Table Editing Dashboard: Click any nickname, title, or URL cell directly in the management table to edit inline via textarea; changes save automatically on focus-out or Enter and cancel on Escape. Fixed column widths and single-line URL truncation keep large lists readable.
-- JSON Editor & Backup Export: Bulk edit all bookmarks in a built-in JSON editor or export backups as JSON files at any time.
-- Multi-Language Interface: Switch between English and Japanese instantly in Preferences without reloading the extension.
-- Non-Intrusive Feedback: Subtle in-page toast notifications confirm actions in the active tab or inside the popup without breaking focus.
+- Inline Table Editing, Filtering & Sorting: Click any nickname, title, or URL cell directly in the management table to edit inline via textarea; changes save automatically on focus-out or Enter and cancel on Escape. Filter per column with space-separated AND matching, sort by default order, last used date, or decay score, and rename or delete folders in bulk.
+- Import, JSON Editor & Backup Export: Import from Nickmark JSON or Chrome Bookmarks HTML (with preview, optional destination folder, and merge/overwrite modes), bulk edit in the built-in JSON editor, or export JSON backups at any time.
+- Customizable Tab Behavior & Multi-Language UI: Optionally open items in a new tab by default (with an exception to reuse the current tab when on a New Tab page), and switch between English and Japanese instantly without reloading.
+- Non-Intrusive Feedback & Contextual Tips: Operation results and duplicate-bookmark notices appear directly inside the popup without forced tab switching, alongside subtle in-page toast notifications and clickable usage tips when the search field is empty.
 
 [ 🔒 PRIVACY FIRST ]
 - Local & Personal Sync Only: Bookmark data is stored exclusively in your browser's local storage or your personal Chrome sync storage. No external servers are used, and no telemetry or browsing data is collected.
@@ -76,13 +78,16 @@ Nickmark は、マウス移動を最小限にしたいエンジニアやパワ�
 
 【 🚀 主な機能 】
 ■ コマンドパレット型ポップアップランチャー
-キーボードショートカット（Windows/Linux: Alt+Shift+D、macOS: Option+Shift+D）でどこからでもランチャーを起動できます。上下キーや Ctrl+N / Ctrl+P で候補を選択し、Tab で補完できます。Enter で現在のタブに遷移し、Cmd/Ctrl/Alt+Enter で新規フォアグラウンドタブ、Shift+Enter でバックグラウンドタブとして開きます。
+キーボードショートカット（Windows/Linux: Alt+Shift+D、macOS: Option+Shift+D）でどこからでもランチャーを起動できます。上下キーや Ctrl+N / Ctrl+P で候補を選択し、Tab で補完できます。Enter で現在のタブに遷移し、Cmd/Ctrl/Alt+Enter で新規フォアグラウンドタブ、Shift+Enter でバックグラウンドタブとして開きます（設定画面からデフォルトを別タブ開きに変更することも可能です）。
 
 ■ 動的 URL（%s プレースホルダー）とデフォルト値
 URL に '%s' を含めることで、検索クエリを引数として渡せる動的ショートカットを作成できます（例: 'gh 検索語'）。引数省略時に使用するデフォルト値の指定や、未設定時のトップページ遷移にも対応しています。
 
 ■ フォルダ階層管理と一括オープン
-スラッシュ区切り（例: 'work/dashboard'）でニックネームをフォルダ分類できます。':open work/' で配下のブックマークをバックグラウンドタブに一括展開でき、設定可能な安全上限件数（1〜100件）を超える場合は確認プロンプトが表示されます。
+スラッシュ区切り（例: 'work/dashboard'）でニックネームをフォルダ分類できます。ポップアップで 'work/'（または下位フォルダ名のみの 'dashboard/'）と入力して Enter を押すか、管理画面から配下のブックマークをバックグラウンドタブに一括展開できます。設定可能な安全上限件数（1〜100件）を超える場合は確認プロンプトが表示されます。
+
+■ 定番プリセット（検索サービス・ブックマークレット）
+設定画面のチェックボックスひとつで、主要な検索サービス 15 種類（Google、Bing、Yahoo!、DuckDuckGo、GitHub、YouTube、npm、MDN などの '%s' 動的 URL）および実用ブックマークレット 3 種類（Markdown リンクコピー 'mdlink'、HTML リンクコピー 'htmllink'、Wayback Machine 表示 'wayback'）をすぐに有効化できます。有効化した ID のみを保存するため、ストレージ容量をほとんど消費しません。
 
 ■ ブックマークレット実行対応
 'javascript:' で始まるブックマークレットを登録し、ページ遷移を行わずに現在のアクティブタブ上で直接スクリプトを実行できます（Chrome 135 以降の userScripts API を利用）。
@@ -96,29 +101,30 @@ URL に '%s' を含めることで、検索クエリを引数として渡せる�
 ■ Google アカウント同期と大容量ローカル保存
 デバイス固有の高速・大容量ローカルストレージと、複数デバイス間で共有できる Chrome 同期ストレージ（100KB 上限・自動チャンク分割・移行時の競合解決ダイアログ付き）を切り替えて利用できます。
 
-【 コマンド一覧 】
-・ :add [ニックネーム] [URL] [タイトル] (エイリアス: :a) : 現在のタブ、指定 URL、またはブックマークレットを登録。
+【 コマンド一覧（先頭に ':' または ';' を入力） 】
+・ :add [ニックネーム] [URL] [タイトル] (エイリアス: :a) : 現在のタブ、指定 URL、またはブックマークレットを登録。現在のタブが登録済みの場合はお知らせ通知を表示。
 ・ :addall [ニックネーム] (エイリアス: :aa) : 現在のウィンドウで開いている全タブを一括登録。
-・ :open [ニックネーム または フォルダ/] (エイリアス: :o) : 紐づく URL やフォルダ配下をバックグラウンドタブで一括オープン。
 ・ :rm [ニックネーム] [URL] : ニックネームまたは特定の URL を削除。
 ・ :ls : ブックマーク一覧（管理画面）を開く。
-・ :prefs : 設定画面（同期・言語・履歴検索・一括オープン上限）を開く。
+・ :prefs : 設定画面（同期・言語・タブ開き方・履歴検索・プリセット・一括オープン上限）を開く。
 ・ :help : 公式ドキュメントを開く。
 
 【 💡 使い方 】
 1. よく利用する Web ページを開きます。
 2. ショートカット（Alt+Shift+D / Option+Shift+D）でコマンドパレットを開きます。
-3. ':add gh' と入力して Enter を押すと、現在のタブが 'gh' として登録されます。
+3. ':add gh'（または ';add gh'）と入力して Enter を押すと、現在のタブが 'gh' として登録されます。
 4. 次回からはパレットを開いて 'gh' と入力し、Enter を押すことで目的のページへ遷移します。
-5. 'work/mail' や 'work/tasks' のようにスラッシュ付きで登録しておくと、':open work/' でまとめて開くことができます。
+5. 'work/mail' や 'work/tasks' のようにスラッシュ付きで登録しておくと、'work/' と入力して Enter を押すだけでまとめて開くことができます。
 
 【 開発者・パワーユーザー向け機能 】
-■ 一覧画面でのインライン編集と固定列幅レイアウト
-管理画面の一覧テーブルは各列の幅が固定されており、長い URL も 1 行で「...」省略表示（ホバーで全文表示）されます。各セルをクリックするとその場でテキストエリアに切り替わり、フォーカスアウトまたは Enter で即座に保存、Escape でキャンセルできます。
-■ JSON エディタとバックアップ出力
-内蔵の JSON エディタによる一括編集や、JSON ファイルとしてのバックアップエクスポートに対応しています。
-■ 即時反映される日英多言語対応
-設定画面から日本語・英語を切り替えられ、画面を再読み込みせずに即座に反映されます。
+■ 一覧画面でのインライン編集・列フィルター・並び替え
+管理画面の一覧テーブルは固定列幅かつ 1 行省略表示（ホバーで全文表示）で見やすさを保ち、各セルをクリックするだけでインライン編集（フォーカスアウトまたは Enter で保存、Escape でキャンセル）が可能です。さらに列ヘッダーごとのリアルタイム AND フィルター、最終使用日時やスコア順の並び替え、フォルダの一括リネーム・削除にも対応しています。
+■ JSON / Chrome ブックマーク HTML インポート＆バックアップ
+内蔵の JSON エディタによる一括編集やバックアップエクスポートに加え、Nickmark JSON や Chrome 標準のブックマーク HTML からのインポート（事前プレビュー確認、取り込み先フォルダ指定、マージ／上書き選択対応）を行えます。
+■ 柔軟なタブ遷移設定と即時多言語切替
+設定画面から「デフォルトで別タブで開く」および「“新しいタブ”のときはそのタブで開く」オプションを設定できます。日本語・英語の切り替えも画面を再読み込みせずに即座に反映されます。
+■ 邪魔にならないフィードバックと活用ヒント
+登録・削除・エラー通知などはすべてポップアップ内で完結表示され、特殊ページ上でも管理画面へ強制遷移しません。空欄時の活用ヒント（Tips）表示や、リンクコピー時の控えめなページ内トースト通知も備えています。
 
 【 🔒 プライバシーとデータ管理 】
 ■ 外部サーバーへの送信なし
