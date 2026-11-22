@@ -682,7 +682,8 @@ import {
   FilterableColumnField,
   ImportApplyMode,
   ListSortOption,
-  ParsedImportResult
+  ParsedImportResult,
+  THEME_COLOR_STORAGE_KEY
 } from './shared/types';
 import {
   applyBaseFolderPrefix,
@@ -715,12 +716,14 @@ import {
   getListSortOrder,
   getMaxBatchOpenTabs,
   getSaveErrorMessage,
+  getThemeColor,
   loadBookmarksData,
   openFolderUrls,
   renameFolder,
   saveBookmarksData,
   setListSortOrder
 } from './shared/storage';
+import { applyThemeColor } from './shared/theme';
 import { filterNicknameSuggestions } from './shared/search';
 import { initI18n, t } from './i18n';
 
@@ -1495,8 +1498,27 @@ const checkAndConsumePendingToast = async (): Promise<void> => {
   }
 };
 
+/**
+ * 他タブや同期経由でテーマカラーまたは同期設定が変更された際に一覧画面のテーマを即座に同期します。
+ * @param changes - 変更されたストレージキーの辞書
+ * @returns 処理完了を示す Promise
+ */
+const handleListStorageChanged = async (
+  changes: { [key: string]: chrome.storage.StorageChange }
+): Promise<void> => {
+  if (changes[THEME_COLOR_STORAGE_KEY] || changes.isSyncEnabled) {
+    const nextThemeColor = await getThemeColor(true);
+    applyThemeColor(nextThemeColor);
+  }
+};
+
 onMounted(async () => {
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(handleListStorageChanged);
+  }
   await initI18n();
+  const initialThemeColor = await getThemeColor(true);
+  applyThemeColor(initialThemeColor);
   title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   refreshUserScriptsStatus();
   selectedSortOrder.value = await getListSortOrder();
@@ -1539,6 +1561,9 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.removeListener(handleListStorageChanged);
+  }
   window.removeEventListener('focus', onWindowFocusOrVisible);
   document.removeEventListener('visibilitychange', onWindowFocusOrVisible);
 });

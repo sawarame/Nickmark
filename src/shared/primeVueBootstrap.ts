@@ -2,6 +2,8 @@ import { Component, createApp, Plugin } from 'vue';
 import PrimeVue from 'primevue/config';
 import { definePreset } from '@primeuix/themes';
 import Tooltip from 'primevue/tooltip';
+import { ThemeColor } from './types';
+import { buildPrimaryPalette, getCachedThemeColorSync } from './theme';
 
 /**
  * PrimeVue ルートアプリケーションの初期化オプション
@@ -14,14 +16,20 @@ export interface PrimeVueRootBootstrapOptions {
 }
 
 /**
- * 指定されたベースプリセットに対して、ライト／ダークモード双方のページ背景（`--p-page-background`）を
- * 拡張した Nickmark 共通テーマプリセットを生成します。
+ * 指定されたベースプリセットに対して、選択済みテーマカラーのプライマリパレットおよび
+ * ライト／ダークモード双方のページ背景（`--p-page-background`）を拡張した Nickmark 共通テーマプリセットを生成します。
  * @param basePreset - 拡張元となる PrimeVue テーマプリセット（Aura またはそのサブセット）
+ * @param initialColor - 初期適用するテーマカラー（省略時は `localStorage` 同期キャッシュから復元）
  * @returns Nickmark 向けに拡張されたテーマプリセット
  */
-export function createNickmarkPreset<T extends Parameters<typeof definePreset>[0]>(basePreset: T) {
+export function createNickmarkPreset<T extends Parameters<typeof definePreset>[0]>(
+  basePreset: T,
+  initialColor?: ThemeColor
+) {
+  const primaryPalette = buildPrimaryPalette(initialColor ?? getCachedThemeColorSync());
   return definePreset(basePreset, {
     semantic: {
+      primary: primaryPalette,
       colorScheme: {
         light: {
           page: {

@@ -228,6 +228,7 @@ import {
   PresetId,
   RuntimeMessage,
   TabDisposition,
+  THEME_COLOR_STORAGE_KEY,
   TipEntry
 } from './shared/types';
 import {
@@ -254,11 +255,13 @@ import {
   getMaxBatchOpenTabs,
   getOpenInCurrentIfNewTab,
   getOpenInNewTab,
+  getThemeColor,
   loadBookmarksData,
   loadPopupInitialData,
   openFolderUrls,
   updateScore
 } from './shared/storage';
+import { applyThemeColor } from './shared/theme';
 import { formatTipMessage, pickRandomTipIndex, POPUP_TIPS } from './shared/tips';
 import { showInPageToastOnly } from './shared/toast';
 import { isChromeNewTab, isCommandPrefixQuery, isRestrictedTabUrl } from './shared/url';
@@ -1182,7 +1185,7 @@ const handleGlobalKeyDown = (event: KeyboardEvent): void => {
 };
 
 /**
- * ストレージ変更イベントに応じて言語設定、有効化プリセット、別タブ開き方設定をリアクティブに同期します。
+ * ストレージ変更イベントに応じて言語設定、有効化プリセット、別タブ開き方設定、テーマカラーをリアクティブに同期します。
  * @param changes - 変更されたストレージキーの辞書
  * @returns 処理完了を示す Promise
  */
@@ -1202,6 +1205,10 @@ const handlePopupStorageChanged = async (
   }
   if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY] || changes.isSyncEnabled) {
     openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
+  }
+  if (changes[THEME_COLOR_STORAGE_KEY] || changes.isSyncEnabled) {
+    const nextThemeColor = await getThemeColor(true);
+    applyThemeColor(nextThemeColor);
   }
 };
 
@@ -1229,6 +1236,7 @@ onMounted(async (): Promise<void> => {
       enabledPresetIds.value = initial.enabledPresetIds;
       openInNewTabByDefault.value = initial.openInNewTab;
       openInCurrentIfNewTab.value = initial.openInCurrentIfNewTab;
+      applyThemeColor(initial.themeColor);
 
       // 取得済みの言語設定と同期キャッシュを突き合わせ、必要な場合のみ辞書読込と再描画を行う
       // 履歴検索が OFF の場合は permissions.contains の呼び出し自体を省く

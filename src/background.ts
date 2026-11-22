@@ -4,7 +4,8 @@ import {
   OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   RuntimeMessage,
-  SYNC_KEY_PREFIX
+  SYNC_KEY_PREFIX,
+  THEME_COLOR_STORAGE_KEY
 } from './shared/types';
 import { getHelpUrl } from './shared/url';
 import {
@@ -12,6 +13,7 @@ import {
   clearEnabledPresetsCache,
   clearOpenInCurrentIfNewTabCache,
   clearOpenInNewTabCache,
+  clearThemeColorCache,
   getSyncEnabled,
   loadBookmarksData,
   updateEnabledPresetsCache,
@@ -20,7 +22,8 @@ import {
   updateMaxBatchOpenTabsCache,
   updateOpenInCurrentIfNewTabCache,
   updateOpenInNewTabCache,
-  updateSyncEnabledCache
+  updateSyncEnabledCache,
+  updateThemeColorCache
 } from './shared/storage';
 import { executeBookmarklet } from './shared/commands';
 
@@ -31,6 +34,7 @@ export * from './shared/toast';
 export * from './shared/listSort';
 export * from './shared/bookmarkImport';
 export * from './shared/presets';
+export * from './shared/theme';
 export * from './shared/storage';
 export * from './shared/search';
 export * from './shared/commands';
@@ -59,6 +63,7 @@ if (typeof window === 'undefined') {
         clearEnabledPresetsCache();
         clearOpenInNewTabCache();
         clearOpenInCurrentIfNewTabCache();
+        clearThemeColorCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -84,6 +89,9 @@ if (typeof window === 'undefined') {
       }
       if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]) {
         updateOpenInCurrentIfNewTabCache(changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY].newValue);
+      }
+      if (changes[THEME_COLOR_STORAGE_KEY]) {
+        updateThemeColorCache(changes[THEME_COLOR_STORAGE_KEY].newValue);
       }
     }
   });
