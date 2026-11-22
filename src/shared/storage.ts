@@ -9,10 +9,13 @@ import {
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   PopupInitialStorageData,
   PresetId,
-  SYNC_KEY_PREFIX
+  SYNC_KEY_PREFIX,
+  THEME_COLOR_STORAGE_KEY,
+  ThemeColor
 } from './types';
 import { parseValidListSortOption } from './listSort';
 import { mergeBookmarksWithPresets, normalizeEnabledPresetIds } from './presets';
+import { parseValidThemeColor, saveCachedThemeColorSync } from './theme';
 import {
   isBookmarkletUrl,
   isDynamicUrl,
@@ -496,6 +499,104 @@ export async function setOpenInCurrentIfNewTab(enabled: boolean): Promise<boolea
   return openInCurrentIfNewTabSetting.set(enabled);
 }
 
+let themeColorCache: ThemeColor | null = null;
+let loadThemeColorPromise: Promise<ThemeColor> | null = null;
+
+/**
+ * メモリ上に保持されているテーマカラーキャッシュおよび読み込みプロミスを破棄します。
+ * @returns なし
+ */
+export function clearThemeColorCache(): void {
+  themeColorCache = null;
+  loadThemeColorPromise = null;
+}
+
+/**
+ * テーマカラーのメモリキャッシュを外部（storage.onChanged リスナー等）から更新します。
+ * @param value - 更新後の設定値
+ * @returns なし
+ */
+export function updateThemeColorCache(value: unknown): void {
+  const normalized = parseValidThemeColor(value);
+  themeColorCache = normalized;
+  loadThemeColorPromise = null;
+  saveCachedThemeColorSync(normalized);
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）からテーマカラー設定を読み込みます。
+ * @param area - 読み込み元のストレージ領域（'local' または 'sync'）
+ * @returns 正規化された `ThemeColor`（未設定・不正値時はデフォルト `'emerald'`）
+ */
+export async function loadThemeColorFromStorage(area: 'local' | 'sync'): Promise<ThemeColor> {
+  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+  const data = await storageArea.get(THEME_COLOR_STORAGE_KEY);
+  return parseValidThemeColor(data[THEME_COLOR_STORAGE_KEY]);
+}
+
+/**
+ * 指定されたストレージ領域（local または sync）にテーマカラー設定を保存します。
+ * @param area - 保存先のストレージ領域（'local' または 'sync'）
+ * @param color - 保存するテーマカラー識別子
+ * @returns 正規化されて保存された `ThemeColor`
+ */
+export async function saveThemeColorToStorage(
+  area: 'local' | 'sync',
+  color: ThemeColor
+): Promise<ThemeColor> {
+  const normalized = parseValidThemeColor(color);
+  const storageArea = area === 'sync' ? chrome.storage.sync : chrome.storage.local;
+  await storageArea.set({ [THEME_COLOR_STORAGE_KEY]: normalized });
+  return normalized;
+}
+
+/**
+ * 現在設定されているテーマカラーを取得します。
+ * Google アカウント同期が ON の場合は sync ストレージ、OFF の場合は local ストレージから取得し、メモリにキャッシュします。
+ * @param forceRefresh - true の場合、キャッシュを破棄してストレージから再読み込みします
+ * @returns 正規化された `ThemeColor`
+ */
+export async function getThemeColor(forceRefresh: boolean = false): Promise<ThemeColor> {
+  if (forceRefresh) {
+    clearThemeColorCache();
+  }
+  if (themeColorCache !== null) return themeColorCache;
+  if (loadThemeColorPromise) return loadThemeColorPromise;
+
+  loadThemeColorPromise = (async () => {
+    try {
+      const isSync = await getSyncEnabled();
+      const loaded = await loadThemeColorFromStorage(isSync ? 'sync' : 'local');
+      themeColorCache = loaded;
+      saveCachedThemeColorSync(loaded);
+      return loaded;
+    } finally {
+      loadThemeColorPromise = null;
+    }
+  })();
+
+  return loadThemeColorPromise;
+}
+
+/**
+ * テーマカラー設定を保存します。
+ * Google アカウント同期が ON の場合は sync と local の双方に保存し、OFF の場合は local に保存します。
+ * @param color - 保存するテーマカラー識別子
+ * @returns 正規化されて保存された `ThemeColor`
+ */
+export async function setThemeColor(color: ThemeColor): Promise<ThemeColor> {
+  const normalized = parseValidThemeColor(color);
+  const isSync = await getSyncEnabled();
+  if (isSync) {
+    await saveThemeColorToStorage('sync', normalized);
+  }
+  await saveThemeColorToStorage('local', normalized);
+  themeColorCache = normalized;
+  loadThemeColorPromise = null;
+  saveCachedThemeColorSync(normalized);
+  return normalized;
+}
+
 /**
  * 新規ブックマークエントリオブジェクトを生成します。
  * @param url - 登録する URL またはブックマークレット
@@ -737,7 +838,8 @@ export async function loadPopupInitialData(): Promise<PopupInitialStorageData> {
     'bookmarks',
     ENABLED_PRESETS_STORAGE_KEY,
     OPEN_IN_NEW_TAB_STORAGE_KEY,
-    OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY
+    OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
+    THEME_COLOR_STORAGE_KEY
   ]);
 
   const isSync = !!localData.isSyncEnabled;
@@ -775,6 +877,9 @@ export async function loadPopupInitialData(): Promise<PopupInitialStorageData> {
   const openInCurrentIfNewTab = Boolean(sourceAreaData[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]);
   openInCurrentIfNewTabSetting.updateCache(openInCurrentIfNewTab);
 
+  const themeColor = parseValidThemeColor(sourceAreaData[THEME_COLOR_STORAGE_KEY]);
+  updateThemeColorCache(themeColor);
+
   return {
     language: typeof localData.language === 'string' ? localData.language : undefined,
     bookmarks,
@@ -782,7 +887,8 @@ export async function loadPopupInitialData(): Promise<PopupInitialStorageData> {
     enabledPresetIds,
     historySearchEnabled,
     openInNewTab,
-    openInCurrentIfNewTab
+    openInCurrentIfNewTab,
+    themeColor
   };
 }
 
@@ -1114,6 +1220,7 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         clearEnabledPresetsCache();
         clearOpenInNewTabCache();
         clearOpenInCurrentIfNewTabCache();
+        clearThemeColorCache();
       }
       if (changes.maxBatchOpenTabs) {
         updateMaxBatchOpenTabsCache(changes.maxBatchOpenTabs.newValue);
@@ -1138,6 +1245,14 @@ if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         ) {
           setting.updateCache(changes[setting.storageKey].newValue);
         }
+      }
+    }
+    if (changes[THEME_COLOR_STORAGE_KEY]) {
+      if (
+        (isSyncEnabledCache === true && area === 'sync') ||
+        (isSyncEnabledCache !== true && area === 'local')
+      ) {
+        updateThemeColorCache(changes[THEME_COLOR_STORAGE_KEY].newValue);
       }
     }
   });

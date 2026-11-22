@@ -686,5 +686,29 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "themeColorTitle": {
+    "message": "Theme Color"
+  },
+  "themeColorDescription": {
+    "message": "Choose the theme color applied to the popup, bookmark list, and preferences."
+  },
+  "themeColorEmerald": {
+    "message": "Green"
+  },
+  "themeColorBlue": {
+    "message": "Blue"
+  },
+  "themeColorSlate": {
+    "message": "Gray"
+  },
+  "themeColorIndigo": {
+    "message": "Indigo"
+  },
+  "themeColorOrange": {
+    "message": "Orange"
+  },
+  "themeColorRose": {
+    "message": "Rose"
   }
 }

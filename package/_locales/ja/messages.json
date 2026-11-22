@@ -686,5 +686,29 @@
     "placeholders": {
       "1": { "content": "$1" }
     }
+  },
+  "themeColorTitle": {
+    "message": "テーマカラー"
+  },
+  "themeColorDescription": {
+    "message": "ポップアップ・ブックマーク一覧・設定画面に適用するテーマカラーを選択します。"
+  },
+  "themeColorEmerald": {
+    "message": "グリーン"
+  },
+  "themeColorBlue": {
+    "message": "ブルー"
+  },
+  "themeColorSlate": {
+    "message": "グレー"
+  },
+  "themeColorIndigo": {
+    "message": "インディゴ"
+  },
+  "themeColorOrange": {
+    "message": "オレンジ"
+  },
+  "themeColorRose": {
+    "message": "ローズ"
   }
 }

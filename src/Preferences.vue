@@ -53,6 +53,44 @@
       </Card>
 
       <Card class="mb-4">
+        <template #title>{{ t('themeColorTitle') || 'Theme Color' }}</template>
+        <template #content>
+          <div class="sync-desc theme-color-intro">
+            {{
+              t('themeColorDescription') ||
+              'Choose the theme color applied to the popup, bookmark list, and preferences.'
+            }}
+          </div>
+          <div
+            class="theme-swatch-grid"
+            role="radiogroup"
+            :aria-label="t('themeColorTitle') || 'Theme Color'"
+          >
+            <button
+              v-for="option in THEME_COLOR_DEFINITIONS"
+              :key="option.id"
+              type="button"
+              role="radio"
+              class="theme-swatch-option"
+              :class="{ 'is-selected': selectedThemeColor === option.id }"
+              :aria-checked="selectedThemeColor === option.id"
+              :disabled="isSavingThemeColor"
+              @click="handleThemeColorSelect(option.id)"
+            >
+              <span
+                class="theme-swatch-dot"
+                :style="{ backgroundColor: option.swatchHex }"
+                aria-hidden="true"
+              >
+                <i v-if="selectedThemeColor === option.id" class="pi pi-check theme-swatch-check"></i>
+              </span>
+              <span class="theme-swatch-label">{{ t(option.labelKey) || option.id }}</span>
+            </button>
+          </div>
+        </template>
+      </Card>
+
+      <Card class="mb-4">
         <template #title>{{ t('maxBatchOpenTabsLabel') || 'Safety limit for batch open tabs' }}</template>
         <template #content>
           <div class="sync-row">
@@ -298,17 +336,25 @@ import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
 import {
   BookmarkEntry,
   DEFAULT_MAX_BATCH_OPEN_TABS,
+  DEFAULT_THEME_COLOR,
   ENABLED_PRESETS_STORAGE_KEY,
   OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY,
   OPEN_IN_NEW_TAB_STORAGE_KEY,
   PresetDefinition,
-  PresetId
+  PresetId,
+  THEME_COLOR_STORAGE_KEY,
+  ThemeColor
 } from './shared/types';
 import {
   PRESET_DEFINITIONS,
   normalizeEnabledPresetIds,
   resolvePresetUrl
 } from './shared/presets';
+import {
+  THEME_COLOR_DEFINITIONS,
+  applyThemeColor,
+  parseValidThemeColor
+} from './shared/theme';
 import {
   getEnabledPresetIds,
   getMaxBatchOpenTabs,
@@ -317,25 +363,31 @@ import {
   getSaveErrorMessage,
   getStorageDataWithTimestamp,
   getSyncEnabled,
+  getThemeColor,
   isOverQuota,
   loadEnabledPresetsFromStorage,
   loadOpenInCurrentIfNewTabFromStorage,
   loadOpenInNewTabFromStorage,
+  loadThemeColorFromStorage,
   saveBookmarksData,
   saveEnabledPresetsToStorage,
   saveOpenInCurrentIfNewTabToStorage,
   saveOpenInNewTabToStorage,
+  saveThemeColorToStorage,
   setEnabledPresetIds,
   setHistorySearchEnabled,
   setMaxBatchOpenTabs,
   setOpenInCurrentIfNewTab,
   setOpenInNewTab,
-  setSyncEnabled
+  setSyncEnabled,
+  setThemeColor
 } from './shared/storage';
 import { getEffectiveHistorySearchEnabled, requestHistoryPermission } from './shared/history';
 
 const toast = useToast();
 const selectedLanguage = ref<Locale>('en');
+const selectedThemeColor = ref<ThemeColor>(DEFAULT_THEME_COLOR);
+const isSavingThemeColor = ref(false);
 const syncEnabled = ref(false);
 const maxBatchOpenTabs = ref<number>(DEFAULT_MAX_BATCH_OPEN_TABS);
 const openInNewTab = ref(false);
@@ -407,8 +459,8 @@ let pendingSaveMaxBatchPromise: Promise<void> | null = null;
 const showMigrationDialog = ref(false);
 const migrationType = ref<'enable' | 'disable'>('enable');
 const migrationMessage = ref('');
-const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean } | null>(null);
-const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean } | null>(null);
+const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean; themeColor: ThemeColor } | null>(null);
+const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean; themeColor: ThemeColor } | null>(null);
 
 const languageOptions = ref([
   { label: 'English', value: 'en' },
@@ -423,6 +475,9 @@ const loadSettings = async (): Promise<void> => {
   await initI18n();
   selectedLanguage.value = getCurrentLocale();
   syncEnabled.value = await getSyncEnabled();
+  const loadedThemeColor = await getThemeColor(true);
+  selectedThemeColor.value = loadedThemeColor;
+  applyThemeColor(loadedThemeColor);
   const loadedLimit = await getMaxBatchOpenTabs();
   maxBatchOpenTabs.value = loadedLimit;
   lastSavedMaxBatchOpenTabs = loadedLimit;
@@ -431,6 +486,43 @@ const loadSettings = async (): Promise<void> => {
   historySearchEnabled.value = await getEffectiveHistorySearchEnabled();
   enabledPresetIds.value = await getEnabledPresetIds(true);
   isLoaded.value = true;
+};
+
+/**
+ * カラースウォッチの選択を捕捉し、テーマカラーを即座にプレビュー反映しつつストレージへ保存します。
+ * 保存に失敗した場合は直前のテーマカラーへロールバックしてエラーを通知します。
+ * @param nextColor - 選択されたテーマカラー識別子
+ * @returns 保存完了を示す Promise
+ */
+const handleThemeColorSelect = async (nextColor: ThemeColor): Promise<void> => {
+  if (isSavingThemeColor.value || selectedThemeColor.value === nextColor) return;
+  const previousColor = selectedThemeColor.value;
+  selectedThemeColor.value = nextColor;
+  applyThemeColor(nextColor);
+  isSavingThemeColor.value = true;
+
+  try {
+    const saved = await setThemeColor(nextColor);
+    selectedThemeColor.value = saved;
+    applyThemeColor(saved);
+    addUniqueToast({
+      severity: 'success',
+      summary: t('saveSuccess') || 'Saved',
+      detail: t('saveSuccess') || 'Saved',
+      life: 2000
+    });
+  } catch (err: unknown) {
+    selectedThemeColor.value = previousColor;
+    applyThemeColor(previousColor);
+    addUniqueToast({
+      severity: 'error',
+      summary: 'Error',
+      detail: getSaveErrorMessage(err, 'Failed to save theme color.'),
+      life: 4000
+    });
+  } finally {
+    isSavingThemeColor.value = false;
+  }
 };
 
 /**
@@ -537,6 +629,11 @@ const handleStorageChanged = (
   }
   if (changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY]) {
     openInCurrentIfNewTab.value = Boolean(changes[OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY].newValue);
+  }
+  if (changes[THEME_COLOR_STORAGE_KEY]) {
+    const nextColor = parseValidThemeColor(changes[THEME_COLOR_STORAGE_KEY].newValue);
+    selectedThemeColor.value = nextColor;
+    applyThemeColor(nextColor);
   }
 };
 
@@ -837,12 +934,13 @@ const saveLanguage = async (): Promise<void> => {
 };
 
 /**
- * 同期設定の更新および必要に応じてブックマーク・プリセット・別タブ開き方設定のデータ保存を行い、失敗時は元の設定へロールバックします。
+ * 同期設定の更新および必要に応じてブックマーク・プリセット・別タブ開き方・テーマカラー設定のデータ保存を行い、失敗時は元の設定へロールバックします。
  * @param targetEnabled - 切り替え後の同期設定（true: 有効、false: 無効）
  * @param bookmarksToSave - 切り替え先にコピー保存するブックマークデータ（省略時は設定変更のみ）
  * @param presetsToSave - 切り替え先にコピー保存するプリセット ID 配列（省略時は移行先既存値を維持）
  * @param openInNewTabToSave - 切り替え先にコピー保存する「デフォルトで別タブで開く」設定（省略時は移行先既存値を維持）
  * @param openInCurrentIfNewTabToSave - 切り替え先にコピー保存する「“新しいタブ”のときはそのタブで開く」設定（省略時は移行先既存値を維持）
+ * @param themeColorToSave - 切り替え先にコピー保存するテーマカラー設定（省略時は移行先既存値を維持）
  * @param successNotice - 成功時のトースト通知設定
  * @param errorSummary - 失敗時のトースト見出し
  * @param fallbackError - 不明エラー時のフォールバック文言
@@ -854,6 +952,7 @@ const applySyncTransition = async (
   presetsToSave: PresetId[] | null,
   openInNewTabToSave: boolean | null,
   openInCurrentIfNewTabToSave: boolean | null,
+  themeColorToSave: ThemeColor | null,
   successNotice: { severity: 'success' | 'info'; summary: string; detail: string },
   errorSummary: string,
   fallbackError: string
@@ -884,10 +983,20 @@ const applySyncTransition = async (
       const cloudOpenInCurrentIfNewTab = await loadOpenInCurrentIfNewTabFromStorage('sync');
       await saveOpenInCurrentIfNewTabToStorage('local', cloudOpenInCurrentIfNewTab);
     }
+    if (themeColorToSave !== null) {
+      await setThemeColor(themeColorToSave);
+    } else if (targetEnabled) {
+      // クラウド側の既存データを採用して同期を有効化した場合は、クラウドのテーマカラー設定をローカルにもミラーする
+      const cloudThemeColor = await loadThemeColorFromStorage('sync');
+      await saveThemeColorToStorage('local', cloudThemeColor);
+    }
     syncEnabled.value = targetEnabled;
     enabledPresetIds.value = await getEnabledPresetIds(true);
     openInNewTab.value = await getOpenInNewTab(true);
     openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
+    const syncedThemeColor = await getThemeColor(true);
+    selectedThemeColor.value = syncedThemeColor;
+    applyThemeColor(syncedThemeColor);
     addUniqueToast({ ...successNotice, life: 3000 });
     return true;
   } catch (err: unknown) {
@@ -895,6 +1004,9 @@ const applySyncTransition = async (
     enabledPresetIds.value = await getEnabledPresetIds(true);
     openInNewTab.value = await getOpenInNewTab(true);
     openInCurrentIfNewTab.value = await getOpenInCurrentIfNewTab(true);
+    const restoredThemeColor = await getThemeColor(true);
+    selectedThemeColor.value = restoredThemeColor;
+    applyThemeColor(restoredThemeColor);
     addUniqueToast({
       severity: 'error',
       summary: errorSummary,
@@ -921,11 +1033,12 @@ const handleToggleRequest = (): void => {
  * @returns 処理完了を示す Promise
  */
 const handleSyncToggle = async (newValue: boolean): Promise<void> => {
-  const [local, localPresets, localOpenInNewTab, localOpenInCurrentIfNewTab] = await Promise.all([
+  const [local, localPresets, localOpenInNewTab, localOpenInCurrentIfNewTab, localThemeColor] = await Promise.all([
     getStorageDataWithTimestamp('local'),
     loadEnabledPresetsFromStorage('local'),
     loadOpenInNewTabFromStorage('local'),
-    loadOpenInCurrentIfNewTabFromStorage('local')
+    loadOpenInCurrentIfNewTabFromStorage('local'),
+    loadThemeColorFromStorage('local')
   ]);
 
   if (newValue) {
@@ -941,17 +1054,19 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       return;
     }
 
-    const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab] = await Promise.all([
+    const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab, syncThemeColor] = await Promise.all([
       getStorageDataWithTimestamp('sync'),
       loadEnabledPresetsFromStorage('sync'),
       loadOpenInNewTabFromStorage('sync'),
-      loadOpenInCurrentIfNewTabFromStorage('sync')
+      loadOpenInCurrentIfNewTabFromStorage('sync'),
+      loadThemeColorFromStorage('sync')
     ]);
     if (
       Object.keys(sync.bookmarks).length > 0 ||
       syncPresets.length > 0 ||
       syncOpenInNewTab ||
-      syncOpenInCurrentIfNewTab
+      syncOpenInCurrentIfNewTab ||
+      syncThemeColor !== DEFAULT_THEME_COLOR
     ) {
       migrationType.value = 'enable';
       migrationMessage.value =
@@ -961,13 +1076,15 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
         ...local,
         presets: localPresets,
         openInNewTab: localOpenInNewTab,
-        openInCurrentIfNewTab: localOpenInCurrentIfNewTab
+        openInCurrentIfNewTab: localOpenInCurrentIfNewTab,
+        themeColor: localThemeColor
       };
       syncInfo.value = {
         ...sync,
         presets: syncPresets,
         openInNewTab: syncOpenInNewTab,
-        openInCurrentIfNewTab: syncOpenInCurrentIfNewTab
+        openInCurrentIfNewTab: syncOpenInCurrentIfNewTab,
+        themeColor: syncThemeColor
       };
       showMigrationDialog.value = true;
       return;
@@ -979,6 +1096,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       localPresets,
       localOpenInNewTab,
       localOpenInCurrentIfNewTab,
+      localThemeColor,
       {
         severity: 'success',
         summary: 'Sync Enabled',
@@ -990,17 +1108,19 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     return;
   }
 
-  const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab] = await Promise.all([
+  const [sync, syncPresets, syncOpenInNewTab, syncOpenInCurrentIfNewTab, syncThemeColor] = await Promise.all([
     getStorageDataWithTimestamp('sync'),
     loadEnabledPresetsFromStorage('sync'),
     loadOpenInNewTabFromStorage('sync'),
-    loadOpenInCurrentIfNewTabFromStorage('sync')
+    loadOpenInCurrentIfNewTabFromStorage('sync'),
+    loadThemeColorFromStorage('sync')
   ]);
   if (
     Object.keys(local.bookmarks).length > 0 ||
     localPresets.length > 0 ||
     localOpenInNewTab ||
-    localOpenInCurrentIfNewTab
+    localOpenInCurrentIfNewTab ||
+    localThemeColor !== DEFAULT_THEME_COLOR
   ) {
     migrationType.value = 'disable';
     migrationMessage.value =
@@ -1010,13 +1130,15 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
       ...local,
       presets: localPresets,
       openInNewTab: localOpenInNewTab,
-      openInCurrentIfNewTab: localOpenInCurrentIfNewTab
+      openInCurrentIfNewTab: localOpenInCurrentIfNewTab,
+      themeColor: localThemeColor
     };
     syncInfo.value = {
       ...sync,
       presets: syncPresets,
       openInNewTab: syncOpenInNewTab,
-      openInCurrentIfNewTab: syncOpenInCurrentIfNewTab
+      openInCurrentIfNewTab: syncOpenInCurrentIfNewTab,
+      themeColor: syncThemeColor
     };
     showMigrationDialog.value = true;
     return;
@@ -1028,6 +1150,7 @@ const handleSyncToggle = async (newValue: boolean): Promise<void> => {
     syncPresets,
     syncOpenInNewTab,
     syncOpenInCurrentIfNewTab,
+    syncThemeColor,
     {
       severity: 'info',
       summary: 'Sync Disabled',
@@ -1056,6 +1179,9 @@ const performMigration = async (): Promise<void> => {
   const sourceOpenInCurrentIfNewTab = isEnabling
     ? localInfo.value?.openInCurrentIfNewTab ?? null
     : syncInfo.value?.openInCurrentIfNewTab ?? null;
+  const sourceThemeColor = isEnabling
+    ? localInfo.value?.themeColor ?? null
+    : syncInfo.value?.themeColor ?? null;
 
   const ok = await applySyncTransition(
     isEnabling,
@@ -1063,6 +1189,7 @@ const performMigration = async (): Promise<void> => {
     sourcePresets,
     sourceOpenInNewTab,
     sourceOpenInCurrentIfNewTab,
+    sourceThemeColor,
     {
       severity: 'success',
       summary: 'Success',
@@ -1088,6 +1215,7 @@ const useExistingSyncData = async (): Promise<void> => {
     null,
     null,
     null,
+    null,
     {
       severity: 'success',
       summary: 'Sync Enabled',
@@ -1106,6 +1234,7 @@ const useExistingSyncData = async (): Promise<void> => {
 const keepExistingLocalData = async (): Promise<void> => {
   await applySyncTransition(
     false,
+    null,
     null,
     null,
     null,
@@ -1439,5 +1568,76 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.theme-color-intro {
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.theme-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.theme-swatch-option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.875rem;
+  border-radius: 8px;
+  border: 1px solid var(--p-content-border-color);
+  background-color: var(--p-content-background);
+  color: var(--p-text-color);
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  text-align: left;
+}
+
+.theme-swatch-option:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--p-primary-color) 45%, var(--p-content-border-color));
+}
+
+.theme-swatch-option:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
+.theme-swatch-option.is-selected {
+  background-color: color-mix(in srgb, var(--p-primary-color) 10%, var(--p-content-background));
+  border-color: var(--p-primary-color);
+  font-weight: 600;
+}
+
+.theme-swatch-option:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.theme-swatch-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.theme-swatch-check {
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.theme-swatch-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

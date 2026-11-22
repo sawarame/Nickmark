@@ -244,6 +244,33 @@ export const OPEN_IN_NEW_TAB_STORAGE_KEY = 'openInNewTab';
 export const OPEN_IN_CURRENT_IF_NEW_TAB_STORAGE_KEY = 'openInCurrentIfNewTab';
 
 /**
+ * 選択可能なテーマカラー識別子のリテラル型
+ */
+export type ThemeColor = 'emerald' | 'blue' | 'slate' | 'indigo' | 'orange' | 'rose';
+
+/**
+ * テーマカラー設定のデフォルト値（従来のグリーン基調）
+ */
+export const DEFAULT_THEME_COLOR: ThemeColor = 'emerald';
+
+/**
+ * テーマカラー設定を保存するストレージキー
+ */
+export const THEME_COLOR_STORAGE_KEY = 'themeColor';
+
+/**
+ * テーマカラー 1 件の静的定義モデル
+ */
+export interface ThemeColorDefinition {
+  /** テーマカラー識別子（PrimeVue Aura プリミティブカラー名に対応） */
+  id: ThemeColor;
+  /** `messages.json` 上のカラー表示名メッセージキー */
+  labelKey: string;
+  /** 設定画面のスウォッチ表示に使用する代表色（500 番トーン） */
+  swatchHex: string;
+}
+
+/**
  * 標準プリセットの種別
  */
 export type PresetCategory = 'dynamic_url' | 'bookmarklet';
@@ -384,4 +411,6 @@ export interface PopupInitialStorageData {
   openInNewTab: boolean;
   /** 新しいタブのときはそのタブで開く設定の有効／無効フラグ */
   openInCurrentIfNewTab: boolean;
+  /** 適用するテーマカラー識別子 */
+  themeColor: ThemeColor;
 }
