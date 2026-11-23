@@ -1187,12 +1187,14 @@ const handleGlobalKeyDown = (event: KeyboardEvent): void => {
 /**
  * ストレージ変更イベントに応じて言語設定、有効化プリセット、別タブ開き方設定、テーマカラーをリアクティブに同期します。
  * @param changes - 変更されたストレージキーの辞書
+ * @param area - 変更が発生したストレージ領域
  * @returns 処理完了を示す Promise
  */
 const handlePopupStorageChanged = async (
-  changes: { [key: string]: chrome.storage.StorageChange }
+  changes: { [key: string]: chrome.storage.StorageChange },
+  area: string
 ): Promise<void> => {
-  if (changes.language) {
+  if (area === 'local' && changes.language) {
     await initI18n(changes.language.newValue ?? null);
     i18nReady.value = true;
     i18nVersion.value += 1;

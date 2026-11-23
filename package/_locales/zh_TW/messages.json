@@ -1,0 +1,717 @@
+{
+  "extensionName": {
+    "message": "Nickmark - 鍵盤優先書籤啟動器"
+  },
+  "extensionDescription": {
+    "message": "透過別名從命令面板快速存取書籤。專為希望減少滑鼠移動的鍵盤優先進階使用者設計的擴充功能。"
+  },
+  "bookmarkAddedMessage": {
+    "message": "已登錄為別名「$1」！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkAllAddedMessage": {
+    "message": "已將 $1 個分頁登錄為別名「$2」！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bookmarkRemovedMessage": {
+    "message": "已刪除別名「$1」。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkUrlRemovedMessage": {
+    "message": "已刪除別名「$1」下的指定 URL。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorMultipleUrlsFound": {
+    "message": "找到多個 URL，請從候選清單中選擇一項。"
+  },
+  "errorUrlNotFound": {
+    "message": "在別名「$1」下找不到指定的 URL。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorNicknameRequired": {
+    "message": "請指定一個別名。"
+  },
+  "errorNicknameNotFound": {
+    "message": "找不到別名「$1」。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "preferencesTitle": {
+    "message": "偏好設定"
+  },
+  "languageSetting": {
+    "message": "介面語言"
+  },
+  "languageAuto": {
+    "message": "跟隨瀏覽器語言（自動）"
+  },
+  "saveSuccess": {
+    "message": "設定已儲存。"
+  },
+  "addBookmarkTitle": {
+    "message": "新增別名"
+  },
+  "saveBtn": {
+    "message": "儲存"
+  },
+  "nicknameLabel": {
+    "message": "別名"
+  },
+  "urlLabel": {
+    "message": "URL"
+  },
+  "titleLabel": {
+    "message": "標題"
+  },
+  "addBtn": {
+    "message": "新增"
+  },
+  "manageNickmarksTitle": {
+    "message": "別名管理"
+  },
+  "exportBtn": {
+    "message": "匯出"
+  },
+  "editJsonBtn": {
+    "message": "以 JSON 編輯"
+  },
+  "isPinnedLabel": {
+    "message": "釘選"
+  },
+  "pinTooltip": {
+    "message": "釘選至頂端"
+  },
+  "unpinTooltip": {
+    "message": "取消釘選"
+  },
+  "actionsLabel": {
+    "message": "操作"
+  },
+  "errorNicknameUrlRequired": {
+    "message": "別名與 URL 為必填欄位。"
+  },
+  "errorUrlExists": {
+    "message": "此別名下已存在相同的 URL。"
+  },
+  "successAdded": {
+    "message": "新增成功。"
+  },
+  "successDeleted": {
+    "message": "刪除成功。"
+  },
+  "successUpdated": {
+    "message": "更新成功。"
+  },
+  "successExported": {
+    "message": "匯出完成"
+  },
+  "successFileDownloaded": {
+    "message": "檔案已成功下載。"
+  },
+  "successJsonUpdated": {
+    "message": "JSON 更新成功。"
+  },
+  "errorInvalidJsonStructure": {
+    "message": "JSON 結構無效，缺少 'bookmarks' 根鍵值。"
+  },
+  "errorInvalidJsonFormat": {
+    "message": "JSON 格式無效。"
+  },
+  "backToListBtn": {
+    "message": "返回清單"
+  },
+  "syncTitle": {
+    "message": "同步"
+  },
+  "enableSyncLabel": {
+    "message": "Google 帳戶同步"
+  },
+  "syncDescription": {
+    "message": "使用 Google 帳戶在多台裝置間同步書籤（上限 100KB）。"
+  },
+  "migrationTitle": {
+    "message": "資料移轉"
+  },
+  "confirmEnableSyncWithData": {
+    "message": "偵測到現有的雲端資料。您想要使用哪一份資料？"
+  },
+  "confirmDisableSyncWithData": {
+    "message": "已存在本機資料。您想要保留哪一份資料？"
+  },
+  "useCloudDataBtn": {
+    "message": "使用雲端資料"
+  },
+  "overwriteCloudBtn": {
+    "message": "覆寫雲端資料"
+  },
+  "overwriteLocalBtn": {
+    "message": "覆寫本機資料"
+  },
+  "keepLocalDataBtn": {
+    "message": "保留本機資料"
+  },
+  "cancelBtn": {
+    "message": "取消"
+  },
+  "errorSyncQuotaExceeded": {
+    "message": "本機資料超過 100KB 上限。請先減少資料量再啟用同步。"
+  },
+  "syncEnabledMessage": {
+    "message": "已啟用同步。"
+  },
+  "syncDisabledMessage": {
+    "message": "已停用同步，資料已複製至本機。"
+  },
+  "syncDisabledMessageOnly": {
+    "message": "已停用同步，保留原有的本機資料。"
+  },
+  "migrationSuccess": {
+    "message": "資料移轉完成。"
+  },
+  "helpMenu": {
+    "message": "說明頁面"
+  },
+  "defaultValueLabel": {
+    "message": "省略查詢參數時的預設值（選填）"
+  },
+  "defaultValuePlaceholder": {
+    "message": "代入 %s 的預設值（留空時將前往網站首頁）"
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "此 URL 已登錄在別名「$1」下。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkTitleUpdatedMessage": {
+    "message": "已更新別名「$1」的標題！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorUserScriptsNotAllowed": {
+    "message": "若要執行書籤小工具，請在擴充功能詳細設定（chrome://extensions）中開啟「允許使用者指令碼」。"
+  },
+  "openExtensionSettingsBtn": {
+    "message": "開啟擴充功能設定"
+  },
+  "errorBookmarkletRestrictedPage": {
+    "message": "無法在此頁面（瀏覽器內部頁面、線上應用程式商店等）執行書籤小工具。"
+  },
+  "errorBookmarkletEmpty": {
+    "message": "書籤小工具程式碼為空。"
+  },
+  "errorBookmarkletExecutionFailed": {
+    "message": "執行書籤小工具失敗：$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popupTitle": {
+    "message": "Nickmark 命令面板"
+  },
+  "popupPlaceholder": {
+    "message": "搜尋別名或輸入 :add / :rm ..."
+  },
+  "popupNoMatches": {
+    "message": "找不到相符的書籤或命令。"
+  },
+  "popupAddEnterPrompt": {
+    "message": "請輸入別名並按 Enter 登錄（例如：:add gh）"
+  },
+  "popupCommandAddHint": {
+    "message": "登錄目前分頁（或 [別名] [URL] [標題]）"
+  },
+  "popupCommandAddUrlHint": {
+    "message": "登錄指定 URL"
+  },
+  "popupCommandAddBookmarkletHint": {
+    "message": "登錄書籤小工具"
+  },
+  "popupAddPreviewTargetLabel": {
+    "message": "目標"
+  },
+  "popupFolderPrefixCompletionHint": {
+    "message": "資料夾前綴"
+  },
+  "popupExistingNicknameCompletionHint": {
+    "message": "現有別名"
+  },
+  "popupCommandAddallHint": {
+    "message": "批次登錄目前視窗的所有分頁"
+  },
+  "popupCommandRmHint": {
+    "message": "刪除別名或指定 URL"
+  },
+  "popupCommandLsHint": {
+    "message": "開啟書籤管理介面"
+  },
+  "popupCommandPrefsHint": {
+    "message": "開啟偏好設定"
+  },
+  "popupCommandHelpHint": {
+    "message": "開啟說明文件"
+  },
+  "popupNoOpenableTabUrl": {
+    "message": "無法從目前分頁取得可登錄的有效 URL。"
+  },
+  "registerBtn": {
+    "message": "儲存"
+  },
+  "closeBtn": {
+    "message": "關閉"
+  },
+  "openOptionsTooltip": {
+    "message": "開啟書籤管理介面"
+  },
+  "openPreferencesTooltip": {
+    "message": "開啟偏好設定"
+  },
+  "bookmarkUpdatedMessage": {
+    "message": "已更新「$1」的標題！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "openAllInFolder": {
+    "message": "📁 開啟資料夾「$1」中的所有書籤（$2 個分頁）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "openFolderSummary": {
+    "message": "📁 $1（批次開啟 $2 個分頁）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "folderFilterLabel": {
+    "message": "資料夾"
+  },
+  "allFoldersOption": {
+    "message": "所有資料夾"
+  },
+  "rootFolderOption": {
+    "message": "未分類（根目錄）"
+  },
+  "openFolderBtn": {
+    "message": "全部開啟"
+  },
+  "renameFolderBtn": {
+    "message": "重新命名資料夾"
+  },
+  "deleteFolderBtn": {
+    "message": "刪除資料夾"
+  },
+  "renameFolderDialogTitle": {
+    "message": "重新命名資料夾"
+  },
+  "newFolderNameLabel": {
+    "message": "新資料夾名稱"
+  },
+  "renameFolderSuccessMessage": {
+    "message": "已將資料夾重新命名為「$1」（共更新 $2 個書籤）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "confirmDeleteFolderTitle": {
+    "message": "確認刪除資料夾"
+  },
+  "confirmDeleteFolderMessage": {
+    "message": "確定要刪除資料夾「$1」下的所有書籤（共 $2 筆）嗎？此操作無法復原。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "deleteFolderSuccessMessage": {
+    "message": "已刪除資料夾「$1」及其下所有書籤。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "maxBatchOpenTabsLabel": {
+    "message": "批次開啟分頁的安全上限"
+  },
+  "maxBatchOpenTabsDescription": {
+    "message": "批次開啟資料夾時自動開啟的最大分頁數量（1-100，預設：20）。超過此上限時將顯示確認提示。"
+  },
+  "confirmBatchOpenTitle": {
+    "message": "確認批次開啟"
+  },
+  "confirmBatchOpenMessage": {
+    "message": "資料夾「$1」包含 $2 個分頁，已超過安全上限（$3 個）。確定要全部開啟嗎？",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" },
+      "3": { "content": "$3" }
+    }
+  },
+  "confirmBatchOpenBtn": {
+    "message": "全部開啟"
+  },
+  "errorBatchOpenZeroUrls": {
+    "message": "資料夾「$1」中沒有可開啟的 URL（僅含書籤小工具或為空）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "historySearchTitle": {
+    "message": "瀏覽紀錄搜尋"
+  },
+  "historySearchLabel": {
+    "message": "在命令面板搜尋中包含瀏覽紀錄"
+  },
+  "historySearchDescription": {
+    "message": "啟用後，在命令面板搜尋時將於書籤候選清單下方顯示相符的瀏覽紀錄（啟用時需授予存取瀏覽紀錄的權限）。"
+  },
+  "historySearchEnabledMessage": {
+    "message": "已啟用瀏覽紀錄搜尋。"
+  },
+  "historySearchDisabledMessage": {
+    "message": "已停用瀏覽紀錄搜尋。"
+  },
+  "historyPermissionDeniedMessage": {
+    "message": "因未授予瀏覽紀錄存取權限，無法啟用此功能。"
+  },
+  "popupHistorySectionTitle": {
+    "message": "瀏覽紀錄"
+  },
+  "popupHistoryTag": {
+    "message": "紀錄"
+  },
+  "deleteBookmarkTooltip": {
+    "message": "刪除"
+  },
+  "popupTipsBadge": {
+    "message": "TIP"
+  },
+  "popupTipsNextHint": {
+    "message": "點擊顯示下一則提示"
+  },
+  "popupTipAddCommand": {
+    "message": "輸入 :add <名稱>（別名 :a）可立即將目前分頁加入書籤。"
+  },
+  "popupTipAddallCommand": {
+    "message": "輸入 :addall <名稱>（別名 :aa）可一次將目前視窗的所有分頁加入書籤。"
+  },
+  "popupTipFolderOpen": {
+    "message": "輸入 資料夾名/ 並按 Enter，即可一次開啟該資料夾下的所有書籤。"
+  },
+  "popupTipDynamicUrl": {
+    "message": "在 URL 中加入 %s 即可透過「別名 搜尋詞」帶入參數搜尋（省略參數時使用預設值或前往首頁）。"
+  },
+  "popupTipTabDisposition": {
+    "message": "按 Shift+Enter 可在背景分頁開啟並保持面板開啟，按 $1+Enter 可於前景新分頁開啟。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "popupTipKeyboardNav": {
+    "message": "使用 ↑ / ↓ 或 Ctrl+N / Ctrl+P 移動候選項目，按 Tab 鍵可將所選別名或命令補全至輸入框。"
+  },
+  "popupTipBookmarklet": {
+    "message": "透過 :add <名稱> javascript:... 登錄書籤小工具，即可從搜尋結果直接於目前分頁執行。"
+  },
+  "popupTipManagementCommands": {
+    "message": "輸入 :ls 管理書籤與資料夾，輸入 :prefs 開啟偏好設定與同步，輸入 :help 開啟說明文件。"
+  },
+  "sortOrderLabel": {
+    "message": "排序"
+  },
+  "sortOrderDefault": {
+    "message": "預設順序"
+  },
+  "sortOrderLastUsedDesc": {
+    "message": "最後使用時間（最新優先）"
+  },
+  "sortOrderLastUsedAsc": {
+    "message": "最後使用時間（最舊優先）"
+  },
+  "sortOrderScoreDesc": {
+    "message": "評分（由高至低）"
+  },
+  "sortOrderScoreAsc": {
+    "message": "評分（由低至高）"
+  },
+  "importBtn": {
+    "message": "匯入"
+  },
+  "importDialogTitle": {
+    "message": "匯入書籤"
+  },
+  "importFileInfoLabel": {
+    "message": "來源檔案"
+  },
+  "importFormatLabel": {
+    "message": "偵測格式"
+  },
+  "importFormatJson": {
+    "message": "Nickmark JSON"
+  },
+  "importFormatChromeHtml": {
+    "message": "Chrome 書籤 HTML"
+  },
+  "importSummaryCount": {
+    "message": "$1 個書籤（$2 個別名）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "importSkippedSummary": {
+    "message": "將略過 $1 筆無法開啟的項目（如瀏覽器內部頁面）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importBaseFolderLabel": {
+    "message": "目標資料夾（選填）"
+  },
+  "importBaseFolderPlaceholder": {
+    "message": "例如：imported（留空則保留原有階層）"
+  },
+  "importModeLabel": {
+    "message": "匯入模式"
+  },
+  "importModeMergeLabel": {
+    "message": "合併（保留現有資料並新增整合）"
+  },
+  "importModeOverwriteLabel": {
+    "message": "覆寫（取代所有現有書籤）"
+  },
+  "importOverwriteWarning": {
+    "message": "執行覆寫將會清除目前登錄的所有 $1 個書籤，並以匯入資料取代。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importExecuteBtn": {
+    "message": "開始匯入"
+  },
+  "successImported": {
+    "message": "匯入完成"
+  },
+  "successImportedDetail": {
+    "message": "已匯入 $1 個書籤（總計：$2 個）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "errorImportEmptyFile": {
+    "message": "所選檔案為空。"
+  },
+  "errorImportNoValidBookmarks": {
+    "message": "找不到可匯入的有效書籤。"
+  },
+  "errorImportInvalidHtml": {
+    "message": "無法解析為有效的書籤 HTML 檔案。"
+  },
+  "errorImportInvalidEntry": {
+    "message": "書籤項目資料格式無效（$1）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "presetsTitle": {
+    "message": "常用預設項目"
+  },
+  "presetsDescription": {
+    "message": "透過核取方塊即可快速啟用常用搜尋服務（%s 動態 URL）與實用書籤小工具。系統僅儲存勾選狀態，幾乎不佔用儲存空間。"
+  },
+  "presetsCategoryDynamicUrl": {
+    "message": "搜尋服務（動態 URL）"
+  },
+  "presetsCategoryBookmarklet": {
+    "message": "書籤小工具"
+  },
+  "presetsSelectAllBtn": {
+    "message": "全選"
+  },
+  "presetsDeselectAllBtn": {
+    "message": "全部取消"
+  },
+  "presetTitleGoogle": {
+    "message": "Google 搜尋"
+  },
+  "presetTitleBing": {
+    "message": "Bing 搜尋"
+  },
+  "presetTitleYahoo": {
+    "message": "Yahoo 搜尋"
+  },
+  "presetTitleNaver": {
+    "message": "Naver 搜尋"
+  },
+  "presetTitleBaidu": {
+    "message": "百度搜尋"
+  },
+  "presetTitleDuckduckgo": {
+    "message": "DuckDuckGo 搜尋"
+  },
+  "presetTitleYoutube": {
+    "message": "YouTube 搜尋"
+  },
+  "presetTitleGithub": {
+    "message": "GitHub 搜尋"
+  },
+  "presetTitleMaps": {
+    "message": "Google 地圖"
+  },
+  "presetTitleTranslate": {
+    "message": "Google 翻譯"
+  },
+  "presetTitleWikipedia": {
+    "message": "維基百科"
+  },
+  "presetTitleAmazon": {
+    "message": "Amazon 搜尋"
+  },
+  "presetTitleX": {
+    "message": "X (Twitter) 搜尋"
+  },
+  "presetTitleNpm": {
+    "message": "npm 搜尋"
+  },
+  "presetTitleMdn": {
+    "message": "MDN 搜尋"
+  },
+  "presetTitleMdlink": {
+    "message": "複製 Markdown 連結"
+  },
+  "presetDescMdlink": {
+    "message": "將目前頁面的 [標題](URL) 複製至剪貼簿"
+  },
+  "presetTitleHtmllink": {
+    "message": "複製 HTML 連結"
+  },
+  "presetDescHtmllink": {
+    "message": "將目前頁面的 <a href=\"URL\">標題</a> 複製至剪貼簿（支援 Teams 等多 MIME 貼上）"
+  },
+  "presetTitleWayback": {
+    "message": "於 Wayback Machine 開啟"
+  },
+  "presetDescWayback": {
+    "message": "以 https://web.archive.org/web/*/ 開啟目前頁面 URL"
+  },
+  "popupTipPresets": {
+    "message": "在偏好設定（:prefs）中只需勾選核取方塊，即可啟用 Google 搜尋（g）或 GitHub 搜尋（gh）等常用預設項目。"
+  },
+  "columnFilterBtnTooltip": {
+    "message": "依$1篩選",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "columnFilterPlaceholder": {
+    "message": "篩選$1...",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "clearColumnFilterTooltip": {
+    "message": "清除篩選"
+  },
+  "openInNewTabTitle": {
+    "message": "於新分頁開啟"
+  },
+  "openInNewTabLabel": {
+    "message": "預設於新分頁開啟"
+  },
+  "openInNewTabDescription": {
+    "message": "啟用後，從命令面板不使用修飾鍵直接開啟書籤或瀏覽紀錄時，將於前景新分頁開啟（Shift+Enter 仍會於背景分頁開啟）。"
+  },
+  "openInCurrentIfNewTabLabel": {
+    "message": "目前為「新分頁」時於該分頁開啟"
+  },
+  "openInCurrentIfNewTabDescription": {
+    "message": "啟用後，當作用中的分頁為瀏覽器新分頁時，不使用修飾鍵開啟書籤或瀏覽紀錄將於該分頁直接開啟（Cmd/Ctrl/Alt+Enter 仍會於新分頁開啟）。"
+  },
+  "presetMdlinkCopiedToast": {
+    "message": "已複製：$1",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorMdlinkCopyFailed": {
+    "message": "複製至剪貼簿失敗。"
+  },
+  "popupAddAlreadyBookmarkedNotice": {
+    "message": "此頁面已加入書籤（別名：$1）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorNicknameForbiddenChars": {
+    "message": "別名包含不允許使用的字元（空白字元、: ; \\ % ? # & = * \" ' ` < > | 等）。"
+  },
+  "errorImportForbiddenNicknameChars": {
+    "message": "別名「$1」包含不允許使用的字元（空白字元、: ; \\ % ? # & = * \" ' ` < > | 等）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "themeColorTitle": {
+    "message": "主題色彩"
+  },
+  "themeColorDescription": {
+    "message": "選擇套用至命令面板、書籤管理介面與偏好設定頁面的主題色彩。"
+  },
+  "themeColorEmerald": {
+    "message": "綠色"
+  },
+  "themeColorBlue": {
+    "message": "藍色"
+  },
+  "themeColorSlate": {
+    "message": "灰色"
+  },
+  "themeColorIndigo": {
+    "message": "靛藍色"
+  },
+  "themeColorOrange": {
+    "message": "橘色"
+  },
+  "themeColorRose": {
+    "message": "玫瑰紅"
+  }
+}

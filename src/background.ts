@@ -52,9 +52,12 @@ if (typeof window === 'undefined') {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area === 'local') {
       if (changes.language) {
-        await initI18n();
+        await initI18n(changes.language.newValue ?? null);
         chrome.contextMenus.update('help-page', {
           title: t('helpMenu')
+        }, () => {
+          // 拡張機能インストール直後などメニュー未作成時の runtime.lastError を無害化する
+          void chrome.runtime.lastError;
         });
       }
       if (changes.isSyncEnabled) {
@@ -107,8 +110,9 @@ if (typeof window === 'undefined') {
   });
 
   // コンテキストメニューのクリックイベント
-  chrome.contextMenus.onClicked.addListener(info => {
+  chrome.contextMenus.onClicked.addListener(async info => {
     if (info.menuItemId === 'help-page') {
+      await initI18n();
       chrome.tabs.create({ url: getHelpUrl(getCurrentLocale()) });
     }
   });

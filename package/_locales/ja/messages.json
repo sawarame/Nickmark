@@ -68,6 +68,9 @@
   "languageSetting": {
     "message": "使用言語"
   },
+  "languageAuto": {
+    "message": "ブラウザの設定に従う（自動）"
+  },
   "saveSuccess": {
     "message": "設定を保存しました。"
   },

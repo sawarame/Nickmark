@@ -1,3 +1,5 @@
+import type { Locale } from '../i18n';
+
 /**
  * ブックマークエントリの型定義
  */
@@ -312,10 +314,10 @@ export interface PresetDefinition {
   titleKey: string;
   /** `messages.json` 上の補足説明メッセージキー（主にブックマークレットの内容表示用） */
   descriptionKey?: string;
-  /** デフォルト（日本語設定時）の URL または `javascript:` コード */
-  urlJa: string;
-  /** 英語設定時の URL（言語により検索先ドメインが異なる `wiki` 等で指定） */
-  urlEn?: string;
+  /** デフォルトの URL または `javascript:` コード */
+  defaultUrl: string;
+  /** ロケールごとの個別 URL マップ（言語により検索先ドメインが異なる `wiki` / `y` 等で指定） */
+  localeUrls?: Partial<Record<Locale, string>>;
 }
 
 /**
