@@ -68,6 +68,9 @@
   "languageSetting": {
     "message": "Language"
   },
+  "languageAuto": {
+    "message": "Follow browser language (Auto)"
+  },
   "saveSuccess": {
     "message": "Settings saved successfully."
   },

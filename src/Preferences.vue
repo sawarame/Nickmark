@@ -332,7 +332,15 @@ import InputNumber, { InputNumberInputEvent } from 'primevue/inputnumber';
 import Dialog from 'primevue/dialog';
 import Toast, { ToastEvent, ToastMessageOptions } from 'primevue/toast';
 
-import { initI18n, t, setLocale, getCurrentLocale, Locale } from './i18n';
+import {
+  initI18n,
+  t,
+  setLocale,
+  getCurrentLocale,
+  getLanguageSetting,
+  normalizeLanguageSetting,
+  LanguageSetting
+} from './i18n';
 import {
   BookmarkEntry,
   DEFAULT_MAX_BATCH_OPEN_TABS,
@@ -385,7 +393,7 @@ import {
 import { getEffectiveHistorySearchEnabled, requestHistoryPermission } from './shared/history';
 
 const toast = useToast();
-const selectedLanguage = ref<Locale>('en');
+const selectedLanguage = ref<LanguageSetting>('auto');
 const selectedThemeColor = ref<ThemeColor>(DEFAULT_THEME_COLOR);
 const isSavingThemeColor = ref(false);
 const syncEnabled = ref(false);
@@ -462,10 +470,23 @@ const migrationMessage = ref('');
 const localInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean; themeColor: ThemeColor } | null>(null);
 const syncInfo = ref<{ bookmarks: Record<string, BookmarkEntry[]>; lastUpdated: number; presets: PresetId[]; openInNewTab: boolean; openInCurrentIfNewTab: boolean; themeColor: ThemeColor } | null>(null);
 
-const languageOptions = ref([
-  { label: 'English', value: 'en' },
-  { label: '日本語', value: 'ja' }
-]);
+/**
+ * 言語選択ドロップダウンに表示する選択肢一覧を算出します。
+ * 「ブラウザの設定に従う（自動）」は現在の表示言語でローカライズし、
+ * 各言語名は読めない言語へ切り替えても戻せるよう母語表記とします。
+ * @returns 言語選択肢配列
+ */
+const languageOptions = computed((): Array<{ label: string; value: LanguageSetting }> => {
+  void renderKey.value;
+  return [
+    { label: t('languageAuto') || 'Follow browser language (Auto)', value: 'auto' },
+    { label: 'English', value: 'en' },
+    { label: '日本語', value: 'ja' },
+    { label: '简体中文', value: 'zh_CN' },
+    { label: '繁體中文', value: 'zh_TW' },
+    { label: '한국어', value: 'ko' }
+  ];
+});
 
 /**
  * 設定画面の初期値をストレージから読み込みます。
@@ -473,7 +494,7 @@ const languageOptions = ref([
  */
 const loadSettings = async (): Promise<void> => {
   await initI18n();
-  selectedLanguage.value = getCurrentLocale();
+  selectedLanguage.value = getLanguageSetting();
   syncEnabled.value = await getSyncEnabled();
   const loadedThemeColor = await getThemeColor(true);
   selectedThemeColor.value = loadedThemeColor;
@@ -531,10 +552,11 @@ const handleThemeColorSelect = async (nextColor: ThemeColor): Promise<void> => {
  * @returns 表示用のプレビュー文字列
  */
 const getPresetPreviewText = (preset: PresetDefinition): string => {
+  const activeLocale = getCurrentLocale();
   if (preset.descriptionKey) {
-    return t(preset.descriptionKey) || resolvePresetUrl(preset, selectedLanguage.value);
+    return t(preset.descriptionKey) || resolvePresetUrl(preset, activeLocale);
   }
-  return resolvePresetUrl(preset, selectedLanguage.value);
+  return resolvePresetUrl(preset, activeLocale);
 };
 
 /**
@@ -606,15 +628,24 @@ const deselectAllPresets = async (): Promise<void> => {
 };
 
 /**
- * 他タブやバックグラウンドで同期対象の設定（プリセット・別タブ開き方）が変更された際に設定画面の表示を同期します。
+ * 他タブやバックグラウンドで言語設定・同期対象の設定（プリセット・別タブ開き方・テーマカラー）が変更された際に設定画面の表示を同期します。
  * @param changes - 変更されたストレージキーの辞書
  * @param area - 変更が発生したストレージ領域
- * @returns なし
+ * @returns 処理完了を示す Promise
  */
-const handleStorageChanged = (
+const handleStorageChanged = async (
   changes: { [key: string]: chrome.storage.StorageChange },
   area: string
-): void => {
+): Promise<void> => {
+  if (area === 'local' && changes.language) {
+    const nextSetting = normalizeLanguageSetting(changes.language.newValue);
+    const updated = await initI18n(changes.language.newValue ?? null);
+    selectedLanguage.value = nextSetting;
+    if (updated) {
+      renderKey.value++;
+    }
+  }
+
   const isTargetArea =
     (syncEnabled.value && area === 'sync') || (!syncEnabled.value && area === 'local');
   if (!isTargetArea) return;

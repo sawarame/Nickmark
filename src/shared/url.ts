@@ -379,14 +379,23 @@ export function formatUrlForDisplay(url: string, maxLength: number = 100): strin
 }
 
 /**
+ * ロケール別の公式ヘルプページ URL マップ
+ */
+const HELP_PAGE_URLS: Record<Locale, string> = {
+  ja: 'https://sawara.me/extensions/nickmark',
+  en: 'https://sawara.me/en/extensions/nickmark',
+  zh_CN: 'https://sawara.me/zh-Hans/extensions/nickmark',
+  zh_TW: 'https://sawara.me/zh-Hant/extensions/nickmark',
+  ko: 'https://sawara.me/ko/extensions/nickmark'
+};
+
+/**
  * 表示言語に応じた公式ヘルプページの URL を取得します。
- * @param locale - 現在のロケール（'ja' または 'en'）
+ * @param locale - 現在のロケール
  * @returns ヘルプページの URL
  */
 export function getHelpUrl(locale: Locale): string {
-  return locale === 'ja'
-    ? 'https://sawara.me/extensions/nickmark'
-    : 'https://sawara.me/en/extensions/nickmark';
+  return HELP_PAGE_URLS[locale] ?? HELP_PAGE_URLS.en;
 }
 
 /**

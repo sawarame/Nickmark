@@ -1,36 +1,106 @@
 /**
  * サポートしている表示言語のロケール型
  */
-export type Locale = 'en' | 'ja';
+export type Locale = 'en' | 'ja' | 'zh_CN' | 'zh_TW' | 'ko';
+
+/**
+ * ストレージおよび設定画面で扱う言語設定値の型（`'auto'` はブラウザ UI 言語へ自動追従）
+ */
+export type LanguageSetting = 'auto' | Locale;
 
 type LocaleMessagesMap = Record<string, { message?: string }>;
 
 const I18N_LOCALE_CACHE_KEY = 'nickmark:i18n:locale';
 const I18N_MESSAGES_CACHE_PREFIX = 'nickmark:i18n:messages:';
 
+let currentLanguageSetting: LanguageSetting = 'auto';
 let currentLocale: Locale = 'en';
 let messages: LocaleMessagesMap = {};
 let loadedMessagesLocale: Locale | null = null;
 let hasLoadedMessages = false;
 
 /**
- * 任意の値をサポート対象のロケール（`'en'` または `'ja'`）へ正規化します。
+ * 任意の値をサポート対象のロケール（`'en' | 'ja' | 'zh_CN' | 'zh_TW' | 'ko'`）へ正規化します。
  * @param value - 検証対象の値
- * @returns 有効なロケールの場合は `'en'` または `'ja'`、それ以外は `undefined`
+ * @returns 有効なロケールの場合はその値、それ以外は `undefined`
  */
-function normalizeLocale(value: unknown): Locale | undefined {
-  return value === 'ja' || value === 'en' ? value : undefined;
+export function normalizeLocale(value: unknown): Locale | undefined {
+  if (
+    value === 'en' ||
+    value === 'ja' ||
+    value === 'zh_CN' ||
+    value === 'zh_TW' ||
+    value === 'ko'
+  ) {
+    return value;
+  }
+  return undefined;
 }
 
 /**
- * ブラウザ UI 言語からデフォルトのロケールを判定します。
- * @returns `'ja'` または `'en'`
+ * 任意の値を言語設定値（`'auto'` またはサポート対象ロケール）へ正規化します。
+ * 未設定（`undefined` / `null`）や不正値は `'auto'` にフォールバックします。
+ * @param value - 検証対象の値
+ * @returns 正規化された言語設定値
  */
-function resolveBrowserDefaultLocale(): Locale {
-  if (typeof chrome !== 'undefined' && chrome.i18n?.getUILanguage) {
-    return chrome.i18n.getUILanguage().startsWith('ja') ? 'ja' : 'en';
+export function normalizeLanguageSetting(value: unknown): LanguageSetting {
+  if (value === 'auto') return 'auto';
+  return normalizeLocale(value) ?? 'auto';
+}
+
+/**
+ * ブラウザ UI 言語文字列（例: `ja`, `zh-TW`, `zh_Hant_HK`, `ko-KR` 等）から対応ロケールを決定します。
+ * ハイフン／アンダースコアおよび大文字・小文字を正規化したうえでマッピングします。
+ * @param uiLanguage - ブラウザ UI 言語文字列
+ * @returns マッピングされたサポート対象ロケール
+ */
+export function resolveLocaleFromBrowserLanguage(uiLanguage?: string): Locale {
+  if (!uiLanguage || typeof uiLanguage !== 'string') return 'en';
+  const normalized = uiLanguage.trim().toLowerCase().replace(/_/g, '-');
+  if (!normalized) return 'en';
+
+  if (normalized === 'ja' || normalized.startsWith('ja-')) {
+    return 'ja';
+  }
+  if (normalized === 'ko' || normalized.startsWith('ko-')) {
+    return 'ko';
+  }
+  if (
+    normalized === 'zh-tw' ||
+    normalized === 'zh-hk' ||
+    normalized === 'zh-mo' ||
+    normalized === 'zh-hant' ||
+    normalized.startsWith('zh-hant-') ||
+    normalized.startsWith('zh-tw-') ||
+    normalized.startsWith('zh-hk-') ||
+    normalized.startsWith('zh-mo-')
+  ) {
+    return 'zh_TW';
+  }
+  if (normalized === 'zh' || normalized.startsWith('zh-')) {
+    return 'zh_CN';
   }
   return 'en';
+}
+
+/**
+ * 現在のブラウザ UI 言語からデフォルトのロケールを判定します。
+ * @returns 判定されたロケール
+ */
+export function resolveBrowserDefaultLocale(): Locale {
+  if (typeof chrome !== 'undefined' && chrome.i18n?.getUILanguage) {
+    return resolveLocaleFromBrowserLanguage(chrome.i18n.getUILanguage());
+  }
+  return 'en';
+}
+
+/**
+ * 言語設定値（`'auto'` または明示ロケール）を実際に表示するロケールへ解決します。
+ * @param setting - 言語設定値
+ * @returns 表示に使用するロケール
+ */
+export function resolveLanguageSetting(setting: LanguageSetting): Locale {
+  return setting === 'auto' ? resolveBrowserDefaultLocale() : setting;
 }
 
 /**
@@ -73,18 +143,37 @@ function compactMessagesMap(raw: LocaleMessagesMap): LocaleMessagesMap {
 }
 
 /**
- * ロケールとメッセージ辞書を `localStorage` に同期キャッシュとして保存します。
- * Service Worker など `localStorage` が存在しない環境では何もしません。
- * @param locale - 保存するロケール
- * @param loadedMessages - 保存するメッセージ辞書
+ * 言語設定値（`'auto'` または明示ロケール）を `localStorage` に同期保存します。
+ * @param setting - 保存する言語設定値
  * @returns なし
  */
-function saveI18nCache(locale: Locale, loadedMessages: LocaleMessagesMap): void {
+function saveLanguageSettingCache(setting: LanguageSetting): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(I18N_LOCALE_CACHE_KEY, setting);
+  } catch {
+    // ストレージ容量制限等で書き込みに失敗しても動作継続を優先する
+  }
+}
+
+/**
+ * ロケール、言語設定値、およびメッセージ辞書を `localStorage` に同期キャッシュとして保存します。
+ * Service Worker など `localStorage` が存在しない環境では何もしません。
+ * @param locale - 保存する解決済みロケール
+ * @param loadedMessages - 保存するメッセージ辞書
+ * @param setting - 保存する言語設定値（`'auto'` または明示ロケール）
+ * @returns なし
+ */
+function saveI18nCache(
+  locale: Locale,
+  loadedMessages: LocaleMessagesMap,
+  setting: LanguageSetting
+): void {
   if (typeof localStorage === 'undefined') return;
   try {
     const targetKey = buildMessagesCacheKey(locale);
     const compacted = compactMessagesMap(loadedMessages);
-    localStorage.setItem(I18N_LOCALE_CACHE_KEY, locale);
+    localStorage.setItem(I18N_LOCALE_CACHE_KEY, setting);
     localStorage.setItem(targetKey, JSON.stringify(compacted));
 
     // 古いバージョン向けのキャッシュキーが残っていれば削除する
@@ -101,19 +190,26 @@ function saveI18nCache(locale: Locale, loadedMessages: LocaleMessagesMap): void 
 }
 
 /**
- * モジュール読み込み時に `localStorage` から前回のロケールおよび辞書キャッシュを同期復元します。
- * ポップアップ起動時の初回レンダリングから正しい言語・Tips を即座に表示するために使用します。
+ * モジュール読み込み時に `localStorage` から前回の言語設定および辞書キャッシュを同期復元します。
+ * `'auto'` がキャッシュされている場合は都度ブラウザ UI 言語から解決するため、
+ * ブラウザ言語変更後に古いロケールのキャッシュが誤って表示され続けることを防ぎます。
  * @returns なし
  */
-function restoreI18nCacheSync(): void {
+export function restoreI18nCacheSync(): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    const cachedLocale =
-      normalizeLocale(localStorage.getItem(I18N_LOCALE_CACHE_KEY)) ?? resolveBrowserDefaultLocale();
+    const cachedSetting = normalizeLanguageSetting(localStorage.getItem(I18N_LOCALE_CACHE_KEY));
+    const cachedLocale = resolveLanguageSetting(cachedSetting);
+    currentLanguageSetting = cachedSetting;
     currentLocale = cachedLocale;
 
     const cachedJson = localStorage.getItem(buildMessagesCacheKey(cachedLocale));
-    if (!cachedJson) return;
+    if (!cachedJson) {
+      messages = {};
+      loadedMessagesLocale = null;
+      hasLoadedMessages = false;
+      return;
+    }
 
     const parsed = JSON.parse(cachedJson) as LocaleMessagesMap;
     if (parsed && typeof parsed === 'object') {
@@ -157,37 +253,33 @@ export async function initI18n(preloadedLanguage?: unknown): Promise<boolean> {
     rawLanguage = data.language ?? null;
   }
 
-  const storedLocale = normalizeLocale(rawLanguage);
-  const targetLocale = storedLocale || resolveBrowserDefaultLocale();
+  const setting = normalizeLanguageSetting(rawLanguage);
+  const targetLocale = resolveLanguageSetting(setting);
+  currentLanguageSetting = setting;
   currentLocale = targetLocale;
 
   if (hasLoadedMessages && loadedMessagesLocale === targetLocale) {
-    if (typeof localStorage !== 'undefined') {
-      try {
-        localStorage.setItem(I18N_LOCALE_CACHE_KEY, targetLocale);
-      } catch {
-        // 書き込み不可時は無視する
-      }
-    }
+    saveLanguageSettingCache(setting);
     return prevLocale !== targetLocale;
   }
 
-  await loadMessages(targetLocale);
+  await loadMessages(targetLocale, setting);
   return !wasReady || prevLocale !== targetLocale;
 }
 
 /**
  * 指定されたロケールのメッセージ定義 JSON を読み込み、キャッシュへ保存します。
- * @param locale - 読み込む対象ロケール（'en' または 'ja'）
+ * @param locale - 読み込む対象ロケール
+ * @param setting - キャッシュに記録する言語設定値（`'auto'` または明示ロケール）
  * @returns 読み込み完了を示す Promise
  */
-async function loadMessages(locale: Locale): Promise<void> {
+async function loadMessages(locale: Locale, setting: LanguageSetting): Promise<void> {
   const url = chrome.runtime.getURL(`_locales/${locale}/messages.json`);
   const response = await fetch(url);
   messages = await response.json();
   loadedMessagesLocale = locale;
   hasLoadedMessages = true;
-  saveI18nCache(locale, messages);
+  saveI18nCache(locale, messages, setting);
 }
 
 /**
@@ -213,20 +305,31 @@ export function t(key: string, substitutions?: string[]): string {
 }
 
 /**
- * 表示言語を変更し、メッセージを即時再読み込みしてローカルストレージへ保存します。
- * @param locale - 新しく設定するロケール
+ * 言語設定（`'auto'` または明示ロケール）を変更し、解決後のメッセージを即時再読み込みしてローカルストレージへ保存します。
+ * @param setting - 新しく設定する言語設定値（`'auto'` またはサポート対象ロケール）
  * @returns 更新完了を示す Promise
  */
-export async function setLocale(locale: Locale): Promise<void> {
-  currentLocale = locale;
-  await loadMessages(locale);
-  await chrome.storage.local.set({ language: locale });
+export async function setLocale(setting: LanguageSetting): Promise<void> {
+  const normalizedSetting = normalizeLanguageSetting(setting);
+  const targetLocale = resolveLanguageSetting(normalizedSetting);
+  currentLanguageSetting = normalizedSetting;
+  currentLocale = targetLocale;
+  await loadMessages(targetLocale, normalizedSetting);
+  await chrome.storage.local.set({ language: normalizedSetting });
 }
 
 /**
- * 現在適用されているロケールを取得します。
- * @returns 現在のロケール（'en' または 'ja'）
+ * 現在適用されている表示ロケール（`'auto'` 解決後の実ロケール）を取得します。
+ * @returns 現在のロケール
  */
 export function getCurrentLocale(): Locale {
   return currentLocale;
+}
+
+/**
+ * 現在適用されている言語設定値（`'auto'` または明示ロケール）を取得します。
+ * @returns 現在の言語設定値
+ */
+export function getLanguageSetting(): LanguageSetting {
+  return currentLanguageSetting;
 }

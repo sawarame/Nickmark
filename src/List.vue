@@ -3,6 +3,7 @@
     <Toast />
     <ConfirmDialog />
 
+    <div :key="i18nVersion">
     <div class="header">
       <h1>{{ title }}</h1>
       <Button
@@ -652,6 +653,7 @@
         />
       </template>
     </Dialog>
+    </div>
   </div>
 </template>
 
@@ -759,7 +761,11 @@ interface InlineEditState {
 const toast = useToast();
 const confirm = useConfirm();
 
-const title = ref('');
+const i18nVersion = ref(0);
+const title = computed((): string => {
+  void i18nVersion.value;
+  return (t('extensionName') || 'Nickmark') + ' Bookmarks';
+});
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
 const isLoaded = ref(false);
 const userScriptsAllowed = ref(true);
@@ -1106,6 +1112,7 @@ const handleColumnFilterKeydown = (
  * @returns 並び替え選択肢オブジェクトの配列
  */
 const sortOptions = computed((): Array<{ label: string; value: ListSortOption }> => {
+  void i18nVersion.value;
   return [
     { label: t('sortOrderDefault') || 'デフォルト順', value: 'default' },
     { label: t('sortOrderLastUsedDesc') || '最終使用日時（新しい順）', value: 'last_used_desc' },
@@ -1145,6 +1152,7 @@ const flatBookmarks = computed((): FlatBookmarkRow[] => {
  * @returns 選択肢オブジェクトの配列
  */
 const folderOptions = computed(() => {
+  void i18nVersion.value;
   const folders = extractFolders(bookmarksData.value);
   const options = [
     { label: t('allFoldersOption') || 'すべてのフォルダ', value: '__ALL__' },
@@ -1499,13 +1507,21 @@ const checkAndConsumePendingToast = async (): Promise<void> => {
 };
 
 /**
- * 他タブや同期経由でテーマカラーまたは同期設定が変更された際に一覧画面のテーマを即座に同期します。
+ * 他タブや同期経由で言語設定・テーマカラー・同期設定が変更された際に一覧画面の表示を即座に同期します。
  * @param changes - 変更されたストレージキーの辞書
+ * @param area - 変更が発生したストレージ領域
  * @returns 処理完了を示す Promise
  */
 const handleListStorageChanged = async (
-  changes: { [key: string]: chrome.storage.StorageChange }
+  changes: { [key: string]: chrome.storage.StorageChange },
+  area: string
 ): Promise<void> => {
+  if (area === 'local' && changes.language) {
+    const updated = await initI18n(changes.language.newValue ?? null);
+    if (updated) {
+      i18nVersion.value += 1;
+    }
+  }
   if (changes[THEME_COLOR_STORAGE_KEY] || changes.isSyncEnabled) {
     const nextThemeColor = await getThemeColor(true);
     applyThemeColor(nextThemeColor);
@@ -1519,7 +1535,6 @@ onMounted(async () => {
   await initI18n();
   const initialThemeColor = await getThemeColor(true);
   applyThemeColor(initialThemeColor);
-  title.value = (t('extensionName') || 'Nickmark') + ' Bookmarks';
   refreshUserScriptsStatus();
   selectedSortOrder.value = await getListSortOrder();
   await loadBookmarks();

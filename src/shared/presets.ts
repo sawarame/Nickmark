@@ -34,107 +34,115 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     nickname: 'g',
     category: 'dynamic_url',
     titleKey: 'presetTitleGoogle',
-    urlJa: 'https://www.google.com/search?q=%s'
+    defaultUrl: 'https://www.google.com/search?q=%s'
   },
   {
     id: 'b',
     nickname: 'b',
     category: 'dynamic_url',
     titleKey: 'presetTitleBing',
-    urlJa: 'https://www.bing.com/search?q=%s'
+    defaultUrl: 'https://www.bing.com/search?q=%s'
   },
   {
     id: 'y',
     nickname: 'y',
     category: 'dynamic_url',
     titleKey: 'presetTitleYahoo',
-    urlJa: 'https://search.yahoo.co.jp/search?p=%s',
-    urlEn: 'https://search.yahoo.com/search?p=%s'
+    defaultUrl: 'https://search.yahoo.com/search?p=%s',
+    localeUrls: {
+      ja: 'https://search.yahoo.co.jp/search?p=%s'
+    }
   },
   {
     id: 'nv',
     nickname: 'nv',
     category: 'dynamic_url',
     titleKey: 'presetTitleNaver',
-    urlJa: 'https://search.naver.com/search.naver?query=%s'
+    defaultUrl: 'https://search.naver.com/search.naver?query=%s'
   },
   {
     id: 'bd',
     nickname: 'bd',
     category: 'dynamic_url',
     titleKey: 'presetTitleBaidu',
-    urlJa: 'https://www.baidu.com/s?wd=%s'
+    defaultUrl: 'https://www.baidu.com/s?wd=%s'
   },
   {
     id: 'ddg',
     nickname: 'ddg',
     category: 'dynamic_url',
     titleKey: 'presetTitleDuckduckgo',
-    urlJa: 'https://duckduckgo.com/?q=%s'
+    defaultUrl: 'https://duckduckgo.com/?q=%s'
   },
   {
     id: 'yt',
     nickname: 'yt',
     category: 'dynamic_url',
     titleKey: 'presetTitleYoutube',
-    urlJa: 'https://www.youtube.com/results?search_query=%s'
+    defaultUrl: 'https://www.youtube.com/results?search_query=%s'
   },
   {
     id: 'gh',
     nickname: 'gh',
     category: 'dynamic_url',
     titleKey: 'presetTitleGithub',
-    urlJa: 'https://github.com/search?q=%s'
+    defaultUrl: 'https://github.com/search?q=%s'
   },
   {
     id: 'map',
     nickname: 'map',
     category: 'dynamic_url',
     titleKey: 'presetTitleMaps',
-    urlJa: 'https://www.google.com/maps/search/%s'
+    defaultUrl: 'https://www.google.com/maps/search/%s'
   },
   {
     id: 'tr',
     nickname: 'tr',
     category: 'dynamic_url',
     titleKey: 'presetTitleTranslate',
-    urlJa: 'https://translate.google.com/?text=%s'
+    defaultUrl: 'https://translate.google.com/?text=%s'
   },
   {
     id: 'wiki',
     nickname: 'wiki',
     category: 'dynamic_url',
     titleKey: 'presetTitleWikipedia',
-    urlJa: 'https://ja.wikipedia.org/w/index.php?search=%s',
-    urlEn: 'https://en.wikipedia.org/w/index.php?search=%s'
+    defaultUrl: 'https://en.wikipedia.org/w/index.php?search=%s',
+    localeUrls: {
+      ja: 'https://ja.wikipedia.org/w/index.php?search=%s',
+      en: 'https://en.wikipedia.org/w/index.php?search=%s',
+      zh_CN: 'https://zh.wikipedia.org/w/index.php?search=%s',
+      zh_TW: 'https://zh.wikipedia.org/w/index.php?search=%s',
+      ko: 'https://ko.wikipedia.org/w/index.php?search=%s'
+    }
   },
   {
     id: 'amz',
     nickname: 'amz',
     category: 'dynamic_url',
     titleKey: 'presetTitleAmazon',
-    urlJa: 'https://www.amazon.co.jp/s?k=%s'
+    defaultUrl: 'https://www.amazon.co.jp/s?k=%s'
   },
   {
     id: 'x',
     nickname: 'x',
     category: 'dynamic_url',
     titleKey: 'presetTitleX',
-    urlJa: 'https://x.com/search?q=%s'
+    defaultUrl: 'https://x.com/search?q=%s'
   },
   {
     id: 'npm',
     nickname: 'npm',
     category: 'dynamic_url',
     titleKey: 'presetTitleNpm',
-    urlJa: 'https://www.npmjs.com/search?q=%s'
+    defaultUrl: 'https://www.npmjs.com/search?q=%s'
   },
   {
     id: 'mdn',
     nickname: 'mdn',
     category: 'dynamic_url',
     titleKey: 'presetTitleMdn',
-    urlJa: 'https://developer.mozilla.org/search?q=%s'
+    defaultUrl: 'https://developer.mozilla.org/search?q=%s'
   },
   {
     id: 'mdlink',
@@ -142,7 +150,7 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     category: 'bookmarklet',
     titleKey: 'presetTitleMdlink',
     descriptionKey: 'presetDescMdlink',
-    urlJa: MDLINK_BOOKMARKLET_URL
+    defaultUrl: MDLINK_BOOKMARKLET_URL
   },
   {
     id: 'htmllink',
@@ -150,7 +158,7 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     category: 'bookmarklet',
     titleKey: 'presetTitleHtmllink',
     descriptionKey: 'presetDescHtmllink',
-    urlJa: HTMLLINK_BOOKMARKLET_URL
+    defaultUrl: HTMLLINK_BOOKMARKLET_URL
   },
   {
     id: 'wayback',
@@ -158,7 +166,7 @@ export const PRESET_DEFINITIONS: readonly PresetDefinition[] = [
     category: 'bookmarklet',
     titleKey: 'presetTitleWayback',
     descriptionKey: 'presetDescWayback',
-    urlJa: WAYBACK_BOOKMARKLET_URL
+    defaultUrl: WAYBACK_BOOKMARKLET_URL
   }
 ];
 
@@ -209,10 +217,7 @@ export function normalizeEnabledPresetIds(raw: unknown): PresetId[] {
  */
 export function resolvePresetUrl(preset: PresetDefinition, locale?: Locale): string {
   const activeLocale = locale ?? getCurrentLocale();
-  if (activeLocale === 'en' && preset.urlEn) {
-    return preset.urlEn;
-  }
-  return preset.urlJa;
+  return preset.localeUrls?.[activeLocale] ?? preset.defaultUrl;
 }
 
 /**

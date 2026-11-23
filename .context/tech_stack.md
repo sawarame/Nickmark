@@ -25,7 +25,7 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
   - `list.ts` / `List.vue`: ブックマーク一覧画面のエントリーポイントおよびメインコンポーネント。
   - `preferences.ts` / `Preferences.vue`: 設定画面のエントリーポイントおよびメインコンポーネント。
   - `popup.ts` / `Popup.vue`: コマンドパレット型ポップアップランチャーのエントリーポイントおよびメインコンポーネント。
-  - `i18n.ts`: 多言語対応（`en` / `ja`）モジュール。
+  - `i18n.ts`: 多言語対応（`en` / `ja` / `zh_CN` / `zh_TW` / `ko`、およびブラウザ言語自動判定 `'auto'`）モジュール。
   - `components/`: 再利用可能な UI コンポーネント群。
     - `CommandPromptIcon.vue`: ポップアップのコマンド候補等で使用するコマンドプロンプト（`>_`）SVG アイコンコンポーネント。
   - `shared/`: モジュール間で共有するドメイン別内部モジュール群。
@@ -49,7 +49,7 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
   - `list.html` / `preferences.html` / `popup.html`: 各画面のベース HTML。
   - `js/`: Webpack によってビルドされた JavaScript ファイル群が出力される。
   - `icons/`: `generate_icons.js` によって生成されたアイコン画像。
-  - `_locales/`: `en` と `ja` の国際化 (i18n) 用メッセージファイル。
+  - `_locales/`: `en`、`ja`、`zh_CN`、`zh_TW`、`ko` の 5 言語国際化 (i18n) 用メッセージファイル。
 
 ## 4. コマンド・使い方
 

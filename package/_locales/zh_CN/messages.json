@@ -1,0 +1,717 @@
+{
+  "extensionName": {
+    "message": "Nickmark - 键盘优先书签启动器"
+  },
+  "extensionDescription": {
+    "message": "通过别名在命令面板中快速访问书签。专为希望减少鼠标移动的键盘优先进阶用户打造的扩展程序。"
+  },
+  "bookmarkAddedMessage": {
+    "message": "已注册为别名“$1”！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkAllAddedMessage": {
+    "message": "已将 $1 个标签页注册为别名“$2”！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      },
+      "2": {
+        "content": "$2"
+      }
+    }
+  },
+  "bookmarkRemovedMessage": {
+    "message": "已删除别名“$1”。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkUrlRemovedMessage": {
+    "message": "已删除别名“$1”下的指定 URL。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorMultipleUrlsFound": {
+    "message": "找到多个 URL，请从候选列表中选择一项。"
+  },
+  "errorUrlNotFound": {
+    "message": "在别名“$1”下未找到指定的 URL。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorNicknameRequired": {
+    "message": "请指定一个别名。"
+  },
+  "errorNicknameNotFound": {
+    "message": "未找到别名“$1”。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "preferencesTitle": {
+    "message": "偏好设置"
+  },
+  "languageSetting": {
+    "message": "界面语言"
+  },
+  "languageAuto": {
+    "message": "跟随浏览器语言（自动）"
+  },
+  "saveSuccess": {
+    "message": "设置已保存。"
+  },
+  "addBookmarkTitle": {
+    "message": "添加别名"
+  },
+  "saveBtn": {
+    "message": "保存"
+  },
+  "nicknameLabel": {
+    "message": "别名"
+  },
+  "urlLabel": {
+    "message": "URL"
+  },
+  "titleLabel": {
+    "message": "标题"
+  },
+  "addBtn": {
+    "message": "添加"
+  },
+  "manageNickmarksTitle": {
+    "message": "别名管理"
+  },
+  "exportBtn": {
+    "message": "导出"
+  },
+  "editJsonBtn": {
+    "message": "编辑 JSON"
+  },
+  "isPinnedLabel": {
+    "message": "置顶"
+  },
+  "pinTooltip": {
+    "message": "置顶显示"
+  },
+  "unpinTooltip": {
+    "message": "取消置顶"
+  },
+  "actionsLabel": {
+    "message": "操作"
+  },
+  "errorNicknameUrlRequired": {
+    "message": "别名和 URL 为必填项。"
+  },
+  "errorUrlExists": {
+    "message": "该别名下已存在此 URL。"
+  },
+  "successAdded": {
+    "message": "添加成功。"
+  },
+  "successDeleted": {
+    "message": "删除成功。"
+  },
+  "successUpdated": {
+    "message": "更新成功。"
+  },
+  "successExported": {
+    "message": "导出完成"
+  },
+  "successFileDownloaded": {
+    "message": "文件已成功下载。"
+  },
+  "successJsonUpdated": {
+    "message": "JSON 更新成功。"
+  },
+  "errorInvalidJsonStructure": {
+    "message": "JSON 结构无效，缺少 'bookmarks' 根键。"
+  },
+  "errorInvalidJsonFormat": {
+    "message": "JSON 格式无效。"
+  },
+  "backToListBtn": {
+    "message": "返回列表"
+  },
+  "syncTitle": {
+    "message": "同步"
+  },
+  "enableSyncLabel": {
+    "message": "Google 账号同步"
+  },
+  "syncDescription": {
+    "message": "使用 Google 账号在多台设备间同步书签（上限 100KB）。"
+  },
+  "migrationTitle": {
+    "message": "数据迁移"
+  },
+  "confirmEnableSyncWithData": {
+    "message": "检测到已有的云端数据。您希望使用哪一份数据？"
+  },
+  "confirmDisableSyncWithData": {
+    "message": "已存在本地数据。您希望保留哪一份数据？"
+  },
+  "useCloudDataBtn": {
+    "message": "使用云端数据"
+  },
+  "overwriteCloudBtn": {
+    "message": "覆盖云端数据"
+  },
+  "overwriteLocalBtn": {
+    "message": "覆盖本地数据"
+  },
+  "keepLocalDataBtn": {
+    "message": "保留本地数据"
+  },
+  "cancelBtn": {
+    "message": "取消"
+  },
+  "errorSyncQuotaExceeded": {
+    "message": "本地数据超过 100KB 上限。请减少数据量后再开启同步。"
+  },
+  "syncEnabledMessage": {
+    "message": "已开启同步。"
+  },
+  "syncDisabledMessage": {
+    "message": "已关闭同步，数据已复制到本地。"
+  },
+  "syncDisabledMessageOnly": {
+    "message": "已关闭同步，保留原有本地数据。"
+  },
+  "migrationSuccess": {
+    "message": "数据迁移完成。"
+  },
+  "helpMenu": {
+    "message": "帮助页面"
+  },
+  "defaultValueLabel": {
+    "message": "省略查询参数时的默认值（可选）"
+  },
+  "defaultValuePlaceholder": {
+    "message": "填入 %s 的默认值（留空时将打开站点首页）"
+  },
+  "bookmarkAlreadyExistsMessage": {
+    "message": "此 URL 已注册在别名“$1”下。",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "bookmarkTitleUpdatedMessage": {
+    "message": "已更新别名“$1”的标题！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "errorUserScriptsNotAllowed": {
+    "message": "要运行书签脚本，请在扩展程序详情页（chrome://extensions）中开启“允许用户脚本”。"
+  },
+  "openExtensionSettingsBtn": {
+    "message": "打开扩展程序设置"
+  },
+  "errorBookmarkletRestrictedPage": {
+    "message": "无法在此页面（浏览器内部页面、应用商店等）执行书签脚本。"
+  },
+  "errorBookmarkletEmpty": {
+    "message": "书签脚本代码为空。"
+  },
+  "errorBookmarkletExecutionFailed": {
+    "message": "执行书签脚本失败：$1",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "popupTitle": {
+    "message": "Nickmark 命令面板"
+  },
+  "popupPlaceholder": {
+    "message": "搜索别名或输入 :add / :rm ..."
+  },
+  "popupNoMatches": {
+    "message": "未找到匹配的书签或命令。"
+  },
+  "popupAddEnterPrompt": {
+    "message": "请输入别名并按 Enter 注册（例如：:add gh）"
+  },
+  "popupCommandAddHint": {
+    "message": "注册当前标签页（或 [别名] [URL] [标题]）"
+  },
+  "popupCommandAddUrlHint": {
+    "message": "注册指定 URL"
+  },
+  "popupCommandAddBookmarkletHint": {
+    "message": "注册书签脚本"
+  },
+  "popupAddPreviewTargetLabel": {
+    "message": "目标"
+  },
+  "popupFolderPrefixCompletionHint": {
+    "message": "文件夹前缀"
+  },
+  "popupExistingNicknameCompletionHint": {
+    "message": "已有别名"
+  },
+  "popupCommandAddallHint": {
+    "message": "批量注册当前窗口的所有标签页"
+  },
+  "popupCommandRmHint": {
+    "message": "删除别名或指定 URL"
+  },
+  "popupCommandLsHint": {
+    "message": "打开书签管理界面"
+  },
+  "popupCommandPrefsHint": {
+    "message": "打开偏好设置"
+  },
+  "popupCommandHelpHint": {
+    "message": "打开帮助文档"
+  },
+  "popupNoOpenableTabUrl": {
+    "message": "无法从当前标签页获取可注册的有效 URL。"
+  },
+  "registerBtn": {
+    "message": "保存"
+  },
+  "closeBtn": {
+    "message": "关闭"
+  },
+  "openOptionsTooltip": {
+    "message": "打开书签管理界面"
+  },
+  "openPreferencesTooltip": {
+    "message": "打开偏好设置"
+  },
+  "bookmarkUpdatedMessage": {
+    "message": "已更新“$1”的标题！",
+    "placeholders": {
+      "1": {
+        "content": "$1"
+      }
+    }
+  },
+  "openAllInFolder": {
+    "message": "📁 打开文件夹“$1”中的所有书签（$2 个标签页）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "openFolderSummary": {
+    "message": "📁 $1（批量打开 $2 个标签页）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "folderFilterLabel": {
+    "message": "文件夹"
+  },
+  "allFoldersOption": {
+    "message": "全部文件夹"
+  },
+  "rootFolderOption": {
+    "message": "未分类（根目录）"
+  },
+  "openFolderBtn": {
+    "message": "全部打开"
+  },
+  "renameFolderBtn": {
+    "message": "重命名文件夹"
+  },
+  "deleteFolderBtn": {
+    "message": "删除文件夹"
+  },
+  "renameFolderDialogTitle": {
+    "message": "重命名文件夹"
+  },
+  "newFolderNameLabel": {
+    "message": "新文件夹名称"
+  },
+  "renameFolderSuccessMessage": {
+    "message": "已将文件夹重命名为“$1”（共更新 $2 个书签）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "confirmDeleteFolderTitle": {
+    "message": "确认删除文件夹"
+  },
+  "confirmDeleteFolderMessage": {
+    "message": "确定要删除文件夹“$1”下的全部书签（共 $2 项）吗？此操作无法撤销。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "deleteFolderSuccessMessage": {
+    "message": "已删除文件夹“$1”及其下的所有书签。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "maxBatchOpenTabsLabel": {
+    "message": "批量打开标签页的安全上限"
+  },
+  "maxBatchOpenTabsDescription": {
+    "message": "批量打开文件夹时自动打开的最大标签页数量（1-100，默认：20）。超过此上限时将弹出确认提示。"
+  },
+  "confirmBatchOpenTitle": {
+    "message": "确认批量打开"
+  },
+  "confirmBatchOpenMessage": {
+    "message": "文件夹“$1”包含 $2 个标签页，已超过安全上限（$3 个）。确定要全部打开吗？",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" },
+      "3": { "content": "$3" }
+    }
+  },
+  "confirmBatchOpenBtn": {
+    "message": "全部打开"
+  },
+  "errorBatchOpenZeroUrls": {
+    "message": "文件夹“$1”中没有可打开的 URL（仅含书签脚本或为空）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "historySearchTitle": {
+    "message": "浏览器历史记录搜索"
+  },
+  "historySearchLabel": {
+    "message": "在命令面板搜索中包含浏览器历史记录"
+  },
+  "historySearchDescription": {
+    "message": "开启后，在命令面板搜索时将在书签候选项下方显示匹配的浏览器历史记录（开启时需要授予访问历史记录的权限）。"
+  },
+  "historySearchEnabledMessage": {
+    "message": "已开启浏览器历史记录搜索。"
+  },
+  "historySearchDisabledMessage": {
+    "message": "已关闭浏览器历史记录搜索。"
+  },
+  "historyPermissionDeniedMessage": {
+    "message": "由于未授予浏览器历史记录访问权限，无法开启此功能。"
+  },
+  "popupHistorySectionTitle": {
+    "message": "浏览器历史记录"
+  },
+  "popupHistoryTag": {
+    "message": "历史"
+  },
+  "deleteBookmarkTooltip": {
+    "message": "删除"
+  },
+  "popupTipsBadge": {
+    "message": "TIP"
+  },
+  "popupTipsNextHint": {
+    "message": "点击查看下一条提示"
+  },
+  "popupTipAddCommand": {
+    "message": "输入 :add <名称>（简写 :a）可立即将当前标签页收藏为书签。"
+  },
+  "popupTipAddallCommand": {
+    "message": "输入 :addall <名称>（简写 :aa）可一键收藏当前窗口中的所有标签页。"
+  },
+  "popupTipFolderOpen": {
+    "message": "输入 文件夹名/ 并按 Enter，即可一次性打开该文件夹下的所有书签。"
+  },
+  "popupTipDynamicUrl": {
+    "message": "在 URL 中包含 %s 即可通过“别名 搜索词”传递参数进行搜索（省略参数时使用默认值或跳转至首页）。"
+  },
+  "popupTipTabDisposition": {
+    "message": "按 Shift+Enter 可在后台标签页打开并保持面板开启，按 $1+Enter 可在前台新标签页中打开。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "popupTipKeyboardNav": {
+    "message": "使用 ↑ / ↓ 或 Ctrl+N / Ctrl+P 移动候选项，按 Tab 键可将所选别名或命令补全到输入框。"
+  },
+  "popupTipBookmarklet": {
+    "message": "使用 :add <名称> javascript:... 注册书签脚本，即可在搜索结果中直接于当前标签页运行。"
+  },
+  "popupTipManagementCommands": {
+    "message": "输入 :ls 管理书签与文件夹，输入 :prefs 打开偏好设置与同步，输入 :help 查看帮助文档。"
+  },
+  "sortOrderLabel": {
+    "message": "排序"
+  },
+  "sortOrderDefault": {
+    "message": "默认顺序"
+  },
+  "sortOrderLastUsedDesc": {
+    "message": "最近使用（最新优先）"
+  },
+  "sortOrderLastUsedAsc": {
+    "message": "最近使用（最早优先）"
+  },
+  "sortOrderScoreDesc": {
+    "message": "评分（从高到低）"
+  },
+  "sortOrderScoreAsc": {
+    "message": "评分（从低到高）"
+  },
+  "importBtn": {
+    "message": "导入"
+  },
+  "importDialogTitle": {
+    "message": "导入书签"
+  },
+  "importFileInfoLabel": {
+    "message": "源文件"
+  },
+  "importFormatLabel": {
+    "message": "检测格式"
+  },
+  "importFormatJson": {
+    "message": "Nickmark JSON"
+  },
+  "importFormatChromeHtml": {
+    "message": "Chrome 书签 HTML"
+  },
+  "importSummaryCount": {
+    "message": "$1 个书签（$2 个别名）",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "importSkippedSummary": {
+    "message": "将跳过 $1 个无法打开的条目（如浏览器内部页面）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importBaseFolderLabel": {
+    "message": "目标文件夹（可选）"
+  },
+  "importBaseFolderPlaceholder": {
+    "message": "例如：imported（留空则保留原有层级）"
+  },
+  "importModeLabel": {
+    "message": "导入方式"
+  },
+  "importModeMergeLabel": {
+    "message": "合并（保留现有数据并追加整合）"
+  },
+  "importModeOverwriteLabel": {
+    "message": "覆盖（替换所有现有书签）"
+  },
+  "importOverwriteWarning": {
+    "message": "执行覆盖后，当前已注册的全部 $1 个书签将被清空并替换为导入的数据。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "importExecuteBtn": {
+    "message": "开始导入"
+  },
+  "successImported": {
+    "message": "导入完成"
+  },
+  "successImportedDetail": {
+    "message": "已导入 $1 个书签（当前总计：$2 个）。",
+    "placeholders": {
+      "1": { "content": "$1" },
+      "2": { "content": "$2" }
+    }
+  },
+  "errorImportEmptyFile": {
+    "message": "所选文件为空。"
+  },
+  "errorImportNoValidBookmarks": {
+    "message": "未找到可导入的有效书签。"
+  },
+  "errorImportInvalidHtml": {
+    "message": "无法作为有效的书签 HTML 文件解析。"
+  },
+  "errorImportInvalidEntry": {
+    "message": "书签条目数据格式无效（$1）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "presetsTitle": {
+    "message": "常用预设"
+  },
+  "presetsDescription": {
+    "message": "通过复选框快速启用常用搜索服务（%s 动态 URL）和实用书签脚本。系统仅保存勾选状态，几乎不占用存储空间。"
+  },
+  "presetsCategoryDynamicUrl": {
+    "message": "搜索服务（动态 URL）"
+  },
+  "presetsCategoryBookmarklet": {
+    "message": "书签脚本"
+  },
+  "presetsSelectAllBtn": {
+    "message": "全选"
+  },
+  "presetsDeselectAllBtn": {
+    "message": "取消全选"
+  },
+  "presetTitleGoogle": {
+    "message": "Google 搜索"
+  },
+  "presetTitleBing": {
+    "message": "Bing 搜索"
+  },
+  "presetTitleYahoo": {
+    "message": "Yahoo 搜索"
+  },
+  "presetTitleNaver": {
+    "message": "Naver 搜索"
+  },
+  "presetTitleBaidu": {
+    "message": "百度搜索"
+  },
+  "presetTitleDuckduckgo": {
+    "message": "DuckDuckGo 搜索"
+  },
+  "presetTitleYoutube": {
+    "message": "YouTube 搜索"
+  },
+  "presetTitleGithub": {
+    "message": "GitHub 搜索"
+  },
+  "presetTitleMaps": {
+    "message": "Google 地图"
+  },
+  "presetTitleTranslate": {
+    "message": "Google 翻译"
+  },
+  "presetTitleWikipedia": {
+    "message": "维基百科"
+  },
+  "presetTitleAmazon": {
+    "message": "Amazon 搜索"
+  },
+  "presetTitleX": {
+    "message": "X (Twitter) 搜索"
+  },
+  "presetTitleNpm": {
+    "message": "npm 搜索"
+  },
+  "presetTitleMdn": {
+    "message": "MDN 搜索"
+  },
+  "presetTitleMdlink": {
+    "message": "复制 Markdown 链接"
+  },
+  "presetDescMdlink": {
+    "message": "将当前页面的 [标题](URL) 复制到剪贴板"
+  },
+  "presetTitleHtmllink": {
+    "message": "复制 HTML 链接"
+  },
+  "presetDescHtmllink": {
+    "message": "将当前页面的 <a href=\"URL\">标题</a> 复制到剪贴板（支持 Teams 等多 MIME 粘贴）"
+  },
+  "presetTitleWayback": {
+    "message": "在 Wayback Machine 中打开"
+  },
+  "presetDescWayback": {
+    "message": "通过 https://web.archive.org/web/*/ 打开当前页面 URL"
+  },
+  "popupTipPresets": {
+    "message": "在偏好设置（:prefs）中只需勾选复选框，即可启用 Google 搜索（g）或 GitHub 搜索（gh）等常用预设。"
+  },
+  "columnFilterBtnTooltip": {
+    "message": "按$1筛选",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "columnFilterPlaceholder": {
+    "message": "筛选$1...",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "clearColumnFilterTooltip": {
+    "message": "清除筛选"
+  },
+  "openInNewTabTitle": {
+    "message": "在新标签页中打开"
+  },
+  "openInNewTabLabel": {
+    "message": "默认在新标签页中打开"
+  },
+  "openInNewTabDescription": {
+    "message": "开启后，在命令面板中不使用修饰键直接打开书签或浏览器历史记录时，将在前台新标签页中打开（Shift+Enter 仍会在后台标签页中打开）。"
+  },
+  "openInCurrentIfNewTabLabel": {
+    "message": "当前为“新标签页”时在该标签页中打开"
+  },
+  "openInCurrentIfNewTabDescription": {
+    "message": "开启后，当活动标签页为浏览器新标签页时，不使用修饰键打开书签或历史记录将在该标签页直接跳转（Cmd/Ctrl/Alt+Enter 仍会在新标签页中打开）。"
+  },
+  "presetMdlinkCopiedToast": {
+    "message": "已复制：$1",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorMdlinkCopyFailed": {
+    "message": "复制到剪贴板失败。"
+  },
+  "popupAddAlreadyBookmarkedNotice": {
+    "message": "此页面已收藏（别名：$1）",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "errorNicknameForbiddenChars": {
+    "message": "别名包含不允许使用的字符（空白字符、: ; \\ % ? # & = * \" ' ` < > | 等）。"
+  },
+  "errorImportForbiddenNicknameChars": {
+    "message": "别名“$1”包含不允许使用的字符（空白字符、: ; \\ % ? # & = * \" ' ` < > | 等）。",
+    "placeholders": {
+      "1": { "content": "$1" }
+    }
+  },
+  "themeColorTitle": {
+    "message": "主题颜色"
+  },
+  "themeColorDescription": {
+    "message": "选择应用于命令面板、书签管理界面和偏好设置页面的主题颜色。"
+  },
+  "themeColorEmerald": {
+    "message": "绿色"
+  },
+  "themeColorBlue": {
+    "message": "蓝色"
+  },
+  "themeColorSlate": {
+    "message": "灰色"
+  },
+  "themeColorIndigo": {
+    "message": "靛蓝色"
+  },
+  "themeColorOrange": {
+    "message": "橙色"
+  },
+  "themeColorRose": {
+    "message": "玫瑰红"
+  }
+}
