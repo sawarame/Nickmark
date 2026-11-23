@@ -5,7 +5,7 @@
 
     <div :key="i18nVersion">
     <div class="header">
-      <h1>{{ title }}</h1>
+      <h1>Nickmark</h1>
       <Button
         icon="pi pi-cog"
         severity="secondary"
@@ -762,10 +762,6 @@ const toast = useToast();
 const confirm = useConfirm();
 
 const i18nVersion = ref(0);
-const title = computed((): string => {
-  void i18nVersion.value;
-  return (t('extensionName') || 'Nickmark') + ' Bookmarks';
-});
 const bookmarksData = ref<Record<string, BookmarkEntry[]>>({});
 const isLoaded = ref(false);
 const userScriptsAllowed = ref(true);
