@@ -1,5 +1,9 @@
 <template>
-  <div class="palette-container" @keydown="handleGlobalKeyDown">
+  <div
+    class="palette-container"
+    @keydown="handleGlobalKeyDown"
+    @mousemove.capture="handleContainerMouseMove"
+  >
     <!-- 検索入力ヘッダーエリア -->
     <div class="palette-search-bar">
       <!-- コマンド入力モード時は >_ アイコン、通常検索時は虫眼鏡アイコンを表示する -->
@@ -113,7 +117,9 @@
       v-else-if="shouldShowList"
       ref="listContainerRef"
       class="palette-list"
+      :class="{ 'is-pointer-active': isPointerHoverActive }"
       role="listbox"
+      @scroll="suppressPointerHover"
     >
       <div v-if="items.length === 0 && !isHistorySearchPending" class="palette-empty">
         <i class="pi pi-info-circle" aria-hidden="true" />
@@ -138,7 +144,8 @@
           :class="{ 'is-selected': index === selectedIndex }"
           role="option"
           :aria-selected="index === selectedIndex"
-          @mouseenter="selectedIndex = index"
+          @mouseenter="handleItemPointerHover(index)"
+          @mousemove="handleItemPointerHover(index)"
           @click="handleItemClick($event, item)"
         >
           <!-- 左側種別アイコン / favicon -->
@@ -243,6 +250,13 @@ import {
   shouldSearchHistoryForQuery
 } from './shared/history';
 import {
+  createPointerSelectionState,
+  PointerSelectionState,
+  recordPointerMove,
+  resolveHoverSelectedIndex,
+  suppressPointerHoverState
+} from './shared/pointerSelection';
+import {
   mergeBookmarksWithPresets,
   formatHtmlLink,
   formatMarkdownLink,
@@ -297,6 +311,53 @@ const feedback = ref<FeedbackState | null>(null);
 const pendingBatchConfirm = ref<BatchOpenConfirmationData | null>(null);
 const failedFavicons = ref<Set<string>>(new Set());
 const currentTipIndex = ref<number>(pickRandomTipIndex(POPUP_TIPS.length));
+const pointerSelectionState = ref<PointerSelectionState>(createPointerSelectionState());
+
+/**
+ * 実際のマウス移動を検知してホバーによる選択・背景色が有効になっているかどうかを返します。
+ * @returns ポインターホバーが有効な場合は true
+ */
+const isPointerHoverActive = computed((): boolean => {
+  return pointerSelectionState.value.isPointerHoverActive;
+});
+
+/**
+ * 検索入力変更・候補リスト更新・キーボード移動・スクロール時にポインターホバーを抑止状態へ戻します。
+ * @returns なし
+ */
+const suppressPointerHover = (): void => {
+  pointerSelectionState.value = suppressPointerHoverState(pointerSelectionState.value);
+};
+
+/**
+ * ポップアップ全体でのマウス移動をキャプチャフェーズで検知し、実座標変化があった場合のみホバー選択を有効化します。
+ * @param event - マウスイベント
+ * @returns なし
+ */
+const handleContainerMouseMove = (event: MouseEvent): void => {
+  pointerSelectionState.value = recordPointerMove(pointerSelectionState.value, {
+    clientX: event.clientX,
+    clientY: event.clientY,
+    screenX: event.screenX,
+    screenY: event.screenY
+  });
+};
+
+/**
+ * 候補アイテム上のポインターホバー時に、ポインターホバーが有効な場合のみ選択インデックスを更新します。
+ * @param index - カーソルが乗っている候補アイテムのインデックス
+ * @returns なし
+ */
+const handleItemPointerHover = (index: number): void => {
+  const nextIndex = resolveHoverSelectedIndex(
+    pointerSelectionState.value,
+    index,
+    selectedIndex.value
+  );
+  if (nextIndex !== selectedIndex.value) {
+    selectedIndex.value = nextIndex;
+  }
+};
 
 /**
  * initI18n 完了後にもテンプレート上の翻訳テキストを再評価するためのラッパー関数です。
@@ -455,8 +516,9 @@ const clearHistoryDebounceTimer = (): void => {
   }
 };
 
-// 同期候補（ブックマーク・コマンド）の変化時は選択インデックスを先頭へリセットする
+// 同期候補（ブックマーク・コマンド）の変化時はポインターホバーを抑止し選択インデックスを先頭へリセットする
 watch(bookmarkItems, newBookmarks => {
+  suppressPointerHover();
   optionRefs.value.clear();
   selectedIndex.value = newBookmarks.length > 0 ? 0 : -1;
 });
@@ -500,6 +562,7 @@ watch(
       const prevSelectedId =
         selectedIndex.value >= 0 ? items.value[selectedIndex.value]?.id : undefined;
 
+      suppressPointerHover();
       optionRefs.value.clear();
       isHistorySearchPending.value = false;
       historyItems.value = fetched;
@@ -600,6 +663,7 @@ const markFaviconFailed = (url?: string): void => {
  * @returns なし
  */
 const handleUserInput = (): void => {
+  suppressPointerHover();
   clearFeedbackDismissTimer();
   feedback.value = null;
 };
@@ -644,6 +708,7 @@ const moveSelection = (delta: number): void => {
   const len = items.value.length;
   if (len === 0) return;
 
+  suppressPointerHover();
   const current = selectedIndex.value < 0 ? 0 : selectedIndex.value;
   selectedIndex.value = (current + delta + len) % len;
 
@@ -663,6 +728,7 @@ const applyTabCompletion = (): void => {
   const target = items.value[selectedIndex.value] ?? items.value[0];
   if (!target || !target.fillText) return;
 
+  suppressPointerHover();
   clearFeedbackDismissTimer();
   feedback.value = null;
   query.value = target.fillText;
@@ -1445,7 +1511,7 @@ onUnmounted(() => {
   transition: background-color 0.1s ease;
 }
 
-.palette-item:hover {
+.palette-list.is-pointer-active .palette-item:hover:not(.is-selected) {
   background-color: var(--p-content-hover-background);
 }
 
