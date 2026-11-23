@@ -50,9 +50,14 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
   - `js/`: Webpack によってビルドされた JavaScript ファイル群が出力される。
   - `icons/`: `generate_icons.js` によって生成されたアイコン画像。
   - `_locales/`: `en`、`ja`、`zh_CN`、`zh_TW`、`ko` の 5 言語国際化 (i18n) 用メッセージファイル。
+- `scripts/`: プロモーション画像の自動生成など開発・ストア配布用補助スクリプト群。
+  - `generate_promo_images.js`: HTML/CSS テンプレートと Headless Chrome を用いて `images/` 配下に多言語プロモーション画像（1280×800 PNG）を生成するスクリプト。
+  - `promo_templates.js`: 5 種類のプロモーション画像スライド用 HTML/CSS テンプレート。
+  - `promo_locales.js`: プロモーション画像向けの多言語テキスト辞書（`zh_CN` / `zh_TW` / `ko` / `ja` / `en`）。
 
 ## 4. コマンド・使い方
 
 - `npm install`: 依存関係のインストール。
 - `npm run build`: ソースコードのビルド、`package/js/` への出力、および配布用の `package.zip` の生成を行う。
 - `node generate_icons.js`: `src` やルートにあるスクリプトからアイコン画像を生成する（通常は手動、または必要に応じて実行）。
+- `node scripts/generate_promo_images.js`: 中国語（簡体字・繁体字）・韓国語のプロモーション画像を `images/` に生成する（`--langs=zh_CN,ko` や `--all` で対象言語を指定可能）。
