@@ -1,6 +1,6 @@
 <template>
   <div class="container" v-if="isLoaded">
-    <Toast @close="handleToastClosed" @life-end="handleToastClosed" />
+    <Toast :dt="themedToastTokens" @close="handleToastClosed" @life-end="handleToastClosed" />
 
     <div :key="renderKey">
       <div class="header">
@@ -361,6 +361,7 @@ import {
 import {
   THEME_COLOR_DEFINITIONS,
   applyThemeColor,
+  buildThemedSuccessToastTokens,
   parseValidThemeColor
 } from './shared/theme';
 import {
@@ -393,6 +394,8 @@ import {
 import { getEffectiveHistorySearchEnabled, requestHistoryPermission } from './shared/history';
 
 const toast = useToast();
+// 設定画面の成功トースト（severity: 'success'）をテーマカラーへ連動させるスコープ付きトークン
+const themedToastTokens = buildThemedSuccessToastTokens();
 const selectedLanguage = ref<LanguageSetting>('auto');
 const selectedThemeColor = ref<ThemeColor>(DEFAULT_THEME_COLOR);
 const isSavingThemeColor = ref(false);

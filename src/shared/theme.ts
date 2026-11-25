@@ -132,6 +132,85 @@ export function saveCachedThemeColorSync(color: ThemeColor): void {
 }
 
 /**
+ * 成功トーストの単一カラースキーム向けデザイントークン定義
+ */
+export interface ThemedSuccessToastSchemeTokens {
+  background: string;
+  borderColor: string;
+  color: string;
+  detailColor: string;
+  shadow: string;
+  closeButton: {
+    hoverBackground: string;
+    focusRing: {
+      color: string;
+      shadow: string;
+    };
+  };
+}
+
+/**
+ * PrimeVue Toast コンポーネントの `:dt` プロパティへ渡す成功トースト用デザイントークン定義
+ */
+export interface ThemedSuccessToastTokens {
+  colorScheme: {
+    light: {
+      success: ThemedSuccessToastSchemeTokens;
+    };
+    dark: {
+      success: ThemedSuccessToastSchemeTokens;
+    };
+  };
+}
+
+/**
+ * PrimeVue Toast の `success` トーストをテーマカラー（`primary` パレット）へ連動させる
+ * スコープ付きデザイントークン定義を生成します。
+ * ライト／ダークモード双方で Aura テーマの標準構造を踏襲しつつ、
+ * ダークモードのアクセント文字・フォーカスリングには視認性の高い `{primary.400}` を採用します。
+ * @returns `<Toast :dt="...">` へそのまま渡せるデザイントークンオブジェクト
+ */
+export function buildThemedSuccessToastTokens(): ThemedSuccessToastTokens {
+  return {
+    colorScheme: {
+      light: {
+        success: {
+          background: 'color-mix(in srgb, {primary.50}, transparent 5%)',
+          borderColor: '{primary.200}',
+          color: '{primary.600}',
+          detailColor: '{surface.700}',
+          shadow: '0px 4px 8px 0px color-mix(in srgb, {primary.500}, transparent 96%)',
+          closeButton: {
+            hoverBackground: '{primary.100}',
+            focusRing: {
+              color: '{primary.600}',
+              shadow: 'none'
+            }
+          }
+        }
+      },
+      dark: {
+        success: {
+          background: 'color-mix(in srgb, {primary.500}, transparent 84%)',
+          borderColor: 'color-mix(in srgb, {primary.700}, transparent 64%)',
+          // ダーク背景上で slate / indigo を含む全 6 色の視認性を確保するため primary.400 を使用する
+          color: '{primary.400}',
+          detailColor: '{surface.0}',
+          shadow: '0px 4px 8px 0px color-mix(in srgb, {primary.500}, transparent 96%)',
+          closeButton: {
+            hoverBackground: 'rgba(255, 255, 255, 0.05)',
+            focusRing: {
+              color: '{primary.400}',
+              shadow: 'none'
+            }
+          }
+        }
+      }
+    }
+  };
+}
+
+/**
  * 指定されたテーマカラーを PrimeVue の実行時プライマリパレットへ即座に適用し、
  * 次回起動時のちらつき防止用同期キャッシュも同時に更新します。
  * @param color - 適用するテーマカラー識別子
