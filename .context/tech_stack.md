@@ -55,6 +55,13 @@ Nickmark プロジェクトで使用されている主要な技術とツール�
   - `generate_promo_images.js`: HTML/CSS テンプレートと Headless Chrome を用いて `images/` 配下に多言語プロモーション画像（1280×800 PNG）を生成するスクリプト。
   - `promo_templates.js`: 5 種類のプロモーション画像スライド用 HTML/CSS テンプレート。
   - `promo_locales.js`: プロモーション画像向けの多言語テキスト辞書（`zh_CN` / `zh_TW` / `ko` / `ja` / `en`）。
+- `docs/`: GitHub Pages（`/docs` ルート公開想定）向けのビルド不要な静的紹介ページ（ランディングページ）。
+  - `index.html`: セマンティック HTML による単一紹介ページ本体（ライト／ダーク FOUC 抑止初期化スクリプト内蔵）。
+  - `styles.css`: ライト／ダーク自動追従・手動切替および定番 6 色テーマカラープレビュー対応のレスポンシブスタイルシート。
+  - `i18n.js`: 5 言語（`ja` / `en` / `zh-Hans` / `zh-Hant` / `ko`）の翻訳辞書・言語判定・`sawara.me` ドキュメント URL マッピング。
+  - `app.js`: 多言語切替、テーマ・6 色アクセントプレビュー、コマンドパレット体験デモ（検索・動的 URL・フォルダ一括起動・コマンド・ブックマークレット・Tips）、コピーボタン、スクロールスパイ制御。
+  - `assets/icon.svg`: ページ内表示・ファビコン用に同梱したアプリアイコン。
+  - `.nojekyll`: GitHub Pages での Jekyll ビルドを無効化するマーカーファイル。
 
 ## 4. コマンド・使い方
 
