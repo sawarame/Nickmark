@@ -1,0 +1,898 @@
+<!doctype html>
+<html lang="ja" data-theme="light" data-accent="emerald">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nickmark | キーボード操作特化型ブックマークランチャー Chrome 拡張機能</title>
+  <meta
+    name="description"
+    content="コマンドパレット、動的URL(%s)、定番プリセット18種、フォルダ一括起動、ブックマークレット実行、指数減衰ランキング、6色テーマカラーを備えたキーボード特化型 Chrome 拡張機能「Nickmark」の紹介ページ。"
+  />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Nickmark | Keyboard-First Bookmark Launcher for Chrome" />
+  <meta
+    property="og:description"
+    content="Command palette, dynamic URLs (%s), 18 built-in presets, folder batch open, bookmarklet execution, exponential decay ranking, and 6 accent themes."
+  />
+  <link rel="icon" type="image/svg+xml" href="./assets/icon.svg" />
+  <!-- 初回描画時のテーマ・アクセントちらつき（FOUC）を防止する軽量初期化スクリプト -->
+  <script>
+    (function () {
+      try {
+        var savedTheme = window.localStorage.getItem('nickmark-docs-theme');
+        var prefersDark =
+          window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var theme = savedTheme === 'dark' || savedTheme === 'light'
+          ? savedTheme
+          : (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+
+        var savedAccent = window.localStorage.getItem('nickmark-docs-accent');
+        var valid = ['emerald', 'blue', 'slate', 'indigo', 'orange', 'rose'];
+        if (savedAccent && valid.indexOf(savedAccent) !== -1) {
+          document.documentElement.setAttribute('data-accent', savedAccent);
+        }
+      } catch (_) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body id="top">
+  <a class="skip-link" href="#main-content" data-i18n="skipToContent">メインコンテンツへスキップ</a>
+
+  <!-- スティッキーヘッダー -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand-link" href="#top">
+        <img class="brand-icon" src="./assets/icon.svg" alt="Nickmark" width="30" height="30" />
+        <span>Nickmark</span>
+      </a>
+
+      <nav class="header-nav" aria-label="Section navigation">
+        <a class="nav-link" href="#palette" data-i18n="navPalette">コマンドパレット</a>
+        <a class="nav-link" href="#dynamic-url" data-i18n="navDynamic">動的URL &amp; JS</a>
+        <a class="nav-link" href="#folders" data-i18n="navFolders">フォルダ一括起動</a>
+        <a class="nav-link" href="#dashboard" data-i18n="navDashboard">学習 &amp; 管理画面</a>
+        <a class="nav-link" href="#privacy" data-i18n="navPrivacy">同期 &amp; カスタマイズ</a>
+        <a class="nav-link" href="#commands" data-i18n="navCommands">コマンド</a>
+        <a class="nav-link" href="#install" data-i18n="navInstall">導入方法</a>
+      </nav>
+
+      <div class="header-actions">
+        <div class="lang-select-wrap">
+          <svg class="lang-select-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M2 12h20"></path>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+          <select id="lang-select" class="lang-select" data-i18n-aria="langSwitcherLabel" aria-label="表示言語を選択">
+            <option value="ja">日本語</option>
+            <option value="en">English</option>
+            <option value="zh-Hans">简体中文</option>
+            <option value="zh-Hant">繁體中文</option>
+            <option value="ko">한국어</option>
+          </select>
+          <svg class="lang-select-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6"></path>
+          </svg>
+        </div>
+
+        <button
+          id="theme-toggle"
+          type="button"
+          class="icon-btn"
+          data-i18n-aria="themeToggleLabel"
+          aria-label="ライト／ダークモードを切り替え"
+          aria-pressed="false"
+        >
+          <svg class="theme-icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+          </svg>
+          <svg class="theme-icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+        </button>
+
+        <a
+          class="icon-btn"
+          href="https://github.com/sawarame/Nickmark"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-i18n-aria="githubLinkLabel"
+          aria-label="GitHub リポジトリを開く"
+        >
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2Z" />
+          </svg>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- 1. ヒーローセクション -->
+    <section class="hero-section">
+      <div class="container hero-inner">
+        <div class="hero-icon-wrap">
+          <img class="hero-app-icon" src="./assets/icon.svg" alt="Nickmark Icon" width="72" height="72" />
+        </div>
+
+        <div>
+          <span class="hero-badge">
+            <span class="hero-badge-dot" aria-hidden="true"></span>
+            <span data-i18n="heroBadge">v2.2.2 · Chrome 135+ · 5 言語対応 · MIT License</span>
+          </span>
+        </div>
+
+        <h1 class="hero-title">
+          <span data-i18n="heroTitleLine1">ブックマークへのアクセスを、</span>
+          <span class="hero-title-accent" data-i18n="heroTitleLine2">キーボードだけで最速に。</span>
+        </h1>
+
+        <p class="hero-desc" data-i18n="heroDesc">
+          Nickmark は、マウス移動を最小限にしたいエンジニアやパワーユーザーのための Chrome 拡張機能です。よく使うページ・検索テンプレート（%s）・フォルダグループ・ブックマークレットに短いニックネームを割り当て、コマンドパレットから瞬時に呼び出せます。
+        </p>
+
+        <div class="cta-group">
+          <a
+            class="btn-primary"
+            href="https://chromewebstore.google.com/detail/nickmark/bicojpjoabhecikokcohbjgaiojggpno"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0Z"></path>
+            </svg>
+            <span data-i18n="ctaStore">Chrome Web Store で追加</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M15 3h6v6"></path>
+              <path d="M10 14 21 3"></path>
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+            </svg>
+          </a>
+
+          <a
+            class="btn-secondary"
+            href="https://sawara.me/extensions/nickmark"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-docs-link
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 7v14"></path>
+              <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"></path>
+            </svg>
+            <span data-i18n="ctaDocs">使い方ドキュメントを見る</span>
+          </a>
+
+          <a
+            class="btn-ghost"
+            href="https://github.com/sawarame/Nickmark"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span data-i18n="ctaGithub">GitHub を見る</span>
+          </a>
+        </div>
+
+        <nav class="mobile-pill-nav" aria-label="Quick section links">
+          <a class="mobile-pill-link" href="#palette" data-i18n="navPalette">コマンドパレット</a>
+          <a class="mobile-pill-link" href="#dynamic-url" data-i18n="navDynamic">動的URL &amp; JS</a>
+          <a class="mobile-pill-link" href="#folders" data-i18n="navFolders">フォルダ一括起動</a>
+          <a class="mobile-pill-link" href="#dashboard" data-i18n="navDashboard">学習 &amp; 管理画面</a>
+          <a class="mobile-pill-link" href="#privacy" data-i18n="navPrivacy">同期 &amp; カスタマイズ</a>
+          <a class="mobile-pill-link" href="#commands" data-i18n="navCommands">コマンド</a>
+          <a class="mobile-pill-link" href="#install" data-i18n="navInstall">導入方法</a>
+        </nav>
+      </div>
+    </section>
+
+    <!-- 2. インタラクティブ体験デモ -->
+    <section class="demo-section" aria-label="Interactive Command Palette Demo">
+      <div class="container showcase-wrap">
+        <div class="demo-presets-bar">
+          <span class="demo-presets-label" data-i18n="demoExamplesLabel">入力例を試す:</span>
+          <button type="button" class="preset-chip is-active" data-demo-example="gh/Nickmark">gh/Nickmark</button>
+          <button type="button" class="preset-chip" data-demo-example="gh vue">gh vue</button>
+          <button type="button" class="preset-chip" data-demo-example="work/">work/</button>
+          <button type="button" class="preset-chip" data-demo-example=":add dev">:add dev</button>
+          <button type="button" class="preset-chip" data-demo-example=";add dev">;add dev</button>
+          <button type="button" class="preset-chip" data-demo-example="js/top">js/top</button>
+          <button type="button" class="preset-chip" data-demo-example="">Tips</button>
+        </div>
+
+        <div class="browser-frame">
+          <!-- タブストリップ -->
+          <div class="browser-tab-strip">
+            <div class="window-dots" aria-hidden="true">
+              <span class="window-dot red"></span>
+              <span class="window-dot yellow"></span>
+              <span class="window-dot green"></span>
+            </div>
+            <div id="demo-tab-list" class="browser-tab-list" role="tablist"></div>
+            <div class="browser-tab-meta">
+              <span id="demo-tab-count" class="tab-count-pill" aria-label="Open tabs">1</span>
+              <button id="demo-reset-btn" type="button" class="reset-browser-btn" data-i18n="demoReset">リセット</button>
+            </div>
+          </div>
+
+          <!-- アドレスバー & 拡張機能アイコン -->
+          <div class="browser-toolbar">
+            <div class="browser-address-bar">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+              <span id="demo-address">https://sawarame.github.io/Nickmark/</span>
+            </div>
+            <button id="demo-trigger-btn" type="button" class="ext-trigger-btn">
+              <img src="./assets/icon.svg" alt="" width="18" height="18" aria-hidden="true" />
+              <span data-i18n="demoTrigger">パレット開閉</span>
+            </button>
+          </div>
+
+          <!-- 疑似ブラウザビューポート -->
+          <div class="browser-viewport">
+            <div id="demo-toast" class="demo-toast" role="status" aria-live="polite"></div>
+
+            <!-- コマンドパレット本体 -->
+            <div id="palette-card" class="palette-card">
+              <div class="palette-input-row">
+                <svg class="palette-search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <path d="m21 21-4.3-4.3"></path>
+                </svg>
+                <input
+                  id="demo-input"
+                  type="text"
+                  class="palette-input"
+                  autocomplete="off"
+                  spellcheck="false"
+                  role="combobox"
+                  aria-expanded="true"
+                  aria-controls="palette-results"
+                  data-i18n-aria="demoInputAria"
+                  data-i18n-placeholder="demoInputPlaceholder"
+                  placeholder="ニックネーム・URL・:コマンド を入力（例: gh vue, work/, :add dev）"
+                />
+                <button
+                  id="demo-clear-btn"
+                  type="button"
+                  class="palette-clear-btn"
+                  data-i18n-aria="demoClearAria"
+                  aria-label="入力をクリア"
+                >×</button>
+              </div>
+
+              <ul id="palette-results" class="palette-results" role="listbox"></ul>
+
+              <div id="palette-tip-box" class="palette-tip-box" role="button" tabindex="0" hidden>
+                <div class="palette-tip-header">
+                  <span data-i18n="demoTipHeader">Nickmark Tip</span>
+                  <span data-i18n="demoTipHint">クリックで別のヒントを表示</span>
+                </div>
+                <p id="palette-tip-text" class="palette-tip-text"></p>
+              </div>
+
+              <div class="palette-footer">
+                <div class="palette-action-group">
+                  <button type="button" class="palette-action-btn" data-demo-action="current">
+                    <kbd>Enter</kbd>
+                    <span data-i18n="demoActionEnter">現在のタブで開く</span>
+                  </button>
+                  <button type="button" class="palette-action-btn" data-demo-action="newTab">
+                    <kbd>⌘/Ctrl + Enter</kbd>
+                    <span data-i18n="demoActionNewTab">新しいタブで開く</span>
+                  </button>
+                  <button type="button" class="palette-action-btn" data-demo-action="bgTab">
+                    <kbd>Shift + Enter</kbd>
+                    <span data-i18n="demoActionBgTab">バックグラウンドで連続起動</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="reopen-palette-bar">
+              <button id="reopen-palette-btn" type="button" class="reopen-palette-btn" hidden data-i18n="demoReopen">
+                コマンドパレットを開く（⌥⇧D / Alt+⇧D）
+              </button>
+            </div>
+
+            <!-- 背景の疑似アクティブページ -->
+            <div class="mock-page-bg">
+              <span id="demo-page-kicker" class="mock-page-kicker">v2.2.2 · Chrome 135+ · MIT License</span>
+              <h2 id="demo-page-title" class="mock-page-title">Nickmark — キーボード操作特化型ブックマークランチャー</h2>
+              <p id="demo-page-desc" class="mock-page-desc">上の入力例チップをクリックするか、パレットに直接入力して検索・展開・フォルダ一括起動を体験できます。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. 主要機能 1: コマンドパレット -->
+    <section id="palette" class="feature-section is-alt">
+      <div class="container feature-grid">
+        <div class="feature-copy">
+          <span class="section-eyebrow" data-i18n="f1Eyebrow">コマンドパレット (⌥⇧D / Alt+⇧D)</span>
+          <h2 class="section-heading" data-i18n="f1Title">どこからでも、思考を止めずに呼び出す。</h2>
+          <p class="section-lead" data-i18n="f1Lead">
+            Option + Shift + D（Windows / Linux は Alt + Shift + D）を押すだけでコマンドパレットが即座に展開。ニックネームの一致度だけでなくタイトルや URL 全体から横断検索し、開きたいタブの挙動まで自在に選べます。
+          </p>
+          <ul class="feature-points">
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f1Point1"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f1Point2"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f1Point3"></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-visual">
+          <div class="visual-card">
+            <div class="visual-card-header">
+              <span class="visual-card-title" data-i18n="f1CardTitle">キーボードファースト操作</span>
+              <span class="visual-pill" data-i18n="f1CardPill">横断検索 + Tips</span>
+            </div>
+            <div class="shortcut-hero-box">
+              <div class="shortcut-keys-pair">
+                <kbd>⌥ + ⇧ + D</kbd>
+                <span>/</span>
+                <kbd>Alt + Shift + D</kbd>
+              </div>
+              <span class="mock-row-meta" data-i18n="f1ShortcutSub">どこからでも即座に起動</span>
+            </div>
+            <div class="mock-row-list">
+              <div class="mock-row is-highlighted">
+                <div class="mock-row-left">
+                  <kbd>Enter</kbd>
+                  <span class="mock-row-text">gh/Nickmark</span>
+                </div>
+                <span class="mock-row-meta" data-i18n="f1Row1Meta">現在タブ / 別タブ設定対応</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <kbd>⌘/Ctrl + Enter</kbd>
+                  <span class="mock-row-text">mdn fetch</span>
+                </div>
+                <span class="mock-row-meta" data-i18n="f1Row2Meta">新しいフォアグラウンドタブ</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <kbd>Shift + Enter</kbd>
+                  <span class="mock-row-text">work/docs</span>
+                </div>
+                <span class="mock-row-meta" data-i18n="f1Row3Meta">パレット維持で連続オープン</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. 主要機能 2: 動的 URL・定番プリセット 18 種 & ブックマークレット -->
+    <section id="dynamic-url" class="feature-section">
+      <div class="container feature-grid is-reversed">
+        <div class="feature-copy">
+          <span class="section-eyebrow" data-i18n="f2Eyebrow">動的 URL (%s)・定番プリセット 18 種 &amp; JS</span>
+          <h2 class="section-heading" data-i18n="f2Title">検索引数もスクリプトも、そのままワンショットで。</h2>
+          <p class="section-lead" data-i18n="f2Lead"></p>
+          <ul class="feature-points">
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f2Point1"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f2Point2"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f2Point3"></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-visual">
+          <div class="visual-card">
+            <div class="visual-card-header">
+              <span class="visual-card-title" data-i18n="f2CardTitle">動的展開 &amp; プリセット実行</span>
+              <span class="visual-pill" data-i18n="f2CardPill">18 Presets + History</span>
+            </div>
+            <div class="mock-row-list">
+              <div class="mock-row is-highlighted">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">gh nickmark</span>
+                  <span class="mock-row-text" data-i18n="f2Row1Desc">https://github.com/search?q=nickmark</span>
+                </div>
+                <span class="mock-row-meta">%s</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">mdlink</span>
+                  <span class="mock-row-text" data-i18n="f2Row2Desc">Markdown 形式 [タイトル](URL) をクリップボードへコピー</span>
+                </div>
+                <span class="mock-row-meta">JS</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">htmllink</span>
+                  <span class="mock-row-text" data-i18n="f2Row3Desc">Teams 等で使えるリッチ HTML リンクをマルチ MIME コピー</span>
+                </div>
+                <span class="mock-row-meta">JS</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">history</span>
+                  <span class="mock-row-text" data-i18n="f2Row4Desc">オプトイン有効時のみ履歴候補を表示（重複除外）</span>
+                </div>
+                <span class="mock-row-meta">Opt-in</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. 主要機能 3: フォルダ管理 & 一括オープン -->
+    <section id="folders" class="feature-section is-alt">
+      <div class="container feature-grid">
+        <div class="feature-copy">
+          <span class="section-eyebrow" data-i18n="f3Eyebrow">フォルダ管理 &amp; 一括オープン</span>
+          <h2 class="section-heading" data-i18n="f3Title">スラッシュ区切りで、作業環境を一気に展開。</h2>
+          <p class="section-lead" data-i18n="f3Lead"></p>
+          <ul class="feature-points">
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f3Point1"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f3Point2"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f3Point3"></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-visual">
+          <div class="visual-card">
+            <div class="visual-card-header">
+              <span class="visual-card-title" data-i18n="f3CardTitle">フォルダ展開プレビュー: work/</span>
+              <span class="visual-pill" data-i18n="f3CardPill">3 タブを一括起動</span>
+            </div>
+            <div class="mock-row-list">
+              <div class="mock-row is-highlighted">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">work/mail</span>
+                  <span class="mock-row-text">Team Webmail</span>
+                </div>
+                <span class="mock-row-meta">mail.example.com</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">work/docs</span>
+                  <span class="mock-row-text">Architecture Docs</span>
+                </div>
+                <span class="mock-row-meta">docs.example.com</span>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">work/ci</span>
+                  <span class="mock-row-text">CI / CD Pipelines</span>
+                </div>
+                <span class="mock-row-meta">ci.example.com</span>
+              </div>
+            </div>
+            <div class="callout-note" data-i18n="f3SafetyNote"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. 主要機能 4: 指数減衰ランキング & 管理画面 -->
+    <section id="dashboard" class="feature-section">
+      <div class="container feature-grid is-reversed">
+        <div class="feature-copy">
+          <span class="section-eyebrow" data-i18n="f4Eyebrow">指数減衰ランキング &amp; 管理画面 (:ls)</span>
+          <h2 class="section-heading" data-i18n="f4Title">使うほど上位へ、メンテナンスも軽快に。</h2>
+          <p class="section-lead" data-i18n="f4Lead"></p>
+          <ul class="feature-points">
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f4Point1"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f4Point2"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f4Point3"></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-visual">
+          <div class="visual-card">
+            <div class="visual-card-header">
+              <span class="visual-card-title" data-i18n="f4CardTitle">指数減衰ランキング</span>
+              <span class="visual-pill" data-i18n="f4CardPill">Score × 0.95^days + 1.0</span>
+            </div>
+            <div class="mock-row-list">
+              <div class="mock-row is-highlighted">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">gh/Nickmark</span>
+                  <span class="mock-row-text">Pinned · 26.4</span>
+                </div>
+                <div class="score-bar-track" aria-hidden="true"><div class="score-bar-fill" style="width: 96%;"></div></div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">work/mail</span>
+                  <span class="mock-row-text">14.5</span>
+                </div>
+                <div class="score-bar-track" aria-hidden="true"><div class="score-bar-fill" style="width: 64%;"></div></div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">work/docs</span>
+                  <span class="mock-row-text">12.1</span>
+                </div>
+                <div class="score-bar-track" aria-hidden="true"><div class="score-bar-fill" style="width: 52%;"></div></div>
+              </div>
+            </div>
+            <div class="callout-note" data-i18n="f4FormulaLabel"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. 主要機能 5: プライバシー・同期・6 色テーマカラーカスタマイズ -->
+    <section id="privacy" class="feature-section is-alt">
+      <div class="container feature-grid">
+        <div class="feature-copy">
+          <span class="section-eyebrow" data-i18n="f5Eyebrow">プライバシー・同期・カスタマイズ</span>
+          <h2 class="section-heading" data-i18n="f5Title">外部送信ゼロ、好みの色と言語でどこでも同期。</h2>
+          <p class="section-lead" data-i18n="f5Lead"></p>
+          <ul class="feature-points">
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f5Point1"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f5Point2"></span>
+            </li>
+            <li>
+              <svg class="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+              <span data-i18n="f5Point3"></span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="feature-visual">
+          <div class="visual-card">
+            <div class="visual-card-header">
+              <span class="visual-card-title" data-i18n="f5CardTitle">プライバシー &amp; 6 色テーマカラー</span>
+              <span class="visual-pill" data-i18n="f5CardPill">v2.2.2 Customize</span>
+            </div>
+            <div class="mock-row-list">
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">0 Tracking</span>
+                  <span class="mock-row-text" data-i18n="f5PrivacyTitle">外部サーバー通信・トラッキングなし</span>
+                </div>
+              </div>
+              <div class="mock-row">
+                <div class="mock-row-left">
+                  <span class="mock-code-tag">Sync / Local</span>
+                  <span class="mock-row-text" data-i18n="f5SyncTitle">ローカル無制限 &amp; Google アカウント同期</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 定番 6 色テーマカラー インタラクティブプレビュー -->
+            <div class="theme-preview-box">
+              <div class="theme-preview-header">
+                <span data-i18n="f5ThemeTitle">定番 6 色テーマカラーを試す</span>
+                <span class="mock-row-meta" data-i18n="f5ThemeHint">クリックでプレビュー</span>
+              </div>
+              <div class="theme-swatch-row" role="group" aria-label="Theme color preview">
+                <button type="button" class="swatch-btn is-active" data-accent-swatch="emerald" aria-pressed="true">
+                  <span class="swatch-dot" style="background: #10b981;" aria-hidden="true"></span>
+                  <span data-i18n="colorEmerald">グリーン</span>
+                </button>
+                <button type="button" class="swatch-btn" data-accent-swatch="blue" aria-pressed="false">
+                  <span class="swatch-dot" style="background: #3b82f6;" aria-hidden="true"></span>
+                  <span data-i18n="colorBlue">ブルー</span>
+                </button>
+                <button type="button" class="swatch-btn" data-accent-swatch="slate" aria-pressed="false">
+                  <span class="swatch-dot" style="background: #64748b;" aria-hidden="true"></span>
+                  <span data-i18n="colorSlate">グレー</span>
+                </button>
+                <button type="button" class="swatch-btn" data-accent-swatch="indigo" aria-pressed="false">
+                  <span class="swatch-dot" style="background: #6366f1;" aria-hidden="true"></span>
+                  <span data-i18n="colorIndigo">インディゴ</span>
+                </button>
+                <button type="button" class="swatch-btn" data-accent-swatch="orange" aria-pressed="false">
+                  <span class="swatch-dot" style="background: #f97316;" aria-hidden="true"></span>
+                  <span data-i18n="colorOrange">オレンジ</span>
+                </button>
+                <button type="button" class="swatch-btn" data-accent-swatch="rose" aria-pressed="false">
+                  <span class="swatch-dot" style="background: #f43f5e;" aria-hidden="true"></span>
+                  <span data-i18n="colorRose">ローズ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. コマンド & ショートカット リファレンス -->
+    <section id="commands" class="center-section">
+      <div class="container">
+        <div class="section-header-centered">
+          <span class="section-eyebrow" data-i18n="cmdEyebrow">コマンド &amp; ショートカット</span>
+          <h2 class="section-heading" data-i18n="cmdTitle">キーボード操作リファレンス</h2>
+          <p class="section-lead" data-i18n="cmdLead"></p>
+        </div>
+
+        <div class="ref-grid">
+          <div class="ref-card">
+            <h3 class="ref-card-title" data-i18n="cmdTableTitle">組み込みコマンド一覧</h3>
+            <div class="table-scroll">
+              <table class="ref-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="cmdColCommand">コマンド</th>
+                    <th data-i18n="cmdColAlias">省略形</th>
+                    <th data-i18n="cmdColDesc">説明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code class="cmd-code">:add [name] [url] [title]</code></td>
+                    <td><code class="cmd-code">:a</code></td>
+                    <td data-i18n="cmdDescAdd"></td>
+                  </tr>
+                  <tr>
+                    <td><code class="cmd-code">:addall [name]</code></td>
+                    <td><code class="cmd-code">:aa</code></td>
+                    <td data-i18n="cmdDescAddAll"></td>
+                  </tr>
+                  <tr>
+                    <td><code class="cmd-code">:rm [name] [url]</code></td>
+                    <td>—</td>
+                    <td data-i18n="cmdDescRm"></td>
+                  </tr>
+                  <tr>
+                    <td><code class="cmd-code">:ls</code></td>
+                    <td>—</td>
+                    <td data-i18n="cmdDescLs"></td>
+                  </tr>
+                  <tr>
+                    <td><code class="cmd-code">:prefs</code></td>
+                    <td>—</td>
+                    <td data-i18n="cmdDescPrefs"></td>
+                  </tr>
+                  <tr>
+                    <td><code class="cmd-code">:help</code></td>
+                    <td>—</td>
+                    <td data-i18n="cmdDescHelp"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="callout-note" style="margin-top: 14px;" data-i18n="cmdNoteSemicolon"></div>
+          </div>
+
+          <div class="ref-card">
+            <h3 class="ref-card-title" data-i18n="scTableTitle">キーボードショートカット一覧</h3>
+            <div class="table-scroll">
+              <table class="ref-table">
+                <thead>
+                  <tr>
+                    <th data-i18n="scColKey">キー操作</th>
+                    <th data-i18n="scColAction">動作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><kbd>⌥⇧D</kbd> / <kbd>Alt+⇧D</kbd></td>
+                    <td data-i18n="scOpen"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>↑</kbd> <kbd>↓</kbd> / <kbd>Ctrl+N</kbd> <kbd>P</kbd></td>
+                    <td data-i18n="scMove"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Tab</kbd></td>
+                    <td data-i18n="scTab"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Enter</kbd></td>
+                    <td data-i18n="scEnter"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>⌘/Ctrl/Alt + Enter</kbd></td>
+                    <td data-i18n="scNewTab"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Shift + Enter</kbd></td>
+                    <td data-i18n="scBgTab"></td>
+                  </tr>
+                  <tr>
+                    <td><kbd>Esc</kbd></td>
+                    <td data-i18n="scEsc"></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. 導入方法 & クイックスタート -->
+    <section id="install" class="center-section is-alt">
+      <div class="container">
+        <div class="section-header-centered">
+          <span class="section-eyebrow" data-i18n="installEyebrow">インストール</span>
+          <h2 class="section-heading" data-i18n="installTitle">導入方法とクイックスタート</h2>
+          <p class="section-lead" data-i18n="installLead"></p>
+        </div>
+
+        <div class="install-grid">
+          <div class="install-card is-recommended">
+            <div class="install-card-head">
+              <h3 class="install-card-title" data-i18n="installStoreTitle">Chrome Web Store から追加</h3>
+              <span class="visual-pill" data-i18n="installRecommended">推奨</span>
+            </div>
+            <p class="section-lead" style="margin: 0;" data-i18n="installStoreLead"></p>
+            <ol class="step-list">
+              <li data-i18n="installStep1"></li>
+              <li data-i18n="installStep2"></li>
+              <li data-i18n="installStep3"></li>
+              <li data-i18n="installStep4"></li>
+            </ol>
+            <div class="callout-note" data-i18n="installUserScriptsNote"></div>
+            <div>
+              <a
+                class="btn-primary"
+                href="https://chromewebstore.google.com/detail/nickmark/bicojpjoabhecikokcohbjgaiojggpno"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span data-i18n="ctaStore">Chrome Web Store で追加</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="install-card">
+            <div class="install-card-head">
+              <h3 class="install-card-title" data-i18n="installBuildTitle">GitHub からビルドして読み込む</h3>
+              <span class="visual-pill">Source</span>
+            </div>
+            <p class="section-lead" style="margin: 0;" data-i18n="installBuildLead"></p>
+
+            <div class="copy-cmd-block">
+              <code>git clone https://github.com/sawarame/Nickmark.git</code>
+              <button
+                type="button"
+                class="copy-btn"
+                data-copy-text="git clone https://github.com/sawarame/Nickmark.git"
+              >
+                <span class="copy-btn-label" data-i18n="copyBtn">コピー</span>
+              </button>
+            </div>
+
+            <div class="copy-cmd-block">
+              <code>cd Nickmark &amp;&amp; npm install &amp;&amp; npm run build</code>
+              <button
+                type="button"
+                class="copy-btn"
+                data-copy-text="cd Nickmark && npm install && npm run build"
+              >
+                <span class="copy-btn-label" data-i18n="copyBtn">コピー</span>
+              </button>
+            </div>
+
+            <ol class="step-list">
+              <li data-i18n="installBuildStep1"></li>
+              <li data-i18n="installBuildStep2"></li>
+              <li data-i18n="installBuildStep3"></li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. 技術仕様サマリー -->
+    <section class="center-section" aria-label="Technical specifications">
+      <div class="container">
+        <div class="spec-grid">
+          <div class="spec-card">
+            <span class="spec-label" data-i18n="specVersionLabel">バージョン / 動作環境</span>
+            <span class="spec-value" data-i18n="specVersionValue">v2.2.2 · Manifest V3 · Chrome 135+</span>
+          </div>
+          <div class="spec-card">
+            <span class="spec-label" data-i18n="specStorageLabel">ストレージ / 同期</span>
+            <span class="spec-value" data-i18n="specStorageValue">ローカル無制限 · Chrome 同期 (100KB / 自動チャンク)</span>
+          </div>
+          <div class="spec-card">
+            <span class="spec-label" data-i18n="specPrivacyLabel">プライバシー / 権限</span>
+            <span class="spec-value" data-i18n="specPrivacyValue">外部送信ゼロ · 履歴権限はオプトイン</span>
+          </div>
+          <div class="spec-card">
+            <span class="spec-label" data-i18n="specStackLabel">ライセンス / 技術スタック</span>
+            <span class="spec-value" data-i18n="specStackValue">MIT License · TypeScript / Vue 3 / PrimeVue</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. 下部 CTA -->
+    <section class="bottom-cta-section">
+      <div class="container bottom-cta-inner">
+        <img class="hero-app-icon" src="./assets/icon.svg" alt="Nickmark Icon" width="68" height="68" />
+        <h2 class="bottom-cta-title" data-i18n="bottomCtaTitle">ブックマークを探す時間を、ゼロに。</h2>
+        <p class="bottom-cta-desc" data-i18n="bottomCtaDesc">
+          無料・オープンソース（MIT ライセンス）で公開しています。Chrome Web Store からすぐに導入できます。
+        </p>
+        <div class="cta-group">
+          <a
+            class="btn-primary"
+            href="https://chromewebstore.google.com/detail/nickmark/bicojpjoabhecikokcohbjgaiojggpno"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span data-i18n="ctaStore">Chrome Web Store で追加</span>
+          </a>
+          <a
+            class="btn-secondary"
+            href="https://sawara.me/extensions/nickmark"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-docs-link
+          >
+            <span data-i18n="ctaDocs">使い方ドキュメントを見る</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span data-i18n="footerDesc">Nickmark — キーボード操作特化型ブックマークランチャー Chrome 拡張機能</span>
+      <div class="footer-links">
+        <a href="https://chromewebstore.google.com/detail/nickmark/bicojpjoabhecikokcohbjgaiojggpno" target="_blank" rel="noopener noreferrer" data-i18n="footerStore">Chrome Web Store</a>
+        <a href="https://sawara.me/extensions/nickmark" target="_blank" rel="noopener noreferrer" data-docs-link data-i18n="footerDocs">使い方ドキュメント</a>
+        <a href="https://github.com/sawarame/Nickmark" target="_blank" rel="noopener noreferrer" data-i18n="footerGithub">GitHub</a>
+        <a href="https://github.com/sawarame/Nickmark/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" data-i18n="footerLicense">MIT License</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./i18n.js" defer></script>
+  <script src="./app.js" defer></script>
+</body>
+</html>
