@@ -1,4 +1,4 @@
-import { updatePrimaryPalette } from '@primeuix/themes';
+import { updatePreset } from '@primeuix/themes';
 import {
   DEFAULT_THEME_COLOR,
   ThemeColor,
@@ -211,7 +211,70 @@ export function buildThemedSuccessToastTokens(): ThemedSuccessToastTokens {
 }
 
 /**
- * 指定されたテーマカラーを PrimeVue の実行時プライマリパレットへ即座に適用し、
+ * 単一カラースキーム向けの PrimeVue セマンティック `highlight` トークン定義
+ */
+export interface ThemeHighlightTokens {
+  background: string;
+  focusBackground: string;
+  color: string;
+  focusColor: string;
+}
+
+/**
+ * ライト／ダーク双方の PrimeVue セマンティック `highlight` トークン定義
+ */
+export interface ThemeHighlightColorScheme {
+  light: ThemeHighlightTokens;
+  dark: ThemeHighlightTokens;
+}
+
+/**
+ * 指定されたテーマカラーに対応するライト／ダーク双方の PrimeVue `semantic.colorScheme.*.highlight` トークンを生成します。
+ * グレー（`'slate'`）選択時は Aura 標準のハイライト背景が背景色・ホバー背景色とほぼ同化して視認しづらいため、
+ * ライト／ダーク双方で十分なコントラストを確保できる濃いめのトーンを返します。
+ * それ以外のテーマカラーでは Aura 標準のハイライトトークンを維持します。
+ * @param color - 対象のテーマカラー識別子
+ * @returns ライト／ダーク別のハイライトトークン定義
+ */
+export function buildHighlightColorScheme(color: ThemeColor): ThemeHighlightColorScheme {
+  const normalized = parseValidThemeColor(color);
+  if (normalized === 'slate') {
+    return {
+      light: {
+        // slate.50 (#f8fafc) は白背景およびホバー色 (surface.100: #f1f5f9) と見分けづらいため一段濃いトーンにする
+        background: '{primary.200}',
+        focusBackground: '{primary.300}',
+        color: '{primary.800}',
+        focusColor: '{primary.900}'
+      },
+      dark: {
+        // ダークモードでも無彩色が背景 (#18181b)・ホバー (#27272a) に埋没しないよう不透明度を引き上げる
+        background: 'color-mix(in srgb, {primary.400}, transparent 72%)',
+        focusBackground: 'color-mix(in srgb, {primary.400}, transparent 64%)',
+        color: 'rgba(255,255,255,.87)',
+        focusColor: 'rgba(255,255,255,.87)'
+      }
+    };
+  }
+
+  return {
+    light: {
+      background: '{primary.50}',
+      focusBackground: '{primary.100}',
+      color: '{primary.700}',
+      focusColor: '{primary.800}'
+    },
+    dark: {
+      background: 'color-mix(in srgb, {primary.400}, transparent 84%)',
+      focusBackground: 'color-mix(in srgb, {primary.400}, transparent 76%)',
+      color: 'rgba(255,255,255,.87)',
+      focusColor: 'rgba(255,255,255,.87)'
+    }
+  };
+}
+
+/**
+ * 指定されたテーマカラーを PrimeVue の実行時プライマリパレットおよびハイライトトークンへ即座に適用し、
  * 次回起動時のちらつき防止用同期キャッシュも同時に更新します。
  * @param color - 適用するテーマカラー識別子
  * @returns 正規化されて適用された `ThemeColor`
@@ -220,7 +283,20 @@ export function applyThemeColor(color: ThemeColor): ThemeColor {
   const normalized = parseValidThemeColor(color);
   saveCachedThemeColorSync(normalized);
   if (typeof document !== 'undefined') {
-    updatePrimaryPalette(buildPrimaryPalette(normalized));
+    const highlight = buildHighlightColorScheme(normalized);
+    updatePreset({
+      semantic: {
+        primary: buildPrimaryPalette(normalized),
+        colorScheme: {
+          light: {
+            highlight: highlight.light
+          },
+          dark: {
+            highlight: highlight.dark
+          }
+        }
+      }
+    });
   }
   return normalized;
 }

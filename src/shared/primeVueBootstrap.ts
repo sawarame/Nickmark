@@ -3,7 +3,11 @@ import PrimeVue from 'primevue/config';
 import { definePreset } from '@primeuix/themes';
 import Tooltip from 'primevue/tooltip';
 import { ThemeColor } from './types';
-import { buildPrimaryPalette, getCachedThemeColorSync } from './theme';
+import {
+  buildHighlightColorScheme,
+  buildPrimaryPalette,
+  getCachedThemeColorSync
+} from './theme';
 
 /**
  * PrimeVue ルートアプリケーションの初期化オプション
@@ -16,8 +20,9 @@ export interface PrimeVueRootBootstrapOptions {
 }
 
 /**
- * 指定されたベースプリセットに対して、選択済みテーマカラーのプライマリパレットおよび
- * ライト／ダークモード双方のページ背景（`--p-page-background`）を拡張した Nickmark 共通テーマプリセットを生成します。
+ * 指定されたベースプリセットに対して、選択済みテーマカラーのプライマリパレット、
+ * テーマ別ハイライトトークン（`--p-highlight-*`）、およびライト／ダークモード双方のページ背景
+ * （`--p-page-background`）を拡張した Nickmark 共通テーマプリセットを生成します。
  * @param basePreset - 拡張元となる PrimeVue テーマプリセット（Aura またはそのサブセット）
  * @param initialColor - 初期適用するテーマカラー（省略時は `localStorage` 同期キャッシュから復元）
  * @returns Nickmark 向けに拡張されたテーマプリセット
@@ -26,7 +31,9 @@ export function createNickmarkPreset<T extends Parameters<typeof definePreset>[0
   basePreset: T,
   initialColor?: ThemeColor
 ) {
-  const primaryPalette = buildPrimaryPalette(initialColor ?? getCachedThemeColorSync());
+  const resolvedColor = initialColor ?? getCachedThemeColorSync();
+  const primaryPalette = buildPrimaryPalette(resolvedColor);
+  const highlightColorScheme = buildHighlightColorScheme(resolvedColor);
   return definePreset(basePreset, {
     semantic: {
       primary: primaryPalette,
@@ -34,13 +41,15 @@ export function createNickmarkPreset<T extends Parameters<typeof definePreset>[0
         light: {
           page: {
             background: '{surface.100}'
-          }
+          },
+          highlight: highlightColorScheme.light
         },
         dark: {
           page: {
             // ダークモード時は Card 背景（surface.900）より一段暗い背景色にして階層感を保つ
             background: '{surface.950}'
-          }
+          },
+          highlight: highlightColorScheme.dark
         }
       }
     }
