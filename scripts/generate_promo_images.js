@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * Chrome ウェブストア用 多言語プロモーション画像自動生成スクリプト
+ * Chrome ウェブストア用 多言語スクリーンショット＆言語共通プロモーションタイル自動生成スクリプト
  *
  * 使い方:
- *   node scripts/generate_promo_images.js                            # package/_locales/ の全対応言語を 1280x800 PNG で生成
- *   node scripts/generate_promo_images.js --lang=ja,en               # 指定した言語のみ生成（--langs= も互換サポート）
- *   node scripts/generate_promo_images.js --size=640x400             # 640x400 サイズで生成（デフォルト: 1280x800）
+ *   node scripts/generate_promo_images.js                            # 全種（全対応言語スクリーンショット 1280x800 + プロモーションタイル小・マーキー）を生成
+ *   node scripts/generate_promo_images.js --target=screenshots       # スクリーンショットのみ生成
+ *   node scripts/generate_promo_images.js --target=promo             # 言語共通プロモーションタイル（小 440x280 + マーキー 1400x560）のみ生成
+ *   node scripts/generate_promo_images.js --target=promo-small       # プロモーションタイル小（440x280）のみ生成
+ *   node scripts/generate_promo_images.js --target=promo-marquee     # マーキー プロモーションタイル（1400x560）のみ生成
+ *   node scripts/generate_promo_images.js --lang=ja,en               # 指定した言語のみスクリーンショットを生成（--langs= も互換サポート）
+ *   node scripts/generate_promo_images.js --size=640x400             # スクリーンショットを 640x400 サイズで生成（デフォルト: 1280x800）
  *   node scripts/generate_promo_images.js --format=jpg               # JPEG 形式で生成（デフォルト: 透過なし 24-bit PNG）
  *   node scripts/generate_promo_images.js --all                      # 全対応言語を生成（後方互換オプション）
  *
@@ -23,17 +27,21 @@ const { execFileSync } = require('child_process');
 const sharp = require('sharp');
 const { PROMO_LOCALES } = require('./promo_locales');
 const { SLIDE_RENDERERS } = require('./promo_templates');
+const { PROMO_TILE_RENDERERS } = require('./promo_tile_templates');
 
 const ROOT_DIR = path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'images');
 const LOCALES_DIR = path.join(ROOT_DIR, 'package', '_locales');
 const ICON_SVG_PATH = path.join(ROOT_DIR, 'icon.svg');
 
-/** サポートする出力サイズ定義 */
+/** サポートするスクリーンショット出力サイズ定義 */
 const SUPPORTED_SIZES = {
   '1280x800': { width: 1280, height: 800, scale: 1 },
   '640x400': { width: 640, height: 400, scale: 0.5 },
 };
+
+/** サポートする生成対象オプション一覧 */
+const SUPPORTED_TARGETS = ['all', 'screenshots', 'promo', 'promo-small', 'promo-marquee'];
 
 /** 透過除去時のフォールバック背景色（スライドのベース背景色と統一） */
 const FLATTEN_BG = '#f8fafc';
@@ -105,9 +113,18 @@ function normalizeLangKey(rawCode) {
 /**
  * コマンドライン引数を解析し、生成オプションを返します。
  * @param {string[]} argv - コマンドライン引数配列
- * @returns {{ targetLangs: string[], sizeKey: string, width: number, height: number, scale: number, format: 'png' | 'jpg' }}
+ * @returns {{ target: string, targetLangs: string[], sizeKey: string, width: number, height: number, scale: number, format: 'png' | 'jpg' }}
  */
 function parseCliOptions(argv) {
+  // 生成対象の決定（デフォルト: all）
+  const targetArg = argv.find((arg) => arg.startsWith('--target='));
+  const target = targetArg ? targetArg.slice('--target='.length).trim().toLowerCase() : 'all';
+  if (!SUPPORTED_TARGETS.includes(target)) {
+    throw new Error(
+      `未対応の生成対象です: ${target}（利用可能: ${SUPPORTED_TARGETS.join(', ')}）`
+    );
+  }
+
   // 対象言語の決定（--lang= / --langs= 優先、未指定時は package/_locales/ 自動判定）
   const langsArg = argv.find((arg) => arg.startsWith('--lang=') || arg.startsWith('--langs='));
   let targetLangs;
@@ -122,7 +139,7 @@ function parseCliOptions(argv) {
       .map(normalizeLangKey);
   }
 
-  // 出力サイズの決定（デフォルト: 1280x800）
+  // 出力サイズの決定（デフォルト: 1280x800、スクリーンショットのみ適用）
   const sizeArg = argv.find((arg) => arg.startsWith('--size='));
   const sizeKey = sizeArg ? sizeArg.slice('--size='.length).trim() : '1280x800';
   const sizeConfig = SUPPORTED_SIZES[sizeKey];
@@ -140,6 +157,7 @@ function parseCliOptions(argv) {
   }
 
   return {
+    target,
     targetLangs,
     sizeKey,
     width: sizeConfig.width,
@@ -198,13 +216,30 @@ async function renderHtmlToImage({
 }
 
 /**
- * メイン処理：対象言語 × 全スライドのプロモーション画像を順次生成します。
+ * 生成対象オプションに応じて、出力対象のプロモーションタイル ID 配列を返します。
+ * @param {string} target - 生成対象オプション（all / screenshots / promo / promo-small / promo-marquee）
+ * @returns {string[]} 対象プロモーションタイル ID 配列
+ */
+function resolvePromoTileIds(target) {
+  if (target === 'all' || target === 'promo') {
+    return Object.keys(PROMO_TILE_RENDERERS);
+  }
+  if (target === 'promo-small' || target === 'promo-marquee') {
+    return [target];
+  }
+  return [];
+}
+
+/**
+ * メイン処理：指定対象に応じて多言語スクリーンショットおよび言語共通プロモーションタイルを順次生成します。
  * @returns {Promise<void>}
  */
 async function main() {
   const chromePath = findChromeExecutable();
   const options = parseCliOptions(process.argv.slice(2));
-  const slideIds = Object.keys(SLIDE_RENDERERS);
+  const shouldGenerateScreenshots = options.target === 'all' || options.target === 'screenshots';
+  const slideIds = shouldGenerateScreenshots ? Object.keys(SLIDE_RENDERERS) : [];
+  const promoTileIds = resolvePromoTileIds(options.target);
 
   if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -217,46 +252,83 @@ async function main() {
   // 一時 HTML および中間 PNG 用のディレクトリを作成（処理完了後に必ず削除）
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'nickmark-promo-'));
 
-  console.log(
-    `対象言語: ${options.targetLangs.join(', ')} / サイズ: ${options.sizeKey} / 形式: ${options.format.toUpperCase()}`
-  );
+  const summaryParts = [`対象: ${options.target}`];
+  if (shouldGenerateScreenshots) {
+    summaryParts.push(`言語: ${options.targetLangs.join(', ')}`);
+    summaryParts.push(`スクリーンショットサイズ: ${options.sizeKey}`);
+  }
+  if (promoTileIds.length > 0) {
+    summaryParts.push(`プロモーションタイル: ${promoTileIds.join(', ')}`);
+  }
+  summaryParts.push(`形式: ${options.format.toUpperCase()}`);
+  console.log(summaryParts.join(' / '));
 
   try {
-    const total = options.targetLangs.length * slideIds.length;
+    const screenshotTotal = shouldGenerateScreenshots ? options.targetLangs.length * slideIds.length : 0;
+    const total = screenshotTotal + promoTileIds.length;
     let generatedCount = 0;
 
-    for (const lang of options.targetLangs) {
-      const locale = PROMO_LOCALES[lang];
-      for (const slideId of slideIds) {
-        const renderer = SLIDE_RENDERERS[slideId];
-        const html = renderer(locale, iconDataUri, {
-          width: options.width,
-          height: options.height,
-          scale: options.scale,
-        });
-        const baseName = `promo_${lang}_${slideId}`;
-        const htmlPath = path.join(tempDir, `${baseName}.html`);
-        const rawPngPath = path.join(tempDir, `${baseName}_raw.png`);
-        const outputFileName = `${baseName}.${options.format}`;
-        const outputPath = path.join(OUTPUT_DIR, outputFileName);
+    // 1. 多言語スクリーンショット画像の生成
+    if (shouldGenerateScreenshots) {
+      for (const lang of options.targetLangs) {
+        const locale = PROMO_LOCALES[lang];
+        for (const slideId of slideIds) {
+          const renderer = SLIDE_RENDERERS[slideId];
+          const html = renderer(locale, iconDataUri, {
+            width: options.width,
+            height: options.height,
+            scale: options.scale,
+          });
+          const baseName = `promo_${lang}_${slideId}`;
+          const htmlPath = path.join(tempDir, `${baseName}.html`);
+          const rawPngPath = path.join(tempDir, `${baseName}_raw.png`);
+          const outputFileName = `${baseName}.${options.format}`;
+          const outputPath = path.join(OUTPUT_DIR, outputFileName);
 
-        fs.writeFileSync(htmlPath, html, 'utf8');
-        await renderHtmlToImage({
-          chromePath,
-          htmlPath,
-          rawPngPath,
-          outputPath,
-          width: options.width,
-          height: options.height,
-          format: options.format,
-        });
+          fs.writeFileSync(htmlPath, html, 'utf8');
+          await renderHtmlToImage({
+            chromePath,
+            htmlPath,
+            rawPngPath,
+            outputPath,
+            width: options.width,
+            height: options.height,
+            format: options.format,
+          });
 
-        generatedCount += 1;
-        console.log(`[${generatedCount}/${total}] 生成完了: images/${outputFileName}`);
+          generatedCount += 1;
+          console.log(`[${generatedCount}/${total}] 生成完了: images/${outputFileName}`);
+        }
       }
     }
 
-    console.log(`\n全 ${generatedCount} 枚のプロモーション画像を生成しました。`);
+    // 2. 言語共通プロモーションタイル（小: 440x280 / マーキー: 1400x560）の生成
+    for (const tileId of promoTileIds) {
+      const tileConfig = PROMO_TILE_RENDERERS[tileId];
+      const html = tileConfig.render(iconDataUri);
+      const htmlPath = path.join(tempDir, `${tileId}.html`);
+      const rawPngPath = path.join(tempDir, `${tileId}_raw.png`);
+      const outputFileName = `${tileId}.${options.format}`;
+      const outputPath = path.join(OUTPUT_DIR, outputFileName);
+
+      fs.writeFileSync(htmlPath, html, 'utf8');
+      await renderHtmlToImage({
+        chromePath,
+        htmlPath,
+        rawPngPath,
+        outputPath,
+        width: tileConfig.width,
+        height: tileConfig.height,
+        format: options.format,
+      });
+
+      generatedCount += 1;
+      console.log(
+        `[${generatedCount}/${total}] 生成完了: images/${outputFileName} (${tileConfig.width}x${tileConfig.height})`
+      );
+    }
+
+    console.log(`\n全 ${generatedCount} 枚のストア画像を生成しました。`);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
